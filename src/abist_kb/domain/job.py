@@ -48,6 +48,13 @@ class ResourceKind(StrEnum):
     RENDER = "render"
 
 
+ResourceRequirement = tuple[ResourceKind, str | None]
+"""ジョブ種別が必要とするリソース(種別, 区画キー)。`JobService`/`WorkerSupervisor`
+どちらの `resource_for_kind` にもそのまま渡せる共通の型(レビュー Critical 2: 両実行
+経路が同じ形の要求を受け取れるようにし、片方だけリソースリースを取らないという
+実装のずれを防ぐ)。"""
+
+
 def resource_key(kind: ResourceKind, key: str | None = None) -> str:
     """`resource_leases.resource_key` の一意な文字列表現を組み立てる。
 
@@ -113,6 +120,7 @@ __all__ = [
     "JobState",
     "ProgressEvent",
     "ResourceKind",
+    "ResourceRequirement",
     "Severity",
     "resource_key",
 ]

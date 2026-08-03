@@ -16,9 +16,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from abist_kb.domain.errors import AppError
-from abist_kb.domain.job import Job, JobState, ProgressEvent, Severity
+from abist_kb.domain.job import Job, JobState, ResourceRequirement
 from abist_kb.infrastructure.jobs import events as events_mod
 from abist_kb.infrastructure.jobs import leases
+from abist_kb.infrastructure.jobs.execution import run_job as _run_job_with_lease
 from abist_kb.infrastructure.jobs.repository import JobRepository
 
 logger = logging.getLogger(__name__)
@@ -56,6 +57,7 @@ class WorkerSupervisor:
         heartbeat_interval: float = HEARTBEAT_INTERVAL_SECONDS,
         lease_ttl: float = WORKER_LEASE_TTL_SECONDS,
         handlers: dict[str, JobHandler] | None = None,
+        resource_for_kind: dict[str, ResourceRequirement] | None = None,
         event_bus: events_mod.EventBus | None = None,
     ) -> None:
         self.owner_id = owner_id or str(uuid.uuid4())
@@ -63,6 +65,7 @@ class WorkerSupervisor:
         self._heartbeat_interval = heartbeat_interval
         self._lease_ttl = lease_ttl
         self._handlers = dict(handlers or {})
+        self._resource_for_kind = dict(resource_for_kind or {})
         self._event_bus = event_bus or events_mod.EventBus()
         self._repo = JobRepository(conn)
         self._is_leader = False
@@ -104,7 +107,9 @@ class WorkerSupervisor:
             did_work = True
             logger.warning("interrupted_jobs_recovered", extra={"job_ids": recovered})
 
-        job = self._repo.claim(self.owner_id, ttl_seconds=self._lease_ttl)
+        job = self._repo.claim(
+            self.owner_id, ttl_seconds=self._lease_ttl, resource_for_kind=self._resource_for_kind
+        )
         if job is None:
             return did_work
 
@@ -125,43 +130,26 @@ class WorkerSupervisor:
             )
             return
 
-        def emit(
-            *,
-            phase: str,
-            current: int | None = None,
-            total: int | None = None,
-            message: str = "",
-            severity: Severity = Severity.INFO,
-            item: str | None = None,
-        ) -> None:
-            event = ProgressEvent(
-                job_id=job.id,
-                phase=phase,
-                current=current,
-                total=total,
-                message=message,
-                severity=severity,
-                item=item,
-            )
-            events_mod.append_event(self._conn, event)
-            self._event_bus.publish(event)
-            # 進捗報告のたびに heartbeat も更新する。長時間ハンドラが定期的に
-            # emit する限り、実行中ジョブの lease は自動的に生き続ける。
-            self._repo.renew_heartbeat(job.id, self.owner_id, ttl_seconds=self._lease_ttl)
-
-        try:
-            handler(JobRunContext(job=job, emit=emit))
-        except AppError as exc:
-            self._repo.finish(job.id, state=JobState.FAILED, error=exc.to_dict())
-        except Exception as exc:  # ハンドラのバグでもワーカー自体は落とさない
-            logger.exception("job_handler_failed", extra={"job_id": job.id, "kind": job.kind})
-            self._repo.finish(
-                job.id,
-                state=JobState.FAILED,
-                error={"code": "FAILURE", "message": str(exc)},
-            )
-        else:
-            self._repo.finish(job.id, state=JobState.SUCCEEDED)
+        resource = self._resource_for_kind.get(job.kind)
+        # 実際の実行(resource lease 取得・自動更新・emit配線・finish)は
+        # `JobService.run_inline` と共有する `execution.run_job` に委譲する
+        # (コードレビュー Critical 2: 以前はここに同じロジックが重複しており、
+        # インライン実行だけが resource lease を取得していた)。
+        # `renew_worker_lease=True`: ハンドラ実行中もリーダーシップ
+        # (`worker_leases`)を更新し続ける(Important 4)。
+        # `reraise=False`: ハンドラのバグでもワーカー自体は落とさない。
+        _run_job_with_lease(
+            self._conn,
+            self._repo,
+            self._event_bus,
+            job,
+            handler,
+            owner_id=self.owner_id,
+            ttl_seconds=self._lease_ttl,
+            resource=resource,
+            renew_worker_lease=True,
+            reraise=False,
+        )
 
     def run_forever(self, *, poll_interval: float = 1.0) -> None:
         """`tick()` をループする(`<cli> worker run` の実体)。"""

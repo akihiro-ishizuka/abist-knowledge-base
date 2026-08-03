@@ -104,6 +104,61 @@ def db_path(tmp_root: Path) -> Iterator[Path]:
     yield path
 
 
+def _leadership_streaks(lines: list[dict | None]) -> list[tuple[float, float]]:
+    """連続した `leader=True` の行をひとつながりの「リーダーだと信じていた期間」
+    ([最初の行の t_before, 最後の行の t_after])へまとめる。
+
+    Minor 6 の根本原因はここにある: 以前は各行(1回の DB 呼び出しの前後だけの
+    ごく短い時間幅)を個別に比較していたため、SQLite 自身の書込直列化
+    (`BEGIN IMMEDIATE`)がその短い時間幅を狭めてしまい、壊れた実装
+    (`try_acquire_worker_lease` が常に `True` を返す)に対してすら重なりを
+    検出し損ねることがあった(レビューで3回に1回しか検知できないと実測)。
+    「1回のDB呼び出しの瞬間」ではなく「連続してリーダーだと信じ続けていた
+    期間全体」を比較対象にすることで、DBアクセスそのものの直列化に測定精度が
+    左右されなくなる。
+    """
+    streaks: list[tuple[float, float]] = []
+    start: float | None = None
+    end: float | None = None
+    for line in lines:
+        if line is None:
+            continue
+        if line["leader"]:
+            if start is None:
+                start = line["t_before"]
+            end = line["t_after"]
+        elif start is not None:
+            assert end is not None
+            streaks.append((start, end))
+            start = None
+            end = None
+    if start is not None:
+        assert end is not None
+        streaks.append((start, end))
+    return streaks
+
+
+def _assert_no_leadership_overlap(lines_a: list[dict | None], lines_b: list[dict | None]) -> None:
+    """A/B それぞれの「連続してリーダーだと信じ続けていた期間」が重ならないことを検証する。
+
+    `test_exactly_one_leader_across_two_processes` と
+    `test_leadership_overlap_check_detects_broken_try_acquire_mutation` の両方が
+    このロジックを共有することで、後者が「このチェック自体が壊れた実装を確実に
+    検知できるか」の回帰テストとして機能する(Minor 6: 検知ロジックと検知対象の
+    実装がずれて、片方だけ直って他方が置き去りにならないようにするため)。
+    """
+    streaks_a = _leadership_streaks(lines_a)
+    streaks_b = _leadership_streaks(lines_b)
+    assert streaks_a or streaks_b, "A/B どちらもリーダーになれなかった"
+    for a_start, a_end in streaks_a:
+        for b_start, b_end in streaks_b:
+            overlap = a_start < b_end and b_start < a_end
+            assert not overlap, (
+                "A と B が同時にリーダーだと信じていた期間が重なった: "
+                f"A=[{a_start}, {a_end}], B=[{b_start}, {b_end}]"
+            )
+
+
 def test_exactly_one_leader_across_two_processes(db_path: Path) -> None:
     """`worker_leases` のリーダーがプロセス境界を越えて常に1つだけであること。
 
@@ -116,6 +171,16 @@ def test_exactly_one_leader_across_two_processes(db_path: Path) -> None:
     起きるのはアプリ側のロックだけで調停している(=別プロセスの書込を検知
     できない)壊れた実装だけである。DB の `BEGIN IMMEDIATE` が実際に
     プロセス間で調停していれば理論上重ならない。
+
+    **Minor 6 の修正**: 以前はサンプル数(25件)・間隔(0.1秒)が粗く、SQLite
+    自身の書込直列化(`BEGIN IMMEDIATE`)が記録される重なり幅を狭めてしまう
+    ため、`try_acquire_worker_lease` が常に `True` を返すという明確に壊れた
+    実装に対してすら 3 回に 1 回しか失敗を検知できなかった(レビューで実測)。
+    サンプル間隔を大幅に短く(0.02秒)・サンプル数を大幅に増やす(150件)ことで
+    観測の時間分解能を上げ、重なりの検出漏れを減らす。検出ロジック自体が
+    本当に壊れた実装を確実に落とせることは
+    `test_leadership_overlap_check_detects_broken_try_acquire_mutation` が
+    直接検証する。
     """
     proc_a = _spawn(
         "worker-lease",
@@ -126,9 +191,9 @@ def test_exactly_one_leader_across_two_processes(db_path: Path) -> None:
         "--ttl",
         "2.0",
         "--interval",
-        "0.1",
+        "0.02",
         "--duration",
-        "3.0",
+        "5.0",
     )
     proc_b = _spawn(
         "worker-lease",
@@ -139,29 +204,72 @@ def test_exactly_one_leader_across_two_processes(db_path: Path) -> None:
         "--ttl",
         "2.0",
         "--interval",
-        "0.1",
+        "0.02",
         "--duration",
-        "3.0",
+        "5.0",
     )
     reader_a = _LineReader(proc_a.stdout)
     reader_b = _LineReader(proc_b.stdout)
     try:
-        lines_a = [reader_a.read_json(timeout=5.0) for _ in range(25)]
-        lines_b = [reader_b.read_json(timeout=5.0) for _ in range(25)]
+        lines_a = [reader_a.read_json(timeout=8.0) for _ in range(150)]
+        lines_b = [reader_b.read_json(timeout=8.0) for _ in range(150)]
     finally:
         _terminate(proc_a)
         _terminate(proc_b)
 
-    events_a = [line for line in lines_a if line and line["leader"]]
-    events_b = [line for line in lines_b if line and line["leader"]]
-    # 早取り勝ちの単一リーダー原則により、通常はどちらか一方だけが
-    # ずっとリーダーであり続ける。少なくとも一方は必ずリーダーになれる。
-    assert events_a or events_b, "A/B どちらもリーダーになれなかった"
+    _assert_no_leadership_overlap(lines_a, lines_b)
 
-    for a in events_a:
-        for b in events_b:
-            overlap = a["t_before"] < b["t_after"] and b["t_before"] < a["t_after"]
-            assert not overlap, f"A と B が同時にリーダーを名乗った: {a} / {b}"
+
+def test_leadership_overlap_check_detects_broken_try_acquire_mutation(db_path: Path) -> None:
+    """Minor 6 の回帰テスト: 重なり検出ロジック自身が、明確に壊れた実装
+    (`try_acquire_worker_lease` が DB を見ずに常に `True` を返す)に対して
+    確実に(たまたま通ってしまうことなく)検知できることを直接確認する。
+
+    レビューが使った手法(`try_acquire_worker_lease` を常に `True` にパッチする)
+    をそのまま子プロセス側で再現する(`--force-always-leader`)。この変異の下では
+    2プロセスとも常に「自分がリーダーだ」と報告し続けるため、重なりが起きない
+    はずがなく、`_assert_no_leadership_overlap` は確実に `AssertionError` を
+    送出しなければならない。
+    """
+    proc_a = _spawn(
+        "worker-lease",
+        "--db",
+        str(db_path),
+        "--owner",
+        "A",
+        "--ttl",
+        "2.0",
+        "--interval",
+        "0.02",
+        "--duration",
+        "1.0",
+        "--force-always-leader",
+    )
+    proc_b = _spawn(
+        "worker-lease",
+        "--db",
+        str(db_path),
+        "--owner",
+        "B",
+        "--ttl",
+        "2.0",
+        "--interval",
+        "0.02",
+        "--duration",
+        "1.0",
+        "--force-always-leader",
+    )
+    reader_a = _LineReader(proc_a.stdout)
+    reader_b = _LineReader(proc_b.stdout)
+    try:
+        lines_a = [reader_a.read_json(timeout=5.0) for _ in range(20)]
+        lines_b = [reader_b.read_json(timeout=5.0) for _ in range(20)]
+    finally:
+        _terminate(proc_a)
+        _terminate(proc_b)
+
+    with pytest.raises(AssertionError):
+        _assert_no_leadership_overlap(lines_a, lines_b)
 
 
 def test_leadership_transfers_after_leader_dies_not_before(db_path: Path) -> None:
@@ -402,6 +510,209 @@ def test_corpus_write_same_corpus_contends(db_path: Path) -> None:
 
     _terminate(proc_a)
     _terminate(proc_b)
+
+
+def test_resource_lease_survives_ttl_while_handler_runs_without_emitting(db_path: Path) -> None:
+    """Critical 1 の再現: `emit()` を呼ばない長時間ハンドラの間、resource lease が
+    TTL 経過で他プロセスに奪われないこと(自動更新される)。
+
+    レビューが実際に再現した状況そのもの: TTL 2秒の resource lease を A が
+    8秒(`emit()` を一切呼ばずに)保持し続ける間、B は3秒後(=Aの TTL が一度
+    尽きたはずの時刻)に同じリソースの取得を試みる。修正前は resource lease が
+    取得時に一度しか `expires_at` を設定せず、以後は誰も更新しなかったため、
+    B は A がまだ実行中にもかかわらず「空いている」と誤認して取得できてしまい、
+    5秒間(=3秒後から8秒後まで)両プロセスが同時に排他リソースを保持していると
+    信じる状態になっていた。修正後は `JobService.run_inline` が TTL の1/3ごとに
+    resource lease を更新し続けるバックグラウンドスレッドを持つため、B は A が
+    解放するまで(`wait=True` の既定どおり)待たされる。
+    """
+    proc_a = _spawn(
+        "run-inline-job",
+        "--db",
+        str(db_path),
+        "--owner",
+        "A",
+        "--kind",
+        "sync",
+        "--resource",
+        "docs-write",
+        "--ttl",
+        "2.0",
+        "--sleep",
+        "8.0",
+    )
+    reader_a = _LineReader(proc_a.stdout)
+    started_a = reader_a.read_json_matching(
+        lambda p: p.get("status") == "handler_start", timeout=5.0
+    )
+    assert started_a is not None, "A がハンドラを開始できなかった"
+
+    time.sleep(3.0)  # A の TTL(2秒)を過ぎた時点でもまだ実行中(8秒スリープ)のはず
+
+    proc_b = _spawn(
+        "run-inline-job",
+        "--db",
+        str(db_path),
+        "--owner",
+        "B",
+        "--kind",
+        "sync",
+        "--resource",
+        "docs-write",
+        "--ttl",
+        "2.0",
+        "--sleep",
+        "0.1",
+    )
+    reader_b = _LineReader(proc_b.stdout)
+    started_b = reader_b.read_json_matching(
+        lambda p: p.get("status") == "handler_start", timeout=10.0
+    )
+    ended_a = reader_a.read_json_matching(lambda p: p.get("status") == "handler_end", timeout=10.0)
+    try:
+        assert started_b is not None, "B がハンドラを開始できなかった"
+        assert ended_a is not None, "A が終了しなかった"
+        assert started_b["t"] >= ended_a["t"], (
+            "B が A の解放前に resource lease を取得した"
+            f"(TTL切れで誤って奪った可能性): A_end={ended_a['t']}, B_start={started_b['t']}"
+        )
+    finally:
+        _terminate(proc_a)
+        _terminate(proc_b)
+
+
+def test_queue_path_acquires_resource_lease_like_inline_path(db_path: Path) -> None:
+    """Critical 2 の再現: `WorkerSupervisor`(キュー経由)も resource lease を取る。
+
+    修正前は `resource_for_kind`/`acquire_resource_lease` の配線が
+    `JobService.run_inline` にしかなく、`WorkerSupervisor` はどこにも呼んで
+    いなかった。`BUILTIN_HANDLERS` は両経路に登録されるため、同じハンドラが
+    インラインでは保護され、キュー経由(`--detach`・常駐ワーカー全て)では
+    無防備という致命的な差異があった。ここでは、キューに投入したジョブを
+    `WorkerSupervisor` が処理している間、別プロセスが同じ `docs-write` を
+    `wait=False` で取ろうとすると `CONFLICT` になる(=キュー経由でも実際に
+    resource lease を取得している)ことを確認する。
+    """
+    conn = connect(db_path)
+    try:
+        JobRepository(conn).submit("sync", {})
+    finally:
+        conn.close()
+
+    proc_worker = _spawn(
+        "worker-run-job",
+        "--db",
+        str(db_path),
+        "--owner",
+        "A",
+        "--kind",
+        "sync",
+        "--resource",
+        "docs-write",
+        "--ttl",
+        "2.0",
+        "--sleep",
+        "3.0",
+        "--duration",
+        "8.0",
+    )
+    reader_worker = _LineReader(proc_worker.stdout)
+    started = reader_worker.read_json_matching(
+        lambda p: p.get("status") == "handler_start", timeout=5.0
+    )
+    assert started is not None, "worker がジョブを開始できなかった"
+
+    proc_denied = _spawn(
+        "resource-lease",
+        "--db",
+        str(db_path),
+        "--owner",
+        "B",
+        "--kind",
+        "docs-write",
+        "--hold",
+        "0.1",
+        "--ttl",
+        "5.0",
+    )
+    reader_denied = _LineReader(proc_denied.stdout)
+    denied = reader_denied.read_json_matching(lambda p: p["status"] == "denied", timeout=3.0)
+    try:
+        assert denied is not None, (
+            "worker がジョブ実行中にもかかわらず、別プロセスが docs-write を"
+            "即座に取得できてしまった(キュー経由が resource lease を取っていない)"
+        )
+        assert denied["code"] == "CONFLICT"
+    finally:
+        _terminate(proc_worker)
+        _terminate(proc_denied)
+
+
+def test_leadership_survives_a_single_job_longer_than_the_lease_ttl(db_path: Path) -> None:
+    """Important 4 の再現: TTL より長いジョブの間もリーダーシップを保ち続けること。
+
+    修正前は `WorkerSupervisor.tick()` がジョブ実行前に一度だけリーダーシップを
+    更新し、その後は同期的にハンドラを実行し切っていたため、TTL(ここでは1秒)より
+    長いジョブ(3秒)が動いている間にリーダーシップが失効し、別プロセスに
+    乗っ取られ得た。ここでは、A がジョブを実行している最初から最後まで、B が
+    一度もリーダーになれないことを確認する。
+    """
+    conn = connect(db_path)
+    try:
+        JobRepository(conn).submit("slow", {})
+    finally:
+        conn.close()
+
+    ttl = 1.0
+    proc_a = _spawn(
+        "worker-run-job",
+        "--db",
+        str(db_path),
+        "--owner",
+        "A",
+        "--kind",
+        "slow",
+        "--ttl",
+        str(ttl),
+        "--sleep",
+        "3.0",
+        "--duration",
+        "8.0",
+        "--poll",
+        "0.05",
+    )
+    reader_a = _LineReader(proc_a.stdout)
+    started_a = reader_a.read_json_matching(
+        lambda p: p.get("status") == "handler_start", timeout=5.0
+    )
+    assert started_a is not None, "A がジョブを開始できなかった"
+
+    proc_b = _spawn(
+        "worker-lease",
+        "--db",
+        str(db_path),
+        "--owner",
+        "B",
+        "--ttl",
+        str(ttl),
+        "--interval",
+        "0.1",
+        "--duration",
+        "6.0",
+    )
+    reader_b = _LineReader(proc_b.stdout)
+
+    ended_a = reader_a.read_json_matching(lambda p: p.get("status") == "handler_end", timeout=10.0)
+    try:
+        assert ended_a is not None, "A のジョブが終わらなかった"
+        b_lines_during_job = reader_b.drain()
+        assert not any(line["leader"] for line in b_lines_during_job), (
+            "A がジョブ実行中(TTLより長い3秒のスリープ中)に B がリーダーシップを"
+            "奪ってしまった(長時間ジョブの間もリーダーシップを更新し続ける必要がある)"
+        )
+    finally:
+        _terminate(proc_a)
+        _terminate(proc_b)
 
 
 def test_exactly_one_process_claims_the_same_queued_job(db_path: Path) -> None:

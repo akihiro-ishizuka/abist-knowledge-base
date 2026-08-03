@@ -16,7 +16,8 @@ from typing import Any
 from uuid import uuid4
 
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
-from abist_kb.domain.job import RETRYABLE_STATES, Job, JobState
+from abist_kb.domain.job import RETRYABLE_STATES, Job, JobState, ResourceRequirement
+from abist_kb.domain.job import resource_key as build_resource_key
 from abist_kb.infrastructure.db.connection import transaction
 
 
@@ -97,25 +98,43 @@ class JobRepository:
         return job
 
     def claim(
-        self, owner_id: str, *, ttl_seconds: float, resource_key: str | None = None
+        self,
+        owner_id: str,
+        *,
+        ttl_seconds: float,
+        resource_for_kind: dict[str, ResourceRequirement] | None = None,
     ) -> Job | None:
         """キューの先頭を1件だけ claim する。他に取れる queued ジョブが無ければ `None`。
 
         `BEGIN IMMEDIATE` が書込ロックを即座に取るため、この関数内の
         SELECT→UPDATE は他プロセスの同時呼び出しに対して不可分に振る舞う
         (他プロセスは COMMIT/ROLLBACK までブロックされる)。
+
+        `resource_for_kind` を渡すと、claim したジョブの `kind` に対応する
+        リソース要求から `resource_key` を組み立て、この UPDATE で一緒に書き込む
+        (レビュー Important 3: 以前はどちらの本番呼び出し元も `resource_key` を
+        渡していなかったため、この列が常に NULL で `recover_interrupted` の
+        「heartbeat と resource lease が両方期限切れ」というデュアルチェックの
+        後半が実運用では一度も通らなかった)。キュー経由の実行では claim するまで
+        どのジョブ(=どの kind)が選ばれるか分からないため、`resource_key` を
+        直接受け取るのではなく、この関数内で SELECT した `kind` から解決する。
         """
         now = datetime.now(UTC)
         expires_at = now + timedelta(seconds=ttl_seconds)
         with transaction(self._conn):
             candidate = self._conn.execute(
-                "SELECT id FROM jobs WHERE state = ? AND cancel_requested = 0 "
+                "SELECT id, kind FROM jobs WHERE state = ? AND cancel_requested = 0 "
                 "ORDER BY created_at LIMIT 1",
                 (JobState.QUEUED.value,),
             ).fetchone()
             if candidate is None:
                 return None
             job_id = candidate["id"]
+            resource_key_value: str | None = None
+            if resource_for_kind is not None:
+                requirement = resource_for_kind.get(candidate["kind"])
+                if requirement is not None:
+                    resource_key_value = build_resource_key(requirement[0], requirement[1])
             cur = self._conn.execute(
                 "UPDATE jobs SET state = ?, owner_id = ?, resource_key = ?, "
                 "heartbeat_at = ?, lease_expires_at = ?, started_at = ? "
@@ -123,7 +142,7 @@ class JobRepository:
                 (
                     JobState.RUNNING.value,
                     owner_id,
-                    resource_key,
+                    resource_key_value,
                     _iso(now),
                     _iso(expires_at),
                     _iso(now),

@@ -7,29 +7,16 @@
 
 from __future__ import annotations
 
-import contextlib
 import sqlite3
-from collections.abc import Iterator
 from typing import Any
 
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
-from abist_kb.domain.job import Job, JobState, ProgressEvent, ResourceKind, Severity
+from abist_kb.domain.job import Job, JobState, ProgressEvent, ResourceRequirement
 from abist_kb.infrastructure.jobs import events as events_mod
 from abist_kb.infrastructure.jobs import leases
+from abist_kb.infrastructure.jobs.execution import run_job as _run_job_with_lease
 from abist_kb.infrastructure.jobs.repository import JobRepository
-from abist_kb.infrastructure.jobs.supervisor import (
-    WORKER_LEASE_TTL_SECONDS,
-    JobHandler,
-    JobRunContext,
-)
-
-ResourceRequirement = tuple[ResourceKind, str | None]
-"""ジョブ種別が必要とするリソース(種別, 区画キー)。"""
-
-
-@contextlib.contextmanager
-def _no_resource_lease() -> Iterator[None]:
-    yield None
+from abist_kb.infrastructure.jobs.supervisor import WORKER_LEASE_TTL_SECONDS, JobHandler
 
 
 class JobService:
@@ -117,7 +104,9 @@ class JobService:
             )
 
         job = self.submit(kind, params)
-        claimed = self._repo.claim(self._owner_id, ttl_seconds=self._lease_ttl)
+        claimed = self._repo.claim(
+            self._owner_id, ttl_seconds=self._lease_ttl, resource_for_kind=self._resource_for_kind
+        )
         if claimed is None or claimed.id != job.id:
             # 投入直後にこのプロセス自身が最初の claim 者になれなかった場合
             # (理論上、他プロセスのワーカーに先を越された場合のみ起こりうる)。
@@ -129,55 +118,23 @@ class JobService:
             )
 
         resource = self._resource_for_kind.get(kind)
-        lease_cm = (
-            leases.acquire_resource_lease(
-                self._conn,
-                resource[0],
-                key=resource[1],
-                owner_id=self._owner_id,
-                ttl_seconds=self._lease_ttl,
-                job_id=job.id,
-            )
-            if resource is not None
-            else _no_resource_lease()
+        # 実際の実行(resource lease 取得・自動更新・emit配線・finish)は
+        # `WorkerSupervisor` と共有する `execution.run_job` に委譲する
+        # (コードレビュー Critical 2: 重複していたロジックを1箇所にまとめる)。
+        # `renew_worker_lease=False`: インライン実行はリーダー選出に参加しない。
+        # `reraise=True`: CLI がジョブ失敗を終了コードへ反映できるよう再送出する。
+        return _run_job_with_lease(
+            self._conn,
+            self._repo,
+            self._event_bus,
+            claimed,
+            handler,
+            owner_id=self._owner_id,
+            ttl_seconds=self._lease_ttl,
+            resource=resource,
+            renew_worker_lease=False,
+            reraise=True,
         )
-
-        def emit(
-            *,
-            phase: str,
-            current: int | None = None,
-            total: int | None = None,
-            message: str = "",
-            severity: Severity = Severity.INFO,
-            item: str | None = None,
-        ) -> None:
-            event = ProgressEvent(
-                job_id=job.id,
-                phase=phase,
-                current=current,
-                total=total,
-                message=message,
-                severity=severity,
-                item=item,
-            )
-            events_mod.append_event(self._conn, event)
-            self._event_bus.publish(event)
-            self._repo.renew_heartbeat(job.id, self._owner_id, ttl_seconds=self._lease_ttl)
-
-        try:
-            with lease_cm:
-                handler(JobRunContext(job=claimed, emit=emit))
-        except AppError as exc:
-            self._repo.finish(job.id, state=JobState.FAILED, error=exc.to_dict())
-            raise
-        except Exception as exc:
-            self._repo.finish(
-                job.id, state=JobState.FAILED, error={"code": "FAILURE", "message": str(exc)}
-            )
-            raise
-        else:
-            self._repo.finish(job.id, state=JobState.SUCCEEDED)
-        return self.get(job.id)
 
 
 __all__ = ["JobService", "ResourceRequirement"]

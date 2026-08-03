@@ -15,6 +15,31 @@
 合わせて1つの一覧として `apply_migrations` へ渡す。`presentation/cli` 配下で
 `app_db_path` を開く全コマンド(`jobs`/`worker`/`source`/`batch`/`document`)は
 `infrastructure.jobs.db.open_jobs_db` ではなくこの `open_app_db` を使うこと。
+
+**マイグレーション番号の採番規則(コードレビュー Important 5 への対応、次の
+マイルストーンの実装者へ)**:
+
+`app.sqlite` は1個の `schema_migrations` テーブルをパッケージ横断で共有するため、
+バージョン番号は「ディレクトリごと」ではなく「`app.sqlite` 全体」で一意かつ
+連続でなければならない。`apply_migrations` 自身は渡された一覧内の重複を検出して
+拒否するが、それは実際に DB を開いたときにしか働かない。ディレクトリを分けたまま
+座組みだけで衝突を防ぐため、本モジュールの `load_app_migrations()` を
+**唯一の採番台帳**とする:
+
+1. 新しいテーブルを追加するマイグレーションを書くときは、既存の
+   `infrastructure/db/migrations/`(`sources`/`batches`/`documents` など)か
+   `infrastructure/jobs/migrations/`(`jobs`/`resource_leases` など、モジュール名
+   `migrations.py` と衝突するため別ディレクトリに退避してある)のどちらかに置く。
+   **新しい第3のディレクトリを増やさない。**
+2. バージョン番号は必ず `load_app_migrations()` が返す一覧(= 本ファイルが
+   import 時点で把握する全パッケージの合算)を確認し、その最大値+1から採番する。
+   現時点の最大値は 0003(`infrastructure/db/migrations/0003_sources_batches.sql`)。
+   M4(埋め込み)以降でテーブルを追加する場合は 0004 から使うこと。
+3. `tests/db/test_migrations.py::test_load_app_migrations_versions_are_unique_and_sequential`
+   が `load_app_migrations()` を実DBなしで直接検査し、バージョンの重複・欠番を
+   コミットのたびに検出する(2パッケージが独立に採番して衝突する事故を、実際に
+   DBを開くまで気づけない状態にしないため)。新しいマイグレーションを追加したら
+   このテストがまず先に通ることを確認してから DB を触ること。
 """
 
 from __future__ import annotations

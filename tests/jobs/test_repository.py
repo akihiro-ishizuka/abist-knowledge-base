@@ -7,14 +7,16 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from abist_kb.domain.errors import AppError, ErrorCode
-from abist_kb.domain.job import JobState
+from abist_kb.domain.job import JobState, ResourceKind
 from abist_kb.infrastructure.db.connection import connect
+from abist_kb.infrastructure.jobs import leases
 from abist_kb.infrastructure.jobs.db import ensure_jobs_schema
 from abist_kb.infrastructure.jobs.repository import JobRepository
 
@@ -46,6 +48,47 @@ def test_claim_moves_job_to_running_and_sets_owner(repo: JobRepository) -> None:
 
 def test_claim_returns_none_when_queue_is_empty(repo: JobRepository) -> None:
     assert repo.claim("owner-1", ttl_seconds=5.0) is None
+
+
+# -- resource_key の配線(コードレビュー Important 3 の回帰テスト) -------------
+
+
+def test_claim_without_resource_for_kind_leaves_resource_key_null(repo: JobRepository) -> None:
+    """`resource_for_kind` を渡さない既存呼び出しは、以前と同じく NULL のままであること。"""
+    repo.submit("noop")
+    claimed = repo.claim("owner-1", ttl_seconds=5.0)
+    assert claimed is not None
+    assert claimed.resource_key is None
+
+
+def test_claim_populates_resource_key_from_resource_for_kind(repo: JobRepository) -> None:
+    """claim したジョブの `kind` に対応するリソース要求があれば `resource_key` を書き込む。
+
+    以前はどちらの本番呼び出し元(`JobService.run_inline`/`WorkerSupervisor`)も
+    `resource_key` を渡していなかったため、この列が常に NULL だった
+    (コードレビュー Important 3)。キュー経由の実行では claim するまでどの
+    ジョブ(=どの kind)が選ばれるか分からないため、`resource_for_kind` という
+    マッピングを渡し、claim 時に SELECT した `kind` から解決する設計にした。
+    """
+    repo.submit("sync")
+    claimed = repo.claim(
+        "owner-1",
+        ttl_seconds=5.0,
+        resource_for_kind={"sync": (ResourceKind.DOCS_WRITE, None)},
+    )
+    assert claimed is not None
+    assert claimed.resource_key == "docs-write"
+
+
+def test_claim_leaves_resource_key_null_for_kind_without_requirement(repo: JobRepository) -> None:
+    repo.submit("noop")
+    claimed = repo.claim(
+        "owner-1",
+        ttl_seconds=5.0,
+        resource_for_kind={"sync": (ResourceKind.DOCS_WRITE, None)},
+    )
+    assert claimed is not None
+    assert claimed.resource_key is None
 
 
 def test_claim_skips_cancelled_queued_jobs(repo: JobRepository) -> None:
@@ -204,6 +247,65 @@ def test_recover_interrupted_leaves_job_with_live_heartbeat(tmp_root: Path) -> N
     repo.claim("owner-1", ttl_seconds=30.0)
     assert repo.recover_interrupted() == []
     assert repo.get(job.id).state is JobState.RUNNING
+
+
+def test_recover_interrupted_dual_check_via_real_claim_and_lease_both_expired(
+    tmp_root: Path,
+) -> None:
+    """`_make_running_job_with_expired_lease` のような手作り行ではなく、実際の
+    `claim(resource_for_kind=...)` + `acquire_resource_lease` を経由して
+    「heartbeat と resource lease が両方期限切れ」の状態を再現する
+    (コードレビュー Important 3: 手作り行だけのテストは、本番のどちらの
+    呼び出し元も `resource_key` を渡さないという不具合を見逃していた)。
+    """
+    conn = connect(tmp_root / "jobs.sqlite")
+    ensure_jobs_schema(conn)
+    repo = JobRepository(conn)
+    repo.submit("sync")
+    resource_for_kind = {"sync": (ResourceKind.DOCS_WRITE, None)}
+    claimed = repo.claim("dead-owner", ttl_seconds=0.1, resource_for_kind=resource_for_kind)
+    assert claimed is not None
+    assert claimed.resource_key == "docs-write"
+
+    # 本物の resource lease を短い TTL で取得する。`__exit__`(解放)を呼ばずに
+    # 抜けることで、「解放せずにクラッシュしたプロセス」を模す
+    # (実運用でも異常終了時は解放されない)。
+    lease_cm = leases.acquire_resource_lease(
+        conn, ResourceKind.DOCS_WRITE, owner_id="dead-owner", ttl_seconds=0.1, job_id=claimed.id
+    )
+    lease_cm.__enter__()
+
+    time.sleep(0.2)  # heartbeat・resource lease ともに TTL(0.1秒)を超えて期限切れになる
+
+    recovered = repo.recover_interrupted()
+    assert recovered == [claimed.id]
+    assert repo.get(claimed.id).state is JobState.INTERRUPTED
+
+
+def test_recover_interrupted_dual_check_via_real_claim_and_lease_still_valid(
+    tmp_root: Path,
+) -> None:
+    """heartbeat は切れていても resource lease がまだ有効なら中断しないことを、
+    同じく実際の `claim`/`acquire_resource_lease` 経由で確認する。
+    """
+    conn = connect(tmp_root / "jobs.sqlite")
+    ensure_jobs_schema(conn)
+    repo = JobRepository(conn)
+    repo.submit("sync")
+    resource_for_kind = {"sync": (ResourceKind.DOCS_WRITE, None)}
+    # ジョブの heartbeat/lease は短く(すぐ切れる)、resource lease は長く保つ。
+    claimed = repo.claim("dead-owner", ttl_seconds=0.1, resource_for_kind=resource_for_kind)
+    assert claimed is not None
+
+    lease_cm = leases.acquire_resource_lease(
+        conn, ResourceKind.DOCS_WRITE, owner_id="dead-owner", ttl_seconds=30.0, job_id=claimed.id
+    )
+    lease_cm.__enter__()
+
+    time.sleep(0.2)  # ジョブの heartbeat/lease だけが期限切れになる
+
+    assert repo.recover_interrupted() == []
+    assert repo.get(claimed.id).state is JobState.RUNNING
 
 
 def test_recover_interrupted_does_not_auto_retry(tmp_root: Path) -> None:

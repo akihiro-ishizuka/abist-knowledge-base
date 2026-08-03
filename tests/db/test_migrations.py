@@ -368,6 +368,27 @@ def test_apply_migrations_no_ops_when_already_applied_by_another_connection(tmp_
         conn_a.close()
 
 
+def test_load_app_migrations_versions_are_unique_and_sequential() -> None:
+    """コードレビュー Important 5 の回帰テスト。
+
+    `infrastructure/jobs/migrations/` と `infrastructure/db/migrations/` は
+    別々のディレクトリだが、どちらも同じ `app.sqlite` の `schema_migrations` を
+    共有するため、バージョン番号はディレクトリをまたいで一意かつ 1 からの
+    連番でなければならない。2パッケージが独立に採番して衝突する事故を、実際に
+    DBを開いて `MIGRATION_FAILED` になるまで気づけない状態にしないよう、
+    ここで実DB無しに直接検査する(`infrastructure/db/schema.py` のモジュール
+    docstring が定める採番台帳のルール)。
+    """
+    from abist_kb.infrastructure.db.schema import load_app_migrations
+
+    migrations = load_app_migrations()
+    versions = sorted(m.version for m in migrations)
+    assert len(versions) == len(set(versions)), f"バージョン番号が重複しています: {versions}"
+    assert versions == list(range(versions[0], versions[0] + len(versions))), (
+        f"バージョン番号に欠番があります(採番台帳が連番を保証できていません): {versions}"
+    )
+
+
 def test_apply_one_ensures_schema_migrations_table_even_without_prior_call(tmp_root: Path):
     """`_apply_one` を(将来の再配線等で)直接呼んでも `schema_migrations` が無い状態で
     「no such table」にならないこと。呼び出し順序に依存しない堅牢性の回帰テスト。
