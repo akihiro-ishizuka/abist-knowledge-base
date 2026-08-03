@@ -45,6 +45,7 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from queue import Empty
 from typing import Any, Protocol
 
 import numpy as np
@@ -70,6 +71,23 @@ LOCAL_DIMENSIONS = 384
 LOCAL_BATCH_SIZE = 16
 OPENAI_BATCH_SIZE = 100
 OPENAI_MAX_ATTEMPTS = 4
+
+#: 子プロセスのモデルロード完了(`"ready"` メッセージ)を待つ上限秒数。
+#: 実測ロード時間は約55.07秒(`task-2-report.md`)。負荷の高いマシンでの
+#: 遅延や初回のOSキャッシュミスも吸収できるよう、実測値の約3.3倍を確保する。
+LOCAL_READY_TIMEOUT_SECONDS = 180.0
+
+#: 1バッチ分の推論応答を待つ上限秒数(モデルロード後、`"ready"` 受信後に適用)。
+#: 実測スループット8.84件/秒(=1件あたり約0.113秒)から、既定バッチサイズ16件の
+#: 推論は約1.8秒で終わる計算になる。ブラウザやエディタが同居する実行環境での
+#: 負荷変動を許容しつつ、応答が返らない子プロセスをタイムリーに検知できるよう、
+#: 実測所要時間の約16倍(30秒)を上限とする。
+LOCAL_BATCH_TIMEOUT_SECONDS = 30.0
+
+#: 子プロセス異常終了時に内部で再起動・再試行する回数の上限。
+#: 1回まで(ゼロから起動し直すコストが約55秒あるため、繰り返しクラッシュする
+#: 場合はここで打ち切って呼び出し元へ失敗を伝える——無限ループにしない)。
+LOCAL_MAX_RESTART_ATTEMPTS = 1
 
 
 class EmbeddingProvider(Protocol):
@@ -117,6 +135,10 @@ def _local_worker_main(
         out_queue.put((-1, "load_error", str(exc)))
         return
 
+    # ロード完了を親プロセスへ通知する。親側はこの合図の受信でロード待ちを終え、
+    # 以後のバッチ応答タイムアウト(短い方)へ切り替える。
+    out_queue.put((-1, "ready", None))
+
     while True:
         message = in_queue.get()
         if message is None:
@@ -152,22 +174,89 @@ class LocalEmbeddingProvider:
         dimensions: int = LOCAL_DIMENSIONS,
         batch_size: int = LOCAL_BATCH_SIZE,
         model_loader: Callable[[str], Any] = _default_model_loader,
+        ready_timeout: float = LOCAL_READY_TIMEOUT_SECONDS,
+        batch_timeout: float = LOCAL_BATCH_TIMEOUT_SECONDS,
+        max_restart_attempts: int = LOCAL_MAX_RESTART_ATTEMPTS,
     ) -> None:
         self.model_identity = model_identity
         self.load_model_name = load_model_name
         self.dimensions = dimensions
         self.batch_size = batch_size
+        self._model_loader = model_loader
+        self._ready_timeout = ready_timeout
+        self._batch_timeout = batch_timeout
+        self._max_restart_attempts = max_restart_attempts
         self._ctx = mp.get_context("spawn")
         self._in_queue: Any = self._ctx.Queue()
         self._out_queue: Any = self._ctx.Queue()
+        self._process: Any = None
+        self._next_id = 0
+        self._closed = False
+        self._start_process()
+
+    def _start_process(self) -> None:
+        """子プロセスを(再)起動し、モデルロード完了(`"ready"`)まで待つ。
+
+        `embed_batch` からの再起動時にも呼ばれる(子プロセス死亡からの復旧)。
+        """
         self._process = self._ctx.Process(
             target=_local_worker_main,
-            args=(load_model_name, batch_size, model_loader, self._in_queue, self._out_queue),
+            args=(
+                self.load_model_name,
+                self.batch_size,
+                self._model_loader,
+                self._in_queue,
+                self._out_queue,
+            ),
             daemon=True,
         )
         self._process.start()
-        self._next_id = 0
-        self._closed = False
+        self._wait_ready()
+
+    def _wait_ready(self) -> None:
+        try:
+            received_id, status, payload = self._out_queue.get(timeout=self._ready_timeout)
+        except Empty:
+            self._reap()
+            raise AppError(
+                code=ErrorCode.FAILURE,
+                message=(
+                    "埋め込みモデルの読み込みがタイムアウトしました"
+                    f"(子プロセス、{self._ready_timeout:g}秒)。"
+                ),
+                retryable=False,
+                details={"timeout_seconds": self._ready_timeout},
+            ) from None
+        if status == "load_error":
+            self._reap()
+            raise AppError(
+                code=ErrorCode.FAILURE,
+                message="埋め込みモデルの読み込みに失敗しました(子プロセス)。",
+                retryable=False,
+                details={"cause_message": str(payload)},
+            )
+        if status != "ready" or received_id != -1:
+            self._reap()
+            raise AppError(
+                code=ErrorCode.FAILURE,
+                message="埋め込み子プロセスの起動応答が不正です。",
+                retryable=False,
+            )
+
+    def _reap(self) -> None:
+        """存命なら停止させ、既に死んでいれば zombie を回収する。
+
+        タイムアウト・異常終了・close() のすべての退出経路から呼ばれ、子プロセスが
+        親プロセスの利用終了後も残り続けないようにする。
+        """
+        process = self._process
+        if process is None:
+            return
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5)
+        else:
+            process.join(timeout=1)
 
     def embed_batch(self, texts: Sequence[str]) -> list[np.ndarray]:
         if self._closed:
@@ -175,16 +264,31 @@ class LocalEmbeddingProvider:
                 code=ErrorCode.FAILURE,
                 message="既に close() 済みの LocalEmbeddingProvider は使えません。",
             )
+        return self._send_and_wait(list(texts), attempt=0)
+
+    def _send_and_wait(self, texts: list[str], *, attempt: int) -> list[np.ndarray]:
         batch_id = self._next_id
         self._next_id += 1
-        self._in_queue.put((batch_id, list(texts)))
-        received_id, status, payload = self._out_queue.get()
-        if status == "load_error":
-            raise AppError(
-                code=ErrorCode.FAILURE,
-                message="埋め込みモデルの読み込みに失敗しました(子プロセス)。",
-                details={"cause_message": str(payload)},
-            )
+        self._in_queue.put((batch_id, texts))
+        try:
+            received_id, status, payload = self._out_queue.get(timeout=self._batch_timeout)
+        except Empty:
+            alive = self._process.is_alive()
+            self._reap()
+            if alive:
+                # 生存中だが応答が無い: 負荷が高いだけの遅いバッチをクラッシュと
+                # 誤診しない(brief の要求)。ここでは復旧を試みず、原因を明示して
+                # 呼び出し元(run_job)に委ねる——プロセスは既に terminate 済み。
+                raise AppError(
+                    code=ErrorCode.FAILURE,
+                    message=(
+                        "埋め込み子プロセスの応答がタイムアウトしました"
+                        f"(生存中、{self._batch_timeout:g}秒)。"
+                    ),
+                    retryable=False,
+                    details={"timeout_seconds": self._batch_timeout},
+                ) from None
+            return self._restart_and_retry(texts, attempt=attempt)
         if received_id != batch_id:
             raise AppError(
                 code=ErrorCode.FAILURE,
@@ -198,16 +302,30 @@ class LocalEmbeddingProvider:
             )
         return list(payload)
 
+    def _restart_and_retry(self, texts: list[str], *, attempt: int) -> list[np.ndarray]:
+        """子プロセスの死亡を検知した後の復旧(bounded restart)。
+
+        `max_restart_attempts` を超えたら、繰り返しクラッシュする子プロセスを
+        黙って無限リトライせず、明確な `AppError` として呼び出し元へ伝える。
+        """
+        if attempt >= self._max_restart_attempts:
+            raise AppError(
+                code=ErrorCode.FAILURE,
+                message="埋め込み子プロセスが異常終了しました(再起動上限に到達)。",
+                retryable=False,
+                details={"restart_attempts": attempt},
+            )
+        self._start_process()
+        return self._send_and_wait(texts, attempt=attempt + 1)
+
     def close(self) -> None:
         if self._closed:
             return
         self._closed = True
-        if self._process.is_alive():
+        if self._process is not None and self._process.is_alive():
             self._in_queue.put(None)
             self._process.join(timeout=10)
-            if self._process.is_alive():
-                self._process.terminate()
-                self._process.join(timeout=5)
+        self._reap()
 
     def __enter__(self) -> LocalEmbeddingProvider:
         return self
@@ -459,8 +577,11 @@ def _write_meta(conn: sqlite3.Connection, provider: EmbeddingProvider) -> None:
 __all__ = [
     "HASH_MODEL_IDENTITY",
     "LOCAL_BATCH_SIZE",
+    "LOCAL_BATCH_TIMEOUT_SECONDS",
     "LOCAL_DIMENSIONS",
     "LOCAL_LOAD_MODEL_NAME",
+    "LOCAL_MAX_RESTART_ATTEMPTS",
+    "LOCAL_READY_TIMEOUT_SECONDS",
     "OPENAI_BATCH_SIZE",
     "OPENAI_MAX_ATTEMPTS",
     "EmbeddingProvider",
