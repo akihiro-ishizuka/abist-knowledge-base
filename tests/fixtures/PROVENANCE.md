@@ -65,27 +65,45 @@ M4/M8 実装者は「モデル名を統一しよう」と `EMBEDDING_MODELS` の
 `intfloat/...` に変更してはならない(`src/abist_kb/infrastructure/search/e5_input.py`
 のモジュール docstring にも同じ注記がある)。
 
-**M2 の埋め込みゲート前提条件は honest reconstruction 方式(64/100)で証明済み。**
-`gate-samples.json` は `embeddingInput_b64`/`input_hash` 等の**出力**のみを記録し、
-`title`/`heading_path`/`text` といった入力材料そのものは記録していない
-(容量削減のため)。そのため `tests/kernel/test_e5_input.py` の
+**M2 の埋め込みゲート前提条件は100/100件で証明済み(M1 Task 8で64/100から解消)。**
+当初 `gate-samples.json` は `embeddingInput_b64`/`input_hash` 等の**出力**のみを記録し、
+`title`/`heading_path`/`text` といった入力材料そのものは記録していなかった(容量削減の
+ため)。そのため `tests/kernel/test_e5_input.py` の旧版の
 `test_gate_samples_reproduce_e5_input` は、`path`/`chunk_index` を手がかりに
 `tests/fixtures/real-docs/samples.json`(40件の実文書)側で同じ path を探し、
 見つかれば生テキストを `chunk_markdown()` に通して `chunk_index` 番目のチャンクを
-取り出し、`embedding_input()` を実際に呼び出して `embeddingInput_b64`/`input_hash`
-と突き合わせる。`title` は旧実装 `tools/lib/indexer.js` の `indexDocument` と同じ
-3段フォールバック(呼び出し側指定 → front matter の `title` → ファイル名から
-`.md` を除いたもの)で再現する。
+取り出し、`embedding_input()` を実際に呼び出して突き合わせる方式(honest
+reconstruction)を採っており、100件中64件しか再現できず残り36件は `pytest.skip`
+していた(real-docs フィクスチャが40件の層化サンプルで gate-samples 側の全文書を
+カバーしていないため)。
 
-100件中、path が real-docs フィクスチャに存在し `chunk_index` も範囲内だったのは
-**64件**で、この64件は全件 `embedding_input()` の出力・`input_hash` とも完全一致した
-(手直し無し)。残り**36件**は real-docs フィクスチャが40件の層化サンプルであり
-gate-samples 側の全文書をカバーしていないため再構成できず、`pytest.skip` で理由付きに
-明示している(黙って通過させていない)。この 64/100 という達成カバレッジ自体を
-`test_gate_samples_reconstruction_coverage_is_64_of_100` で固定しており、フィクスチャや
-再構成ロジックが変わってこの数が動いたら気付けるようにしてある。M8 はこの
-「64件で入力再現・ハッシュ一致を確認済み、残り36件は文書自体が未採取のため未証明」
-という前提の上でコサイン類似度判定に進むこと。
+M1 Task 8 で `capture-embeddings.mjs`(`chunks JOIN embeddings` のクエリに
+`c.title`/`c.heading_path`/`c.text` は元々含まれていたため、SELECT列は変更せず出力に
+`title_b64`/`heading_path_b64`(NULL許容、`null`のまま記録)/`text_b64`/`contains_astral`
+(astral文字の有無を示す真偽値)の4フィールドを追加しただけ)を再実行し、
+`embeddingInput()` が実際に受け取った材料そのものを100件全件に記録するよう拡張した。
+既存の `embeddingInput_b64`/`input_hash`/`vector_b64` 等の出力フィールドは1件たりとも
+変更されていないことをケースごとに突き合わせて確認済み(値の再計算・再ハッシュでは
+なく、フィクスチャ再生成前後のファイルを直接比較)。
+
+これにより `tests/kernel/test_e5_input.py` の `test_gate_samples_reproduce_e5_input` は
+real-docs フィクスチャに一切依存せず、gate-samples.json 自身の
+`title_b64`/`heading_path_b64`/`text_b64` から `embedding_input()` を直接呼び出して
+100件全件を検証する(スキップ0件)。達成カバレッジ100/100は
+`test_gate_samples_all_cases_carry_verifiable_input_material` で固定している。
+
+**astral文字(サロゲートペア、絵文字等)を含むサンプルは実測9件**(母集団100件中)。
+うち7件は旧 real-docs フィクスチャでは再構成できなかった36件の側に含まれており、
+今回の追加採取以前は `embedding_input()` の truncate/prefix 順序をこの7件で
+実際に検証できていなかった(残り2件はre-docsフィクスチャでも再構成可能だった)。
+検出された astral 文字はいずれも絵文字(U+1F3xx〜U+1F6xx帯)で、CJK拡張B相当の
+文字は今回の100件には含まれていない。512文字(UTF-16コード単位)切り詰め境界が
+サロゲートペアの真ん中を実際に切ってしまうケースは、この9件を含む100件全件を
+走査した結果0件だった(既存の実データではたまたま境界と astral 文字位置が重ならな
+かっただけで、`_truncate_utf16_units` の修正自体の必要性を否定するものではない。
+`tests/kernel/test_e5_input.py` の合成ケースで境界を意図的に跨がせた回帰テストが
+別途ある)。`contains_astral` フラグにより、この母集団は今後も
+`tests/fixtures_check/test_embedding_gate_fixture.py` から再走査せずに問い合わせ可能。
 
 ### sync_status_for マッピング(`kernel/sync-status-for.json`、M2後の追加採取)
 

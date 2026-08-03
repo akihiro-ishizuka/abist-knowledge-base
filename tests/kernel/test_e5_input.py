@@ -24,7 +24,6 @@ from typing import Any
 
 import pytest
 
-from abist_kb.infrastructure.search.chunker import DEFAULT_CHUNK_OPTIONS, chunk_markdown
 from abist_kb.infrastructure.search.e5_input import (
     EMBEDDING_MODELS,
     EmbeddingInputChunk,
@@ -314,26 +313,24 @@ def test_all_fixture_cases_covered() -> None:
 # 再度突き合わせているだけの循環参照であり、`embedding_input()` を一度も
 # 呼んでいなかった(実装の truncate/prefix 順序が壊れていても検出できない)。
 #
-# `gate-samples.json` には `path` と `chunk_index` は記録されているが、
-# `embeddingInput` の材料(title/heading_path/text)そのものは記録されていない
-# ため、フィクスチャ単体では `embedding_input()` を再現できない。そこで
-# `tests/fixtures/real-docs/samples.json`(40件の実文書、front matter と生
-# バイト列を保持)を材料に、同じ文書の同じ path が real-docs 側にも採取されて
-# いれば、その生テキストを `chunk_markdown()` に通し、`chunk_index` 番目の
-# チャンクから `embedding_input()` を実際に呼び出して再構成する。
+# M1 Task 8 で `capture-embeddings.mjs` を拡張し、`gate-samples.json` の各ケースに
+# `embeddingInput()` が実際に受け取った材料そのもの(`title_b64`/`heading_path_b64`/
+# `text_b64`、`chunks` テーブル行から直接採取)を追加採取した。そのため、以前のように
+# `tests/fixtures/real-docs/samples.json`(40件の層化サンプル)から同じ path を探して
+# `chunk_markdown()` で再構成する必要が無くなり、100件全件で `embedding_input()` を
+# 直接呼び出して検証できる(以前は path が real-docs 側に無い36件が `pytest.skip` に
+# なっていた。この 64/100 という達成カバレッジは `tests/fixtures/PROVENANCE.md` の
+# 旧記述であり、本ファイルの更新に合わせて 100/100 に置き換えている)。
 #
-# 旧実装(`tools/lib/indexer.js` の `indexDocument`)が chunk 行へ書き込む
-# `title` は「呼び出し側指定 → front matter の `title` → ファイル名(拡張子
-# 抜き)」の3段フォールバックである(B32doc 等 front matter を持たないソース
-# 向けの経路が最初に来るが、real-docs の対象文書はいずれも front matter を
-# 持つ通常の markdown なので、ここでは後半2段のみで足りる)。
+# `title_b64`/`heading_path_b64` は NULL 許容の `chunks.title`/`chunks.heading_path`
+# 列をそのまま反映するため、フィクスチャ側で `null` の場合は `None` として渡す
+# (`embedding_input()` 側は falsy チェックなので `None` と `""` は挙動上同じだが、
+# 元の値を保つ)。`text_b64` は `chunks.text`(NOT NULL)なので常に文字列。
 #
-# 100件中、path が real-docs フィクスチャに存在するのは64件で、残り36件は
-# real-docs の40件サンプリングに含まれていない文書のため再構成できない
-# (フィクスチャの限界であり、実装の不具合ではない)。再構成できた64件は
-# 全件 chunk_index が範囲内で、`embedding_input()` の出力・`input_hash` とも
-# 完全一致することを確認済み。この 64/100 という達成カバレッジは
-# `tests/fixtures/PROVENANCE.md` にも記録する。
+# 全100件が `title_b64`/`heading_path_b64`/`text_b64` を持つため、スキップは発生
+# しない(0件)。万一いずれかのケースでフィールドが欠けていれば、それはフィクスチャの
+# 採取不備でありテストの不具合ではないため、`pytest.fail` で明示的に落とす
+# (黙ってスキップしない)。
 # ---------------------------------------------------------------------------
 
 GATE_SAMPLES_PATH = (
@@ -341,87 +338,60 @@ GATE_SAMPLES_PATH = (
 )
 GATE_SAMPLES = json.loads(GATE_SAMPLES_PATH.read_text(encoding="utf-8"))
 
-REAL_DOCS_PATH = Path(__file__).resolve().parents[1] / "fixtures" / "real-docs" / "samples.json"
-REAL_DOCS = json.loads(REAL_DOCS_PATH.read_text(encoding="utf-8"))
-REAL_DOCS_BY_PATH = {case["path"]: case for case in REAL_DOCS["cases"]}
-
-# 64/100 という達成カバレッジそのものを固定する(この数が変わったら fixture か
-# 再構成ロジックのどちらかが変わったことを意味するので、無言で変動させない)。
-GATE_SAMPLES_RECONSTRUCTABLE_COUNT = 64
-GATE_SAMPLES_UNRECONSTRUCTABLE_COUNT = 36
+# 100/100 という達成カバレッジそのものを固定する(この数が下がったら、fixture の
+# 採取ロジックが壊れて必須フィールドを書けなくなったことを意味するので、無言で
+# 変動させない)。
+GATE_SAMPLES_VERIFIABLE_COUNT = 100
+GATE_SAMPLES_UNVERIFIABLE_COUNT = 0
 
 
-def _doc_title(path: str, frontmatter_data: dict) -> str:
-    """`tools/lib/indexer.js` の `indexDocument` が chunk 行へ書く `title` を再現する。
+def _gate_sample_chunk(case: dict) -> EmbeddingInputChunk:
+    """`gate-samples.json` の1ケースから `embedding_input()` への入力を組み立てる。
 
-    3段フォールバック(`row.title` → `fm.title` → ファイル名(拡張子抜き))のうち、
-    ここで対象にする real-docs の文書はすべて front matter を持つ通常の markdown
-    (B32doc 等 `row.title` を明示的に渡す経路の対象外)なので、後半2段のみで足りる。
+    `title_b64`/`heading_path_b64` は `chunks.title`/`chunks.heading_path` が NULL
+    だった場合に `null` として記録されているため、その場合は `None` を渡す。
     """
-    title = frontmatter_data.get("title")
-    if isinstance(title, str) and title:
-        return title
-    basename = path.rsplit("/", 1)[-1]
-    return basename[: -len(".md")] if basename.endswith(".md") else basename
-
-
-def _reconstruct_gate_sample(case: dict) -> str | None:
-    """`gate-samples.json` の1ケースを real-docs フィクスチャから再構成する。
-
-    対象文書が real-docs フィクスチャに無い、または `chunk_index` が範囲外なら
-    `None` を返す(再構成不能。フィクスチャの限界であって不具合ではない)。
-    """
-    real_case = REAL_DOCS_BY_PATH.get(case["path"])
-    if real_case is None:
-        return None
-
-    raw = b64d(real_case["expected"]["frontmatter"]["raw_b64"])
-    chunks = chunk_markdown(raw, DEFAULT_CHUNK_OPTIONS)
-    index = case["chunk_index"]
-    if index < 0 or index >= len(chunks):
-        return None
-
-    chunk = chunks[index]
-    title = _doc_title(case["path"], real_case["expected"]["frontmatter"]["data"])
-    ei_chunk = EmbeddingInputChunk(text=chunk.text, title=title, heading_path=chunk.heading_path)
-    return embedding_input(ei_chunk, case["model"])
+    title = b64d(case["title_b64"]) if case["title_b64"] is not None else None
+    heading_path = b64d(case["heading_path_b64"]) if case["heading_path_b64"] is not None else None
+    text = b64d(case["text_b64"])
+    return EmbeddingInputChunk(text=text, title=title, heading_path=heading_path)
 
 
 def test_gate_samples_fixture_has_100_cases() -> None:
     assert len(GATE_SAMPLES["cases"]) == 100
 
 
-def test_gate_samples_reconstruction_coverage_is_64_of_100() -> None:
-    """達成カバレッジそのものの回帰テスト(§コメント参照)。"""
-    reconstructed = sum(
-        1 for case in GATE_SAMPLES["cases"] if _reconstruct_gate_sample(case) is not None
-    )
-    unreconstructable = len(GATE_SAMPLES["cases"]) - reconstructed
-    assert reconstructed == GATE_SAMPLES_RECONSTRUCTABLE_COUNT
-    assert unreconstructable == GATE_SAMPLES_UNRECONSTRUCTABLE_COUNT
+def test_gate_samples_all_cases_carry_verifiable_input_material() -> None:
+    """達成カバレッジそのものの回帰テスト。
+
+    以前は `real-docs/samples.json` に同じ文書が無い36件が再構成不能だったが、
+    `gate-samples.json` 自体が材料(title/heading_path/text)を持つようになったため、
+    100件全件が検証可能になった。この数が下がったら fixture の採取が壊れている。
+    """
+    verifiable = sum(1 for case in GATE_SAMPLES["cases"] if case.get("text_b64") is not None)
+    unverifiable = len(GATE_SAMPLES["cases"]) - verifiable
+    assert verifiable == GATE_SAMPLES_VERIFIABLE_COUNT
+    assert unverifiable == GATE_SAMPLES_UNVERIFIABLE_COUNT
 
 
 @pytest.mark.parametrize("index", range(len(GATE_SAMPLES["cases"])))
 def test_gate_samples_reproduce_e5_input(index: int) -> None:
     """`embedding_input()` を実際に呼び出して `gate-samples.json` を再現する。
 
-    再構成できないケース(path が real-docs フィクスチャに無い、または
-    `chunk_index` が範囲外)は明示的にスキップする——黙って通過させず、
-    理由を pytest の skip reason に残す。
+    フィクスチャに材料(title_b64/heading_path_b64/text_b64)が無いケースは
+    スキップではなく明示的な失敗にする(黙って通過させない。現状は0件のはず)。
     """
     case = GATE_SAMPLES["cases"][index]
-    reconstructed = _reconstruct_gate_sample(case)
-    if reconstructed is None:
-        pytest.skip(
-            f"path={case['path']!r} is not covered by tests/fixtures/real-docs/samples.json "
-            "(only 40 of the full document population were sampled there) or chunk_index is "
-            "out of range for the reconstructed chunk list; embedding_input() cannot be "
-            "re-derived from gate-samples.json alone (it stores outputs only, not "
-            "title/heading_path/text)."
+    if case.get("text_b64") is None:
+        pytest.fail(
+            f"id={case['id']!r}: gate-samples.json に text_b64 が記録されていない"
+            "(fixture の採取不備。capture-embeddings.mjs を確認すること)"
         )
 
-    expected_input = b64d(case["embeddingInput_b64"])
+    chunk = _gate_sample_chunk(case)
     model = case["model"]
+    reconstructed = embedding_input(chunk, model)
 
+    expected_input = b64d(case["embeddingInput_b64"])
     assert reconstructed == expected_input
     assert input_hash(model, reconstructed) == case["input_hash"]

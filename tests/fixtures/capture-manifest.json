@@ -1,14 +1,14 @@
 {
   "capture_dates": {
     "capture": {
-      "commit": "eb864ebdfe05b4d972c9df7353a634e9be745257",
-      "date": "2026-08-03T22:46:30+09:00",
-      "subject": "feat(m1): b32doc-filter の未採取ゴールデンを追加"
+      "commit": "7eeda228db760c80cb03d2ebae2e4ee5c074a1f4",
+      "date": "2026-08-03T23:28:22+09:00",
+      "subject": "fix(m1): sync_status_for を実行結果として採取し、b32doc accept実文書ギャップを解消"
     },
     "capture-manifest.json (this file)": {
-      "commit": "eb864ebdfe05b4d972c9df7353a634e9be745257",
-      "date": "2026-08-03T22:46:30+09:00",
-      "subject": "feat(m1): b32doc-filter の未採取ゴールデンを追加"
+      "commit": "a722d4a09b019923f1b8abedc452e7a59ed3750d",
+      "date": "2026-08-04T00:11:31+09:00",
+      "subject": "fix(m2): 全体レビュー指摘のCRITICAL/IMPORTANT/MINORを一括修正"
     },
     "embedding": {
       "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
@@ -26,9 +26,9 @@
       "subject": "feat(m1): 埋め込みゲート素材・HTML変換ゴールデン・capture-manifestを採取"
     },
     "kernel": {
-      "commit": "eb864ebdfe05b4d972c9df7353a634e9be745257",
-      "date": "2026-08-03T22:46:30+09:00",
-      "subject": "feat(m1): b32doc-filter の未採取ゴールデンを追加"
+      "commit": "7eeda228db760c80cb03d2ebae2e4ee5c074a1f4",
+      "date": "2026-08-03T23:28:22+09:00",
+      "subject": "fix(m1): sync_status_for を実行結果として採取し、b32doc accept実文書ギャップを解消"
     },
     "mcp": {
       "commit": "c49036566aba4243f96e6775a5b63c887bffe001",
@@ -41,9 +41,9 @@
       "subject": "feat(m1): 実データ層化サンプルを旧sync-state.sqliteから採取"
     },
     "root": {
-      "commit": "eb864ebdfe05b4d972c9df7353a634e9be745257",
-      "date": "2026-08-03T22:46:30+09:00",
-      "subject": "feat(m1): b32doc-filter の未採取ゴールデンを追加"
+      "commit": "a722d4a09b019923f1b8abedc452e7a59ed3750d",
+      "date": "2026-08-04T00:11:31+09:00",
+      "subject": "fix(m2): 全体レビュー指摘のCRITICAL/IMPORTANT/MINORを一括修正"
     }
   },
   "categories": {
@@ -76,9 +76,9 @@
           "sha256": "c4a0d1f25598488b805e18490483604818750cab2168517af0a25f624198737b"
         },
         {
-          "bytes": 13997,
+          "bytes": 17115,
           "path": "capture/capture-embeddings.mjs",
-          "sha256": "da511a626cadb650518128fb95681eedbe10965c0dd8c5d367c47842bc12d661"
+          "sha256": "e26a9dbbd0c7145bf42b9c432afc16afbee22691d4c628a8e52bc0b52e98e4e4"
         },
         {
           "bytes": 16686,
@@ -111,18 +111,18 @@
           "sha256": "a092b8c8ea84fec98f472cc7d901ebe2714ed35bcaae35e5812b7fbed078dc35"
         }
       ],
-      "total_bytes": 244067
+      "total_bytes": 247185
     },
     "embedding": {
       "file_count": 1,
       "files": [
         {
-          "bytes": 352192,
+          "bytes": 490786,
           "path": "embedding/gate-samples.json",
-          "sha256": "572439b8bb5f7f47eb9b08a4f93c6c4198be8259d2303a187152802582780fd5"
+          "sha256": "583ab00ad75679e8ad81b24507e9ec5ecfa97c3bc9582eb764c1e6c850c01d66"
         }
       ],
-      "total_bytes": 352192
+      "total_bytes": 490786
     },
     "eval": {
       "file_count": 2,
@@ -373,12 +373,12 @@
           "sha256": "11dce4ae76a450fa325a88133d4282cff549f31fe82312927b1e16b74be90ef0"
         },
         {
-          "bytes": 37761,
+          "bytes": 39347,
           "path": "PROVENANCE.md",
-          "sha256": "5e1a0df683ec6a9181f021c65fa740057c7189c4a061f52dd9e536070885722d"
+          "sha256": "a536fb23b6b18e32c90e2e5c01de2aa849412783c6d93c81792609ddfd0d5c35"
         }
       ],
-      "total_bytes": 37782
+      "total_bytes": 39368
     }
   },
   "exclusions_registry": [

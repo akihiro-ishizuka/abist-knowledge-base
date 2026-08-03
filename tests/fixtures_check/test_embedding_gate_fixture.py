@@ -133,11 +133,114 @@ def test_every_case_has_required_fields() -> None:
             "embeddingInput_b64",
             "input_hash",
             "vector_b64",
+            "title_b64",
+            "heading_path_b64",
+            "text_b64",
+            "contains_astral",
         ):
             assert key in case, f"{case.get('id')}: 必須フィールド {key!r} が無い"
         assert isinstance(case["content_hash"], str) and len(case["content_hash"]) == 64
         assert case["model"] == "Xenova/multilingual-e5-small"
         assert case["dimensions"] == 384
+
+
+# ---------------------------------------------------------------------------
+# M1 Task 8: embeddingInput() の材料そのもの(title_b64/heading_path_b64/text_b64)
+# の健全性検証。以前は gate-samples.json が出力のみを記録していたため、Python 側の
+# `tests/kernel/test_e5_input.py` は 64/100 件しか `embedding_input()` を実際に
+# 呼び出して再現検証できなかった(残り36件は real-docs フィクスチャの限界により
+# 再構成不能で skip)。ここでは追加採取した材料フィールドが全100件に存在し、
+# base64として正しくデコードでき、`contains_astral` フラグがデコード後の実内容と
+# 一致することを固定する。
+# ---------------------------------------------------------------------------
+
+
+def test_text_b64_present_on_all_cases_and_decodes() -> None:
+    """`text_b64` は `chunks.text`(NOT NULL)由来なので全100件に必須。
+
+    `text_length` は採取スクリプト(Node)側で `text.length`(UTF-16 コード単位数)
+    として定義されている。Python の `len(str)` はコードポイント単位で数えるため、
+    astral 文字(サロゲートペア=UTF-16では2単位、Pythonでは1コードポイント)を
+    含むテキストでは1文字あたり1ずつ差が出る。そのため単純な長さ一致ではなく、
+    astral 文字の個数分を補正して比較する。
+    """
+    data = _load()
+    decoded_count = 0
+    for case in data["cases"]:
+        assert case["text_b64"] is not None, f"{case['id']}: text_b64 が無い"
+        try:
+            decoded = base64.b64decode(case["text_b64"], validate=True).decode("utf-8")
+        except (binascii.Error, UnicodeDecodeError) as exc:
+            raise AssertionError(
+                f"{case['id']}: text_b64 が有効なUTF-8のbase64ではない: {exc}"
+            ) from exc
+        astral_chars = sum(1 for ch in decoded if ord(ch) > 0xFFFF)
+        utf16_length = len(decoded) + astral_chars
+        assert utf16_length == case["text_length"], (
+            f"{case['id']}: text_b64 をデコードした文字列のUTF-16コード単位数が "
+            f"text_length と一致しない(実際={utf16_length}, 期待={case['text_length']})"
+        )
+        decoded_count += 1
+    assert decoded_count == 100
+
+
+def test_title_and_heading_path_b64_are_string_or_null() -> None:
+    """`chunks.title`/`chunks.heading_path` は NULL 許容の列なので、フィクスチャ側
+    でも `null`(Python では `None`)か文字列のいずれかであるべき(数値や配列を
+    誤って書いてしまう回帰を防ぐ)。null でなければ有効な base64 としてデコードできる
+    こと。
+    """
+    data = _load()
+    for case in data["cases"]:
+        for key in ("title_b64", "heading_path_b64"):
+            value = case[key]
+            assert value is None or isinstance(value, str), (
+                f"{case['id']}: {key} が null でも文字列でもない: {value!r}"
+            )
+            if value is not None:
+                try:
+                    base64.b64decode(value, validate=True)
+                except binascii.Error as exc:
+                    raise AssertionError(
+                        f"{case['id']}: {key} が有効なbase64ではない: {exc}"
+                    ) from exc
+
+
+def test_contains_astral_is_boolean_on_every_case() -> None:
+    data = _load()
+    for case in data["cases"]:
+        assert isinstance(case["contains_astral"], bool), (
+            f"{case['id']}: contains_astral が真偽値ではない: {case['contains_astral']!r}"
+        )
+
+
+def test_contains_astral_flag_agrees_with_decoded_material() -> None:
+    """`contains_astral` が title/heading_path/text をデコードした実内容の
+    astral文字(コードポイント > 0xFFFF)有無と一致することを固定する
+    (採取スクリプト側の判定ロジックの回帰防止。brief必須要件: astral母集団が
+    問い合わせ可能であることの裏付け)。
+
+    採取スクリプト(Node)はUTF-16コード単位の文字列上でサロゲートペアの有無を
+    見て判定するが、Python の `str` はデコード後すでにコードポイント単位
+    (astral文字は単一の文字)なので、ここでは同値な `ord(ch) > 0xFFFF` で判定する。
+    """
+    data = _load()
+    astral_count = 0
+    for case in data["cases"]:
+        parts = []
+        if case["title_b64"] is not None:
+            parts.append(base64.b64decode(case["title_b64"]).decode("utf-8"))
+        if case["heading_path_b64"] is not None:
+            parts.append(base64.b64decode(case["heading_path_b64"]).decode("utf-8"))
+        parts.append(base64.b64decode(case["text_b64"]).decode("utf-8"))
+        has_astral = any(ord(ch) > 0xFFFF for ch in "".join(parts))
+        assert has_astral == case["contains_astral"], (
+            f"{case['id']}: contains_astral={case['contains_astral']} だが、"
+            f"デコードした実内容の astral 文字有無は {has_astral}"
+        )
+        if has_astral:
+            astral_count += 1
+    assert astral_count > 0, "astral 文字を含むケースが1件も無い(判定ロジックが壊れている可能性)"
 
 
 def test_input_hash_is_64_char_lowercase_hex() -> None:

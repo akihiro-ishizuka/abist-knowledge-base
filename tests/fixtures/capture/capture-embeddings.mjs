@@ -33,12 +33,21 @@
 // crypto 以外の依存が無い純粋関数群なので、サンドボックスへコピーせず旧リポジトリから
 // 直接 import する(capture-kernel.mjs と同じ方式。読み取りのみで副作用が無いことは
 // Task 1 で確認済み)。
+//
+// 【M1 Task 8 追記】gate-samples.json は当初 embeddingInput() の「出力」のみを記録し、
+// 材料(title/heading_path/text)そのものは記録していなかったため、Python 側の
+// テストが100件中64件しか embedding_input() を実際に呼び出して再現検証できず、
+// 残り36件は tests/fixtures/real-docs/samples.json(層化サンプル40件)側に同じ
+// 文書が無いという理由でスキップされていた。ここでは同じ chunk 行から
+// title_b64/heading_path_b64/text_b64(いずれも埋め込み対象チャンクが実際に
+// embeddingInput() へ渡した値そのもの)を追加採取し、100件全件を検証可能にする。
+// 既存の embeddingInput_b64/input_hash/vector_b64 は一切変更しない(追加のみ)。
 
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { assertReadOnly, oldRepoRoot, writeDeterministicJson } from "./_shared.mjs";
+import { assertReadOnly, b64, oldRepoRoot, writeDeterministicJson } from "./_shared.mjs";
 
 assertReadOnly(); // 基準点を記録する
 
@@ -147,6 +156,17 @@ function lengthBucket(len) {
   if (len < 200) return "short";
   if (len <= 600) return "medium";
   return "long";
+}
+
+// astral 文字(基本多言語面外、U+10000以上。絵文字・CJK拡張B等)がひとつでも
+// 含まれるかどうかを判定する。サロゲートペア(高位 \uD800-\uDBFF に続く
+// 低位 \uDC00-\uDFFF)が完全に揃っている箇所を検出する(孤立サロゲートは
+// astral 文字そのものではないため対象外)。title/heading_path/text いずれかに
+// astral 文字があれば、embeddingInput() が組み立てる本文(512文字切り詰め対象)
+// にもその文字が含まれうるため、3フィールドの論理和で判定する。
+const ASTRAL_PAIR_RE = /[\uD800-\uDBFF][\uDC00-\uDFFF]/;
+function containsAstral(...strings) {
+  return strings.some((s) => typeof s === "string" && ASTRAL_PAIR_RE.test(s));
 }
 
 function scriptBucket(text) {
@@ -264,6 +284,20 @@ const cases = selectedRows.map((row) => {
     // 保存済みベクトル BLOB を Float32 LE のまま base64 化する(数値配列に変換すると
     // 浮動小数の精度が落ちるため、生バイト列のまま保持する。brief必須要件)。
     vector_b64: Buffer.from(row.vector.buffer, row.vector.byteOffset, row.vector.byteLength).toString("base64"),
+    // ---- M1 Task 8 追記: embeddingInput() が実際に受け取った材料そのもの ----
+    // chunks.title / chunks.heading_path は NULL 許容(スキーマ: `title TEXT`,
+    // `heading_path TEXT`)なので、null はそのまま null として記録する(空文字列と
+    // 区別する。embeddingInput() は falsy チェック(`if (chunk.title)`)で判定するため、
+    // null と "" は挙動上同じだが、採取物としては元の値を区別して保持する)。
+    // chunks.text は NOT NULL のため常に文字列。
+    title_b64: typeof row.title === "string" ? b64(row.title) : null,
+    heading_path_b64: typeof row.heading_path === "string" ? b64(row.heading_path) : null,
+    text_b64: b64(row.text),
+    // title/heading_path/text のいずれかに astral 文字(サロゲートペア、
+    // U+10000以上。絵文字・CJK拡張B等)が含まれるか。512文字(UTF-16コード
+    // ユニット)切り詰めがサロゲートペアの真ん中を切る不具合(修正済み)の
+    // 影響範囲を、母集団を読み直さずクエリできるようにするための集計用フラグ。
+    contains_astral: containsAstral(row.title, row.heading_path, row.text),
   };
 });
 
@@ -277,7 +311,10 @@ writeDeterministicJson(join(OUT_DIR, "gate-samples.json"), {
     "記録するのみで、判定結果(合格/不合格)はここでは出さない。旧版は q8量子化ONNXの" +
     "Xenova/multilingual-e5-smallで、Python側はintfloat/multilingual-e5-small(非量子化)を" +
     "比較対象とする想定のため不合格が既定シナリオだが、それはM8で実測して確認すべき結論であり、" +
-    "このスクリプトは測定に先回りして仮定しない。",
+    "このスクリプトは測定に先回りして仮定しない。" +
+    "(M1 Task 8追記: 各ケースは embeddingInput() の材料そのもの(title_b64/" +
+    "heading_path_b64/text_b64)と astral 文字有無(contains_astral)も持つため、" +
+    "real-docs フィクスチャに依存せず100件全件で embedding_input() を再現・検証できる。)",
   embedding_model: E5_MODEL,
   model_config: modelConfig(E5_MODEL),
   classification: {
