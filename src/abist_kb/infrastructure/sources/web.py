@@ -24,7 +24,12 @@ fixture化されておらず、このファイルでの pytest 再実装(`tests/
    サイズ・タイムアウトをすべて強制する(セキュリティ要件: 誤った/悪意ある
    ホストへ向けた無制限クローラは他者サーバーへのDoSになりうる)。旧実装は
    ページ数・サイズに上限が無かった(`最大ページ数: 無制限` とログに出していた)。
-   これは意図的な仕様追加(旧実装からの逸脱)である。
+   これは意図的な仕様追加(旧実装からの逸脱)である。**`DEFAULT_MAX_PAGES` は
+   実際の `batch-config.js`(旧リポジトリ)の `catiadoc` バッチ(`maxDepth: 10`)を
+   実際にクロールした結果(約1,300ファイル)を踏まえて選定した値であり、
+   バッチごとに `batch_items.options.max_pages`/`max_size_bytes` で上書きできる
+   (`application.sync_service` 参照)。上限に達した場合は例外で握り潰さず
+   `warn` 経由でログに残す(`WebSyncRunner.crawl` 参照)。
 
 **もう1つの意図的な逸脱: `docs/` 強制付与。** 旧実装は `--output-dir` を
 そのままファイルパス組み立てに使っており、`docs/` を含まないディレクトリ名
@@ -81,7 +86,12 @@ EmitFn = Callable[..., None]
 
 # --- クロール上限(必須、任意化しない: セキュリティ要件) -----------------------
 DEFAULT_MAX_DEPTH = 3
-DEFAULT_MAX_PAGES = 200
+#: 旧実装は無制限だったため新規に決めた値。旧 `batch-config.js` の実在バッチ
+#: `catiadoc`(`maxDepth: 10`)を実際にクロールした結果が約1,300ファイルだった
+#: ことを踏まえ、この実測値に安全マージンを載せた5,000を既定にする(200のままだと
+#: この実在バッチが黙って打ち切られていた)。バッチごとに
+#: `batch_items.options.max_pages` で上書き可能(`application.sync_service`)。
+DEFAULT_MAX_PAGES = 5_000
 DEFAULT_MAX_SIZE_BYTES = 5_000_000  # 1ページあたり5MB
 DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_CONCURRENCY = 5
@@ -352,8 +362,19 @@ class WebSyncRunner:
 
     # -- 1ページの同期 ---------------------------------------------------------
 
-    async def sync_page(self, client: WebClient, url: str) -> tuple[SyncItem | None, list[str]]:
-        """1ページを条件付きGETで差分同期する(旧実装 `downloadPage` の移植)。"""
+    async def sync_page(
+        self, client: WebClient, url: str, *, check_lease: CheckLeaseFn | None = None
+    ) -> tuple[SyncItem | None, list[str]]:
+        """1ページを条件付きGETで差分同期する(旧実装 `downloadPage` の移植)。
+
+        `check_lease` はこのページが実際にファイルへ書き込む直前(このメソッド内の
+        唯一の `_write_text_preserving_eol` 呼び出しの直前)にだけ呼ぶ。取得
+        (`client.fetch`)自体は副作用が無いため、リース確認を取得前に置いても
+        「スケジュール済みの取得がリース喪失後も完了してしまう」ことを防げない
+        (レビュー指摘: 高並行度では確認直後に多数のフェッチが開始してしまう)。
+        意味のある副作用(=ファイル書き込み)の直前に置くことで、確認と副作用の
+        間に他の処理が挟まらない最小の窓にする。
+        """
         resolved = resolve_web_path(
             url,
             root_dir=self._root_dir,
@@ -530,6 +551,11 @@ class WebSyncRunner:
         if self._dry_run:
             return item, links
 
+        # 実際にファイルへ書き込む直前でのリース生存確認(このメソッドの docstring・
+        # `crawl` の `_guarded_sync_page` 参照)。
+        if check_lease is not None:
+            check_lease()
+
         dir_path.mkdir(parents=True, exist_ok=True)
         _write_text_preserving_eol(file_path, content)
 
@@ -576,6 +602,11 @@ class WebSyncRunner:
             while queue:
                 if pages_processed >= self._max_pages:
                     hit_page_limit = True
+                    self._warn(
+                        f"最大ページ数の上限({self._max_pages})に達したため、"
+                        f"クロールを打ち切りました(未処理のURLが{len(queue)}件残っています)。"
+                        "batch_items.options.max_pages で上限を引き上げられます。"
+                    )
                     break
 
                 batch: list[tuple[str, int]] = []
@@ -589,17 +620,15 @@ class WebSyncRunner:
                 if not batch:
                     continue
 
-                async def _guarded_sync_page(url: str) -> tuple[SyncItem | None, list[str]]:
-                    # 1件ずつファイルを書く/DBへ記録する処理なので、その副作用が
-                    # 始まる前に毎回リース生存確認を行う(`JobRunContext.check_lease`
-                    # の契約)。await の前(コルーチン開始直後、同期的)に置くことで、
-                    # 同時実行中でも「この項目の取得・書き込みをこれから始める」
-                    # 直前でリース確認できる(esa の書き込みループと同じ考え方)。
-                    if check_lease is not None:
-                        check_lease()
-                    return await self.sync_page(client, url)
-
-                results = await asyncio.gather(*(_guarded_sync_page(url) for url, _ in batch))
+                # fix(レビュー指摘): 取得(await前)ではなく `sync_page` 内の実際の
+                # ファイル書き込み直前でリース確認する(`sync_page` の docstring参照)。
+                # BFS+gather の並行モデルでは「取得開始前」の確認だと、既に
+                # スケジュール済みの取得群がリース喪失後も完了し書き込みまで
+                # 進んでしまう(確認とその後の並行フェッチの間に窓がある)。
+                # 書き込み直前まで確認を遅らせることで、その窓を最小化する。
+                results = await asyncio.gather(
+                    *(self.sync_page(client, url, check_lease=check_lease) for url, _ in batch)
+                )
 
                 for (url, depth), (item, links) in zip(batch, results, strict=True):
                     if item is not None:

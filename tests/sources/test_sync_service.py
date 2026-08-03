@@ -10,7 +10,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from abist_kb.application.sync_service import SyncService
+from abist_kb.domain.errors import AppError
 from abist_kb.infrastructure.db.batches_repo import BatchRepository
 from abist_kb.infrastructure.db.connection import connect
 from abist_kb.infrastructure.db.documents_repo import DocumentRepository
@@ -19,14 +22,30 @@ from abist_kb.infrastructure.db.sources_repo import SourceRepository
 
 from .conftest import FAKE_TOKEN, MockEsaServer
 from .test_esa import make_post
+from .test_git import make_upstream
+from .test_web import WebPageServer
 
 
-def _build_service(tmp_root: Path, esa_server: MockEsaServer) -> tuple[SyncService, str]:
+def _build_raw_service(tmp_root: Path) -> tuple[SyncService, SourceRepository, BatchRepository]:
     conn = connect(tmp_root / "app.sqlite")
     ensure_app_schema(conn)
     docs_dir = tmp_root / "docs"
     docs_dir.mkdir(exist_ok=True)
     sources = SourceRepository(conn)
+    batches = BatchRepository(conn)
+    service = SyncService(
+        root_dir=tmp_root,
+        docs_dir=docs_dir,
+        reports_dir=tmp_root / "reports",
+        documents=DocumentRepository(conn),
+        sources=sources,
+        batches=batches,
+    )
+    return service, sources, batches
+
+
+def _build_service(tmp_root: Path, esa_server: MockEsaServer) -> tuple[SyncService, str]:
+    service, sources, _batches = _build_raw_service(tmp_root)
     source = sources.create(
         type="esa",
         display_name="テストesa",
@@ -37,15 +56,17 @@ def _build_service(tmp_root: Path, esa_server: MockEsaServer) -> tuple[SyncServi
         },
         output_dir="docs/_svc_test",
     )
-    service = SyncService(
-        root_dir=tmp_root,
-        docs_dir=docs_dir,
-        reports_dir=tmp_root / "reports",
-        documents=DocumentRepository(conn),
-        sources=sources,
-        batches=BatchRepository(conn),
-    )
     return service, source["id"]
+
+
+@pytest.fixture
+def web_server() -> Path:  # type: ignore[misc]
+    server = WebPageServer()
+    server.start()
+    try:
+        yield server
+    finally:
+        server.stop()
 
 
 def test_sync_source_writes_files_and_report(tmp_root: Path, esa_server: MockEsaServer) -> None:
@@ -129,3 +150,209 @@ def test_sync_all_iterates_enabled_esa_batches_only(
 
     assert len(results) == 1
     assert results[0]["batch_name"] == "有効バッチ"
+
+
+# ---------------------------------------------------------------------------
+# web/git バッチの配線(task-5b): SyncService はソース種別で分岐して実行する。
+# ---------------------------------------------------------------------------
+
+
+def test_sync_batch_web_crawls_and_writes_report(tmp_root: Path, web_server: WebPageServer) -> None:
+    web_server.state.body = "<p>本文</p>"
+    service, _sources, batches = _build_raw_service(tmp_root)
+    batch = batches.create(
+        name="webバッチ",
+        type="web",
+        output_dir="docs/_svc_web_test",
+        items=[{"options": {"url": web_server.base_url + "/", "max_depth": 0}}],
+    )
+
+    summary, report_path = service.sync_batch(batch["id"])
+
+    assert summary.source == "web"
+    assert summary.totals["added"] == 1
+    assert report_path is not None
+    assert report_path.name.startswith("sync-web-")
+    saved = list((tmp_root / "docs" / "_svc_web_test").rglob("*.md"))
+    assert len(saved) == 1
+
+
+def test_sync_batch_git_mirrors_and_writes_report(tmp_root: Path) -> None:
+    upstream = make_upstream(tmp_root / "upstream")
+    service, _sources, batches = _build_raw_service(tmp_root)
+    batch = batches.create(
+        name="gitバッチ",
+        type="git",
+        output_dir="docs/_svc_git_test",
+        items=[{"options": {"repository": str(upstream), "branch": "main"}}],
+    )
+
+    summary, report_path = service.sync_batch(batch["id"])
+
+    assert summary.source == "git"
+    assert summary.totals["added"] >= 2  # README.md + docs/a.md + docs/b.md
+    assert report_path is not None
+    assert report_path.name.startswith("sync-git-")
+    saved = list((tmp_root / "docs" / "_svc_git_test").rglob("*.md"))
+    assert len(saved) >= 2
+
+
+def test_sync_source_web_uses_source_connection(tmp_root: Path, web_server: WebPageServer) -> None:
+    web_server.state.body = "<p>本文</p>"
+    service, sources, _batches = _build_raw_service(tmp_root)
+    source = sources.create(
+        type="web",
+        display_name="webソース",
+        connection={"url": web_server.base_url + "/", "max_depth": 0},
+        output_dir="docs/_svc_web_source",
+    )
+
+    summary, report_path = service.sync_source(source["id"])
+
+    assert summary.totals["added"] == 1
+    assert report_path is not None
+    assert list((tmp_root / "docs" / "_svc_web_source").rglob("*.md"))
+
+
+def test_sync_source_git_uses_source_connection(tmp_root: Path) -> None:
+    upstream = make_upstream(tmp_root / "upstream")
+    service, sources, _batches = _build_raw_service(tmp_root)
+    source = sources.create(
+        type="git",
+        display_name="gitソース",
+        connection={"repository": str(upstream), "branch": "main"},
+        output_dir="docs/_svc_git_source",
+    )
+
+    summary, report_path = service.sync_source(source["id"])
+
+    assert summary.totals["added"] >= 2
+    assert report_path is not None
+    assert list((tmp_root / "docs" / "_svc_git_source").rglob("*.md"))
+
+
+def test_sync_batch_git_rejects_dry_run(tmp_root: Path) -> None:
+    """git には旧実装にも `--dry-run` が無いため、要求されたら明示的に拒否する。"""
+    upstream = make_upstream(tmp_root / "upstream")
+    service, _sources, batches = _build_raw_service(tmp_root)
+    batch = batches.create(
+        name="gitバッチ",
+        type="git",
+        output_dir="docs/_svc_git_dry",
+        items=[{"options": {"repository": str(upstream), "branch": "main"}}],
+    )
+
+    with pytest.raises(AppError):
+        service.sync_batch(batch["id"], dry_run=True)
+
+
+def test_sync_batch_web_missing_url_raises(tmp_root: Path) -> None:
+    service, _sources, batches = _build_raw_service(tmp_root)
+    batch = batches.create(
+        name="urlなしバッチ", type="web", output_dir="docs/_svc_web_bad", items=[{"options": {}}]
+    )
+
+    with pytest.raises(AppError):
+        service.sync_batch(batch["id"])
+
+
+# ---------------------------------------------------------------------------
+# sync_all の部分失敗継続(task-5b の判断事項): 1バッチの失敗で全体を止めず、
+# 続行して失敗を収集する。
+# ---------------------------------------------------------------------------
+
+
+def test_sync_all_continues_past_failed_batch_and_reports_it(
+    tmp_root: Path, esa_server: MockEsaServer
+) -> None:
+    esa_server.add_post(make_post(category="カテゴリA"))
+    service, source_id = _build_service(tmp_root, esa_server)
+    # 失敗するバッチ(repository が設定されておらず、実行前の検証で失敗する)。
+    # クローン自体の失敗(到達不能なホスト等)は GitSyncRunner が握り潰さず
+    # summary 内の error アイテムとして扱う契約(brief契約4)であり、バッチ全体を
+    # 例外で落とすものではないため、ここでは「そもそも実行できない設定不備」を使う。
+    service._batches.create(  # noqa: SLF001
+        name="失敗バッチ",
+        type="git",
+        output_dir="docs/_svc_fail_test",
+        items=[{"options": {}}],
+    )
+    service._batches.create(  # noqa: SLF001
+        name="成功バッチ",
+        type="esa",
+        output_dir="docs/_svc_test",
+        items=[{"source_id": source_id, "target": "カテゴリA"}],
+    )
+
+    results = service.sync_all()
+
+    assert len(results) == 2
+    by_name = {r["batch_name"]: r for r in results}
+    assert "error" in by_name["失敗バッチ"]
+    assert by_name["成功バッチ"]["summary"]["totals"]["added"] == 1
+
+
+# ---------------------------------------------------------------------------
+# 旧 batch-config.js からの一方向インポート → 実行までの往復(task-5b 必須要件)。
+# ---------------------------------------------------------------------------
+
+
+def test_imported_web_and_git_batches_can_actually_be_run(
+    tmp_root: Path, tmp_path: Path, web_server: WebPageServer
+) -> None:
+    """`migration.batch_config_parser` が読み取る旧設定の web/git エントリを
+    `BatchService.import_from_old_config` で取り込んだ後、そのバッチが
+    `SyncService.sync_batch` で実際に実行できることを検証する。"""
+    from abist_kb.application.batch_service import BatchService
+
+    web_server.state.body = "<p>本文</p>"
+    upstream = make_upstream(tmp_root / "upstream")
+
+    config_path = tmp_path / "batch-config.js"
+    config_path.write_text(
+        "export const batchConfigs = {\n"
+        "  'catiadoc-like': {\n"
+        "    'type': 'web',\n"
+        f"    'url': '{web_server.base_url}/',\n"
+        "    'outputDir': 'docs/catiadoc-like',\n"
+        "    'maxDepth': 0,\n"
+        "    'delay': 1000\n"
+        "  },\n"
+        "  'catia-flotherm-prep-like': {\n"
+        "    'type': 'git',\n"
+        f"    'repository': '{upstream.as_posix()}',\n"
+        "    'branch': 'main',\n"
+        "    'outputDir': 'docs/catia-flotherm-prep-like'\n"
+        "  }\n"
+        "};\n",
+        encoding="utf-8",
+    )
+
+    conn = connect(tmp_root / "app.sqlite")
+    ensure_app_schema(conn)
+    batch_service = BatchService(conn)
+    result = batch_service.import_from_old_config(config_path)
+    assert result["imported"] == 2
+
+    docs_dir = tmp_root / "docs"
+    docs_dir.mkdir(exist_ok=True)
+    sync_service = SyncService(
+        root_dir=tmp_root,
+        docs_dir=docs_dir,
+        reports_dir=tmp_root / "reports",
+        documents=DocumentRepository(conn),
+        sources=SourceRepository(conn),
+        batches=BatchRepository(conn),
+    )
+
+    web_batch = batch_service.list_by_name("catiadoc-like")
+    web_summary, web_report = sync_service.sync_batch(web_batch["id"])
+    assert web_summary.totals["added"] == 1
+    assert web_report is not None
+    assert list((docs_dir / "catiadoc-like").rglob("*.md"))
+
+    git_batch = batch_service.list_by_name("catia-flotherm-prep-like")
+    git_summary, git_report = sync_service.sync_batch(git_batch["id"])
+    assert git_summary.totals["added"] >= 2
+    assert git_report is not None
+    assert list((docs_dir / "catia-flotherm-prep-like").rglob("*.md"))

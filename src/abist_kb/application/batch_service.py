@@ -30,6 +30,25 @@ from abist_kb.migration.batch_config_parser import parse_batch_config
 
 ConfirmFn = Callable[[str], bool]
 
+#: 旧 `batch-config.js` の web/git エントリのキー(JS由来の camelCase)を、
+#: `batch_items.options` の正準キー(snake_case、`application.sync_service` が
+#: 読む形)へ変換する対応表。旧設定に無いキー(`max_pages`/`max_size_bytes`/
+#: `concurrency` 等、本システムで新規追加したクロール上限)は変換対象に無いため
+#: そのまま欠落し、`infrastructure.sources.web`/`sync_service` 側の既定値が使われる。
+#: 対応表に無いキーはそのまま(名前を変えず)保持する(旧設定にしか無い未知の
+#: フィールドを黙って捨てない)。
+_WEB_OPTION_KEY_MAP: dict[str, str] = {
+    "url": "url",
+    "outputDir": "output_dir",
+    "maxDepth": "max_depth",
+    "delay": "delay",
+}
+_GIT_OPTION_KEY_MAP: dict[str, str] = {
+    "repository": "repository",
+    "branch": "branch",
+    "outputDir": "output_dir",
+}
+
 
 def _batch_run_handler(run: JobRunContext) -> None:
     run.emit(
@@ -155,11 +174,15 @@ class BatchService:
                 )
             elif isinstance(entry, dict) and entry.get("type") in ("web", "git"):
                 output_dir = entry.get("outputDir") or safe_batch_name(name)
+                key_map = _WEB_OPTION_KEY_MAP if entry["type"] == "web" else _GIT_OPTION_KEY_MAP
+                options = {
+                    key_map.get(key, key): value for key, value in entry.items() if key != "type"
+                }
                 self.add(
                     name=name,
                     type=entry["type"],
                     output_dir=_with_docs_prefix(output_dir),
-                    items=[{"options": {k: v for k, v in entry.items() if k != "type"}}],
+                    items=[{"options": options}],
                 )
             else:
                 raise AppError(

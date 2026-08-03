@@ -493,3 +493,24 @@ def test_crawl_checks_lease_between_pages_and_stops_after_theft(
         asyncio.run(runner.crawl(base + "/", concurrency=1, check_lease=lease_lost_on_second_item))
 
     assert calls == 2
+
+
+def test_sync_page_checks_lease_only_immediately_before_writing(
+    documents: DocumentRepository, sync_dirs, web_server: WebPageServer
+) -> None:
+    """レビュー指摘の再現・回帰防止: `check_lease` は取得(fetch)ではなく実際の
+    ファイル書き込み直前だけで呼ぶ。304(書き込み無し)では呼ばれない。"""
+    url = web_server.base_url + "/"
+    runner = make_runner(documents, sync_dirs, web_server.base_url)
+    calls: list[str] = []
+
+    async def _run() -> None:
+        async with WebClient() as client:
+            # 初回: 新規作成のため書き込みが発生する -> check_lease が1回呼ばれる。
+            await runner.sync_page(client, url, check_lease=lambda: calls.append("write"))
+            # 2回目: ETag一致で304、書き込みは発生しない -> check_lease は呼ばれない。
+            await runner.sync_page(client, url, check_lease=lambda: calls.append("no-write"))
+
+    asyncio.run(_run())
+
+    assert calls == ["write"], "304(書き込み無し)でも呼ばれた、または初回に呼ばれなかった"
