@@ -1,4 +1,7 @@
 {
+  "additional_sources": [
+    "download-article.js"
+  ],
   "cases": [
     {
       "expected": {

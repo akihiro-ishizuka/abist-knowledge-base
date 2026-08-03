@@ -150,7 +150,12 @@ function buildFrontmatterFixture() {
       input_b64: b64(input),
       expected: {
         hasFrontmatter: fm.hasFrontmatter,
+        // fm.bom は '' か '﻿' の二値なので bomPresent で全情報を失わず表せるが、
+        // brief は parseFrontmatter の「全戻り値」を残せと明示しているため、
+        // bom フィールドそのものも（生の BOM バイトを JSON テキストに直接埋め込まず）
+        // base64 で記録する。
         bomPresent: fm.bom.length > 0,
+        bom_b64: b64(fm.bom),
         eol: fm.eol,
         data: fm.data,
         keys: fm.keys,
@@ -1055,7 +1060,18 @@ function buildMetadataSchemaFixture() {
     },
   });
 
-  return { schema: 1, source: "tools/lib/metadata-schema.js", cases };
+  return {
+    schema: 1,
+    source: "tools/lib/metadata-schema.js",
+    // sanitize_filename_* / sanitize_category_path_* / resolve_batch_output_dirs の
+    // 一部ケース（約15件）は download-article.js の export
+    // (sanitizeFileName / sanitizeCategoryPath) を実行したものであり、
+    // metadata-schema.js 由来ではない。個々の case の _citation は正しく
+    // download-article.js / test/downloaders.test.js を指しているが、
+    // ファイル出典が単一モジュールに限らないことをトップレベルでも明示しておく。
+    additional_sources: ["download-article.js"],
+    cases,
+  };
 }
 
 // ===========================================================================

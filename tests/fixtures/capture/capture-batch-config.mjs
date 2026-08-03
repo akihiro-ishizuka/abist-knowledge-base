@@ -24,6 +24,24 @@ const { formatConfig, loadBatchConfigsFresh, saveBatchConfigs } = await import(
 
 const cases = [];
 
+/**
+ * saveBatchConfigs → loadBatchConfigsFresh のラウンドトリップを、旧リポジトリの外の
+ * 使い捨て一時ディレクトリで実行する（assertReadOnly() を満たすため旧リポジトリには
+ * 一切書き込まない）。
+ */
+async function saveThenLoad(config) {
+  const tmpDir = mkdtempSync(join(tmpdir(), "kb-batch-config-capture-"));
+  const tmpFile = join(tmpDir, "batch-config.js");
+  try {
+    await saveBatchConfigs(tmpFile, config);
+    const serialized = readFileSync(tmpFile, "utf8");
+    const loaded = await loadBatchConfigsFresh(tmpFile);
+    return { serialized, loaded };
+  } finally {
+    rmSync(tmpDir, { recursive: true, force: true });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // 転記元: test/batch-config-store.test.js:23-39
 // esa 配列・web/git オブジェクト・日本語キー・シングルクォート入り名を網羅したサンプル
@@ -51,6 +69,23 @@ cases.push({
   input: { config: SAMPLE_CONFIG, _citation: "test/batch-config-store.test.js:23-39" },
   expected: { formatted_b64: b64(formatConfig(SAMPLE_CONFIG)) },
 });
+
+// 転記元: test/batch-config-store.test.js:41-49
+// (save → load のラウンドトリップで同じ設定が得られる)
+// saveBatchConfigs で書き出してから loadBatchConfigsFresh で読み戻し、
+// 元の SAMPLE_CONFIG と一致することを実行して確認する。
+{
+  const { serialized, loaded } = await saveThenLoad(SAMPLE_CONFIG);
+  cases.push({
+    id: "format_config_sample_roundtrip",
+    input: { config: SAMPLE_CONFIG, _citation: "test/batch-config-store.test.js:41-49" },
+    expected: {
+      serialized_b64: b64(serialized),
+      loaded,
+      loadedEqualsOriginal: JSON.stringify(loaded) === JSON.stringify(SAMPLE_CONFIG),
+    },
+  });
+}
 
 // UI サーバの正規表現フォールバックでもパースできることの確認
 // 転記元: test/batch-config-store.test.js:63-76
@@ -115,6 +150,31 @@ cases.push({
   input: { config: SYNTHETIC_CONFIG },
   expected: { formatted_b64: b64(formatConfig(SYNTHETIC_CONFIG)) },
 });
+
+// レビュー指摘で追加: SAMPLE_CONFIG には無い落とし穴（空配列・0 という falsy な数値・
+// クォートを含むキー/値）を save → load のラウンドトリップで通す。
+// formatConfig の「出力」だけでは、M2 の Python パーサーがこれらを正しく読み戻せるかは
+// 検証できない。ここで往復させることで、聞かれた双方向（書き出し文字列 と
+// 読み戻したオブジェクトの両方）を記録し、M2 のパーサーが両方向で一致することを
+// 主張できるようにする。
+{
+  const { serialized, loaded } = await saveThenLoad(SYNTHETIC_CONFIG);
+  cases.push({
+    id: "format_config_synthetic_roundtrip",
+    input: {
+      config: SYNTHETIC_CONFIG,
+      _note:
+        "SAMPLE_CONFIG に無い falsy 値・空配列・クォート混在キーを持つ合成設定でのラウンドトリップ。" +
+        "旧テスト test/batch-config-store.test.js:41-49 は SAMPLE_CONFIG のみで検証しており、" +
+        "この合成設定でのラウンドトリップは無かったため追加した。",
+    },
+    expected: {
+      serialized_b64: b64(serialized),
+      loaded,
+      loadedEqualsOriginal: JSON.stringify(loaded) === JSON.stringify(SYNTHETIC_CONFIG),
+    },
+  });
+}
 
 // ---------------------------------------------------------------------------
 // 実物の batch-config.js: パース結果と re-serialize のバイト同一性

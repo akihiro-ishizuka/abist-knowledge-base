@@ -85,6 +85,10 @@ def test_bom_case_survives_round_trip() -> None:
     raw_expected = base64.b64decode(case["expected"]["raw_b64"]).decode("utf-8")
     assert raw_expected.startswith("\ufeff")
     assert case["expected"]["bomPresent"] is True
+    # parseFrontmatterの bom 戻り値そのもの（'' か '\ufeff' の二値）も
+    # base64で記録されていること（brief: 全戻り値を残す）。
+    bom_value = base64.b64decode(case["expected"]["bom_b64"]).decode("utf-8")
+    assert bom_value == "\ufeff"
 
 
 def test_crlf_case_survives_round_trip() -> None:

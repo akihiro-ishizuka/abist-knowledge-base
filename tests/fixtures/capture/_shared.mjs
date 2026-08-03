@@ -4,11 +4,19 @@
 //
 // 絶対条件: 旧リポジトリ (multi-source-knowledge-base) には一切書き込まない。
 // このモジュールが提供する assertReadOnly() は「書き込んでいないはず」の願望ではなく、
-// 実際に旧リポジトリの git status と主要ディレクトリの mtime を採取前後で比較して
-// 変化を検出する自己チェックである。
+// 実際に旧リポジトリの git status と、docs/・data/ 配下の全ファイルの (size, mtime)
+// フィンガープリントを採取前後で比較して変化を検出する自己チェックである。
+//
+// 注意（レビュー指摘で判明した経緯）: docs/ はほぼ全体、data/ は全体が .gitignore
+// 対象のため、git status だけでは既存ファイルの書き換えをほぼ検出できない。
+// また「ディレクトリ自体の mtime」は、既存ファイルを同一バイト列で上書きしても
+// 変化しない（NTFS はディレクトリエントリの中身書き換えで親ディレクトリの mtime を
+// 更新しない）。そのため、docs/・data/ は配下の全ファイルを再帰的に stat し、
+// ファイルごとの (size, mtimeMs) を比較する。約 89,000 ファイルの再帰 stat は
+// 実測 2秒強で、採取スクリプト1回あたり2回（冒頭・末尾）呼んでも許容範囲。
 
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 /**
@@ -95,20 +103,68 @@ function gitStatus(root) {
   }
 }
 
-/** スポットチェック対象（docs/ と data/ はディレクトリの mtime、batch-config.js はファイルの mtime） */
-const SPOT_CHECK_PATHS = ["docs", "data", "batch-config.js"];
+/** 再帰的にファイルの (size, mtime) フィンガープリントを取る対象ディレクトリ */
+const SPOT_CHECK_DIRS = ["docs", "data"];
+/** 単体ファイルとして mtime を見る対象（ディレクトリ内を再帰する必要が無いもの） */
+const SPOT_CHECK_FILES = ["batch-config.js"];
 
-function collectMtimes(root) {
-  const mtimes = {};
-  for (const rel of SPOT_CHECK_PATHS) {
-    const full = join(root, rel);
-    if (!existsSync(full)) {
-      mtimes[rel] = null;
-      continue;
-    }
-    mtimes[rel] = statSync(full).mtimeMs;
+/** dir 配下のファイルを再帰的に辿り、`relPath -> "size:mtimeMs"` を results に積む */
+function walkFingerprint(root, dir, results) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return; // 存在しない・読めない場合は素通り（無いことは無いことで一貫比較できる）
   }
-  return mtimes;
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkFingerprint(root, full, results);
+    } else if (entry.isFile()) {
+      const stat = statSync(full);
+      // 比較用キーは旧リポジトリルートからの相対パス（root の位置に依存しない）
+      const relKey = full.slice(root.length).replace(/\\/g, "/");
+      results.set(relKey, `${stat.size}:${Math.round(stat.mtimeMs)}`);
+    }
+  }
+}
+
+/**
+ * docs/・data/ 配下の全ファイルと batch-config.js の (size, mtime) フィンガープリントを集める。
+ *
+ * ディレクトリ自体の mtime ではなくファイル単位で見るのは、既存ファイルを同一バイト列で
+ * 上書きしてもディレクトリの mtime は変化しないため（この関数はその書き換えも検出する）。
+ */
+function collectFingerprint(root) {
+  const results = new Map();
+  for (const rel of SPOT_CHECK_DIRS) {
+    walkFingerprint(root, join(root, rel), results);
+  }
+  for (const rel of SPOT_CHECK_FILES) {
+    const full = join(root, rel);
+    if (existsSync(full)) {
+      const stat = statSync(full);
+      results.set(rel, `${stat.size}:${Math.round(stat.mtimeMs)}`);
+    } else {
+      results.set(rel, null);
+    }
+  }
+  return results;
+}
+
+/** 2つのフィンガープリント Map を比較し、追加・削除・変更されたキーを返す */
+function diffFingerprints(before, after) {
+  const added = [];
+  const removed = [];
+  const changed = [];
+  for (const [key, value] of after) {
+    if (!before.has(key)) added.push(key);
+    else if (before.get(key) !== value) changed.push(key);
+  }
+  for (const key of before.keys()) {
+    if (!after.has(key)) removed.push(key);
+  }
+  return { added, removed, changed };
 }
 
 let _snapshot = null;
@@ -117,15 +173,20 @@ let _snapshot = null;
  * 旧リポジトリに書き込みが発生していないことを確認する。
  *
  * 各採取スクリプトの冒頭と末尾で呼び出すこと:
- *   - 1回目の呼び出し（冒頭）: git status と主要パスの mtime を記録する（基準点）。
+ *   - 1回目の呼び出し（冒頭）: git status と docs/・data/ 配下全ファイルの
+ *     (size, mtime) フィンガープリント、batch-config.js の mtime を基準点として記録する。
  *   - 2回目の呼び出し（末尾）: 基準点と再度比較し、差異があれば例外を投げて異常終了する。
  *
  * 3回目以降は再度 diff せず新しい基準点として記録し直す（同一プロセス内で複数回
  * 採取処理を行うスクリプトのため）。
+ *
+ * git status だけでは検出できない変更がある点に注意: docs/ はほぼ全体、data/ は
+ * 全体が .gitignore 対象なので、既存ファイルの中身書き換えは git status に出ない。
+ * そのため本チェックの本体は git status ではなく、ファイル単位のフィンガープリント比較。
  */
 export function assertReadOnly() {
   const root = oldRepoRoot();
-  const current = { status: gitStatus(root), mtimes: collectMtimes(root) };
+  const current = { status: gitStatus(root), fingerprint: collectFingerprint(root) };
 
   if (_snapshot === null) {
     _snapshot = current;
@@ -138,13 +199,18 @@ export function assertReadOnly() {
         `--- 採取前 ---\n${_snapshot.status}\n--- 採取後 ---\n${current.status}`
     );
   }
-  for (const rel of SPOT_CHECK_PATHS) {
-    if (current.mtimes[rel] !== _snapshot.mtimes[rel]) {
-      throw new Error(
-        `旧リポジトリの mtime が採取前後で変化しました: ${rel}\n` +
-          `採取前: ${_snapshot.mtimes[rel]} / 採取後: ${current.mtimes[rel]}`
-      );
-    }
+
+  const diff = diffFingerprints(_snapshot.fingerprint, current.fingerprint);
+  if (diff.added.length > 0 || diff.removed.length > 0 || diff.changed.length > 0) {
+    const describe = (label, list) =>
+      list.length > 0 ? `${label} (${list.length}件): ${list.slice(0, 20).join(", ")}` : null;
+    const lines = [describe("追加", diff.added), describe("削除", diff.removed), describe("変更", diff.changed)].filter(
+      Boolean
+    );
+    throw new Error(
+      "旧リポジトリの docs/・data/・batch-config.js が採取前後で変化しました。書き込みが発生した可能性があります。\n" +
+        lines.join("\n")
+    );
   }
   _snapshot = current;
 }

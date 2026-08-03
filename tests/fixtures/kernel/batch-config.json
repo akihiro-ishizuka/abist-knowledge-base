@@ -33,6 +33,60 @@
     },
     {
       "expected": {
+        "loaded": {
+          "catia-flotherm-prep": {
+            "branch": "main",
+            "outputDir": "docs/catia-flotherm-prep",
+            "repository": "https://github.com/abist-co-ltd/catia-flotherm-prep",
+            "type": "git"
+          },
+          "catiadoc": {
+            "delay": 1000,
+            "maxDepth": 10,
+            "outputDir": "docs/catiadoc",
+            "type": "web",
+            "url": "http://catiadoc.free.fr/online/interfaces/CAAHomeIdx.htm"
+          },
+          "o'reilly-notes": [
+            "メモ/O'Reilly"
+          ],
+          "蛇腹形状の自動設計": [
+            "設計効率化/三桜工業様/蛇腹形状の自動設計",
+            "議事録/設計効率化/三桜工業様定例"
+          ]
+        },
+        "loadedEqualsOriginal": true,
+        "serialized_b64": "IyEvdXNyL2Jpbi9lbnYgbm9kZQoKLy8g44OQ44OD44OB44OA44Km44Oz44Ot44O844OJ55So44Gu6Kit5a6a44OV44Kh44Kk44OrCi8vIOikh+aVsOOBruOCq+ODhuOCtOODquODkeOCueOCkumFjeWIl+OBp+Wumue+qeOBl+OBpuOBj+OBoOOBleOBhAoKZXhwb3J0IGNvbnN0IGJhdGNoQ29uZmlncyA9IHsKICAn6JuH6IW55b2i54q244Gu6Ieq5YuV6Kit6KiIJzogWwogICAgJ+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5gv6JuH6IW55b2i54q244Gu6Ieq5YuV6Kit6KiIJywKICAgICforbDkuovpjLIv6Kit6KiI5Yq5546H5YyWL+S4ieahnOW3pealreanmOWumuS+iycKICBdLAogICdvXCdyZWlsbHktbm90ZXMnOiBbCiAgICAn44Oh44OiL09cJ1JlaWxseScKICBdLAogICdjYXRpYWRvYyc6IHsKICAgICd0eXBlJzogIndlYiIsCiAgICAndXJsJzogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL29ubGluZS9pbnRlcmZhY2VzL0NBQUhvbWVJZHguaHRtIiwKICAgICdvdXRwdXREaXInOiAiZG9jcy9jYXRpYWRvYyIsCiAgICAnbWF4RGVwdGgnOiAxMCwKICAgICdkZWxheSc6IDEwMDAKICB9LAogICdjYXRpYS1mbG90aGVybS1wcmVwJzogewogICAgJ3R5cGUnOiAiZ2l0IiwKICAgICdyZXBvc2l0b3J5JzogImh0dHBzOi8vZ2l0aHViLmNvbS9hYmlzdC1jby1sdGQvY2F0aWEtZmxvdGhlcm0tcHJlcCIsCiAgICAnYnJhbmNoJzogIm1haW4iLAogICAgJ291dHB1dERpcic6ICJkb2NzL2NhdGlhLWZsb3RoZXJtLXByZXAiCiAgfQp9Owo="
+      },
+      "id": "format_config_sample_roundtrip",
+      "input": {
+        "_citation": "test/batch-config-store.test.js:41-49",
+        "config": {
+          "catia-flotherm-prep": {
+            "branch": "main",
+            "outputDir": "docs/catia-flotherm-prep",
+            "repository": "https://github.com/abist-co-ltd/catia-flotherm-prep",
+            "type": "git"
+          },
+          "catiadoc": {
+            "delay": 1000,
+            "maxDepth": 10,
+            "outputDir": "docs/catiadoc",
+            "type": "web",
+            "url": "http://catiadoc.free.fr/online/interfaces/CAAHomeIdx.htm"
+          },
+          "o'reilly-notes": [
+            "メモ/O'Reilly"
+          ],
+          "蛇腹形状の自動設計": [
+            "設計効率化/三桜工業様/蛇腹形状の自動設計",
+            "議事録/設計効率化/三桜工業様定例"
+          ]
+        }
+      }
+    },
+    {
+      "expected": {
         "content_b64": "IyEvdXNyL2Jpbi9lbnYgbm9kZQoKLy8g44OQ44OD44OB44OA44Km44Oz44Ot44O844OJ55So44Gu6Kit5a6a44OV44Kh44Kk44OrCi8vIOikh+aVsOOBruOCq+ODhuOCtOODquODkeOCueOCkumFjeWIl+OBp+Wumue+qeOBl+OBpuOBj+OBoOOBleOBhAoKZXhwb3J0IGNvbnN0IGJhdGNoQ29uZmlncyA9IHsKICAn6JuH6IW55b2i54q244Gu6Ieq5YuV6Kit6KiIJzogWwogICAgJ+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5gv6JuH6IW55b2i54q244Gu6Ieq5YuV6Kit6KiIJywKICAgICforbDkuovpjLIv6Kit6KiI5Yq5546H5YyWL+S4ieahnOW3pealreanmOWumuS+iycKICBdLAogICdvXCdyZWlsbHktbm90ZXMnOiBbCiAgICAn44Oh44OiL09cJ1JlaWxseScKICBdLAogICdjYXRpYWRvYyc6IHsKICAgICd0eXBlJzogIndlYiIsCiAgICAndXJsJzogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL29ubGluZS9pbnRlcmZhY2VzL0NBQUhvbWVJZHguaHRtIiwKICAgICdvdXRwdXREaXInOiAiZG9jcy9jYXRpYWRvYyIsCiAgICAnbWF4RGVwdGgnOiAxMCwKICAgICdkZWxheSc6IDEwMDAKICB9LAogICdjYXRpYS1mbG90aGVybS1wcmVwJzogewogICAgJ3R5cGUnOiAiZ2l0IiwKICAgICdyZXBvc2l0b3J5JzogImh0dHBzOi8vZ2l0aHViLmNvbS9hYmlzdC1jby1sdGQvY2F0aWEtZmxvdGhlcm0tcHJlcCIsCiAgICAnYnJhbmNoJzogIm1haW4iLAogICAgJ291dHB1dERpcic6ICJkb2NzL2NhdGlhLWZsb3RoZXJtLXByZXAiCiAgfQp9Owo=",
         "parsedBackEqualsOriginal": true,
         "regexMatched": true
@@ -48,6 +102,88 @@
       },
       "id": "format_config_synthetic",
       "input": {
+        "config": {
+          "gitBatch": {
+            "branch": "feature/x",
+            "outputDir": "docs/repo",
+            "repository": "https://github.com/example/repo.git",
+            "type": "git"
+          },
+          "numericAndBoolLikeStrings": {
+            "delay": 0,
+            "maxDepth": 0,
+            "outputDir": "docs/x",
+            "type": "web",
+            "url": "https://example.com/"
+          },
+          "quote'in'name": [
+            "path/with'quote"
+          ],
+          "webBatch": {
+            "delay": 500,
+            "maxDepth": 5,
+            "outputDir": "docs/example",
+            "type": "web",
+            "url": "https://example.com/docs/"
+          },
+          "webNoOutputDir": {
+            "delay": 100,
+            "maxDepth": 1,
+            "type": "web",
+            "url": "https://example.com/"
+          },
+          "単純esaバッチ": [
+            "カテゴリA",
+            "カテゴリB/サブ"
+          ],
+          "空配列バッチ": []
+        }
+      }
+    },
+    {
+      "expected": {
+        "loaded": {
+          "gitBatch": {
+            "branch": "feature/x",
+            "outputDir": "docs/repo",
+            "repository": "https://github.com/example/repo.git",
+            "type": "git"
+          },
+          "numericAndBoolLikeStrings": {
+            "delay": 0,
+            "maxDepth": 0,
+            "outputDir": "docs/x",
+            "type": "web",
+            "url": "https://example.com/"
+          },
+          "quote'in'name": [
+            "path/with'quote"
+          ],
+          "webBatch": {
+            "delay": 500,
+            "maxDepth": 5,
+            "outputDir": "docs/example",
+            "type": "web",
+            "url": "https://example.com/docs/"
+          },
+          "webNoOutputDir": {
+            "delay": 100,
+            "maxDepth": 1,
+            "type": "web",
+            "url": "https://example.com/"
+          },
+          "単純esaバッチ": [
+            "カテゴリA",
+            "カテゴリB/サブ"
+          ],
+          "空配列バッチ": []
+        },
+        "loadedEqualsOriginal": true,
+        "serialized_b64": "IyEvdXNyL2Jpbi9lbnYgbm9kZQoKLy8g44OQ44OD44OB44OA44Km44Oz44Ot44O844OJ55So44Gu6Kit5a6a44OV44Kh44Kk44OrCi8vIOikh+aVsOOBruOCq+ODhuOCtOODquODkeOCueOCkumFjeWIl+OBp+Wumue+qeOBl+OBpuOBj+OBoOOBleOBhAoKZXhwb3J0IGNvbnN0IGJhdGNoQ29uZmlncyA9IHsKICAn56m66YWN5YiX44OQ44OD44OBJzogW10sCiAgJ+WNmOe0lGVzYeODkOODg+ODgSc6IFsKICAgICfjgqvjg4bjgrTjg6pBJywKICAgICfjgqvjg4bjgrTjg6pCL+OCteODlicKICBdLAogICdxdW90ZVwnaW5cJ25hbWUnOiBbCiAgICAncGF0aC93aXRoXCdxdW90ZScKICBdLAogICd3ZWJCYXRjaCc6IHsKICAgICd0eXBlJzogIndlYiIsCiAgICAndXJsJzogImh0dHBzOi8vZXhhbXBsZS5jb20vZG9jcy8iLAogICAgJ291dHB1dERpcic6ICJkb2NzL2V4YW1wbGUiLAogICAgJ21heERlcHRoJzogNSwKICAgICdkZWxheSc6IDUwMAogIH0sCiAgJ3dlYk5vT3V0cHV0RGlyJzogewogICAgJ3R5cGUnOiAid2ViIiwKICAgICd1cmwnOiAiaHR0cHM6Ly9leGFtcGxlLmNvbS8iLAogICAgJ21heERlcHRoJzogMSwKICAgICdkZWxheSc6IDEwMAogIH0sCiAgJ2dpdEJhdGNoJzogewogICAgJ3R5cGUnOiAiZ2l0IiwKICAgICdyZXBvc2l0b3J5JzogImh0dHBzOi8vZ2l0aHViLmNvbS9leGFtcGxlL3JlcG8uZ2l0IiwKICAgICdicmFuY2gnOiAiZmVhdHVyZS94IiwKICAgICdvdXRwdXREaXInOiAiZG9jcy9yZXBvIgogIH0sCiAgJ251bWVyaWNBbmRCb29sTGlrZVN0cmluZ3MnOiB7CiAgICAndHlwZSc6ICJ3ZWIiLAogICAgJ3VybCc6ICJodHRwczovL2V4YW1wbGUuY29tLyIsCiAgICAnb3V0cHV0RGlyJzogImRvY3MveCIsCiAgICAnbWF4RGVwdGgnOiAwLAogICAgJ2RlbGF5JzogMAogIH0KfTsK"
+      },
+      "id": "format_config_synthetic_roundtrip",
+      "input": {
+        "_note": "SAMPLE_CONFIG に無い falsy 値・空配列・クォート混在キーを持つ合成設定でのラウンドトリップ。旧テスト test/batch-config-store.test.js:41-49 は SAMPLE_CONFIG のみで検証しており、この合成設定でのラウンドトリップは無かったため追加した。",
         "config": {
           "gitBatch": {
             "branch": "feature/x",
