@@ -2024,6 +2024,22 @@ EOF
 6. `tests/console/test_output_purity.py` が PASS(plain/json で ANSI・アニメーション皆無、RICH では色が出る対照テストも含む)。
 7. CI が windows-latest と ubuntu-latest の両方で green。
 
+## 後続マイルストーンへの申し送り
+
+M0 の実装とレビューで確定した、後続が守らなければならない事項。
+
+### M3(CLI にコマンド群を追加するとき)
+
+- **サブコマンド群は `typer.Typer()` ではなく `AppTyper()` で作ること。** `AppTyper` はコマンド本体から投げられた `AppError` を捕捉して `Presenter` で提示し、正しい終了コードへ変換する choke point を持つ。`add_typer()` は親の設定を子へ遡及適用しないため、素の `typer.Typer()` で作ったグループは保護されない。保護漏れの症状は分かりにくい: 実プロセスは `main()` の残置キャッチで正しく終了する一方、`CliRunner` では終了コード 1 になり、テストと本番が食い違う。`source` / `batch` / `sync` / `jobs` / `worker` / `document` の6グループすべてに適用する。
+- ヘルプ文字列に日本語や記号を自由に使ってよい。`main()` が `app()` 呼び出し前に `sys.stdout` / `sys.stderr` を UTF-8 へ再設定するため、cp932 端末でもクラッシュしない。
+- 破壊的操作は `Presenter.confirm(prompt, assume_yes=ctx.assume_yes)` を使う。非対話時は `AppError(INVALID_INPUT)` で `--yes` を促す実装済み。
+
+### 全マイルストーン共通
+
+- **ジョブ/リース処理は `AppError(ErrorCode.CONFLICT, retryable=True)` を再試行の合図として扱う。** SQLite のロック競合(`SQLITE_BUSY`/`SQLITE_LOCKED`)はこのコードへ正規化済みで、それ以外の `OperationalError`(読み取り専用 DB など)は `FAILURE` / 非再試行のまま。リトライループはこの区別に従うこと。恒久エラーを再試行し続ける経路は塞いである。
+- **ログに自由文を渡す箇所では長さを気にしなくてよい。** `mask_secrets` の正規表現は接頭辞長を上限 64 に制限済みで、64k 文字でも 0.14 秒。ただし新しい秘密情報パターンを足すときは、貪欲な文字クラスと必須リテラルの重複を作らないこと(これが二次関数的バックトラックの原因だった)。
+- **例外を `wrap()` で包むと `details["cause_message"]` に元メッセージが入るが、`to_dict()` はこれを出さない。** `--output json` と MCP 応答へ生の外部メッセージが漏れないための意図的な分離。`--debug` 時のみ `Presenter` が表示する。
+
 ## 次のマイルストーン
 
-M0 完了後は **M1(Node 版からの fixture 採取)** へ進む。M1 は旧システムが無傷であるうちに実施する必要があるため、遅延させない。
+M0 完了後は **M1(Node 版からの fixture 採取)** へ進む。計画は [M1-fixture-capture.md](M1-fixture-capture.md)。M1 は旧システムが無傷であるうちに実施する必要があるため、遅延させない。
