@@ -90,14 +90,25 @@ class _RichProgressHandle(ProgressHandle):
     def _visual_completed(self) -> int:
         return self._completed + self._failed
 
+    def _refresh(self) -> None:
+        # 設計書 §6.2: 全体・現在項目・完了数・失敗数・経過時間・残り時間を表示する。
+        # 現在項目は task の `current_item` フィールドとして流し込み、専用の
+        # TextColumn で表示する。`total=None` は Rich 側で no-op(既存値を保持)。
+        self._progress.update(
+            self._task_id,
+            completed=self._visual_completed(),
+            total=self._total,
+            current_item=self._current_item or "",
+        )
+
     def _on_advance(self) -> None:
-        self._progress.update(self._task_id, completed=self._visual_completed(), total=self._total)
+        self._refresh()
 
     def _on_set_total(self) -> None:
-        self._progress.update(self._task_id, total=self._total)
+        self._refresh()
 
     def _on_fail(self) -> None:
-        self._progress.update(self._task_id, completed=self._visual_completed(), total=self._total)
+        self._refresh()
 
 
 def _plain_summary(handle: ProgressHandle, elapsed_seconds: float) -> str:
@@ -130,17 +141,20 @@ def progress_scope(
         return
 
     # RICH: ライブなバー(総数あり)またはスピナー(総数不明)。
+    # 設計書 §6.2 の「全体・現在項目・完了数・失敗数・経過時間・残り時間」に対応し、
+    # 現在項目(advance/fail の item)を専用列として表示する。
     columns: list[Any] = [
         TextColumn("[progress.description]{task.description}"),
         SpinnerColumn() if total is None else BarColumn(),
         MofNCompleteColumn(),
         TimeElapsedColumn(),
         TimeRemainingColumn(),
+        TextColumn("{task.fields[current_item]}"),
     ]
     progress = Progress(*columns, console=presenter.console, transient=True)
     started = time.monotonic()
     progress.start()
-    task_id = progress.add_task(description, total=total)
+    task_id = progress.add_task(description, total=total, current_item="")
     handle = _RichProgressHandle(progress, task_id, total)
     try:
         yield handle

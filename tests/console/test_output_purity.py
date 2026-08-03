@@ -73,3 +73,28 @@ def test_rich_mode_does_produce_ansi_when_colour_enabled():
     p = Presenter(OutputMode.RICH, width=80, color_system="truecolor", force_terminal=True)
     p.success("成功")
     assert ANSI.search(p.stdout_value())
+
+
+def test_rich_mode_progress_scope_shows_live_bar_current_item_and_survives_exception():
+    """レビュー指摘4・5:
+    - RICH の progress_scope は実際にライブ表示(ANSI)を出す。
+    - 終了時の静的な最終行が完了数・失敗数を正しく反映する。
+    - `with` 内で例外が起きても進捗表示は静かに停止し、例外はそのまま伝播する
+      (`finally` で `progress.stop()` する設計の担保)。
+    - `advance`/`fail` に渡した現在項目(設計書 §6.2 の「現在項目」)が
+      RICH のライブ表示に現れる。
+    """
+    p = Presenter(OutputMode.RICH, width=80, color_system="truecolor", force_terminal=True)
+    with (
+        pytest.raises(RuntimeError, match="boom"),
+        progress_scope(p, description="索引作成", total=3) as handle,
+    ):
+        handle.advance(item="docs/a.md")
+        handle.advance(item="docs/b.md")
+        handle.fail(item="docs/c.md")
+        raise RuntimeError("boom")
+    out = p.stdout_value()
+    assert ANSI.search(out)
+    assert "完了 2件" in out
+    assert "失敗 1件" in out
+    assert "docs/c.md" in out

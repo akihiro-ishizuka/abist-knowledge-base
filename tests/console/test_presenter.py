@@ -1,4 +1,8 @@
+import io
 import json
+import sys
+
+import pytest
 
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
 from abist_kb.presentation.console.output import OutputMode
@@ -123,3 +127,44 @@ def test_token_helper_prefixes_symbol():
     p.line("進行中", token=SemanticToken.INFO)
     assert "i" in p.stdout_value()
     assert "進行中" in p.stdout_value()
+
+
+def test_success_does_not_crash_on_cp932_console_stream():
+    """レビュー指摘1(CRITICAL): 日本語ロケール Windows の既定コードページ(cp932)は
+    SUCCESS の記号 '✓'(U+2713)を表現できない。Presenter は StringIO 以外の実ストリーム
+    (TextIOWrapper 等)を渡されても cp932 のまま UnicodeEncodeError を起こしてはならない。
+    """
+    buffer = io.BytesIO()
+    stream = io.TextIOWrapper(buffer, encoding="cp932", errors="strict")
+    p = Presenter(OutputMode.PLAIN, stdout=stream, width=80)
+    p.success("完了")
+    stream.flush()
+    written = buffer.getvalue().decode("utf-8")
+    assert "完了" in written
+    assert "✓" in written
+
+
+def test_json_result_called_twice_raises_runtime_error():
+    """レビュー指摘2: stdout は「payload のみ」の契約。二重出力は壊れた JSON を
+    黙って生成せず、はっきり失敗させる。
+    """
+    p = make(OutputMode.JSON)
+    p.json_result({"a": 1})
+    with pytest.raises(RuntimeError):
+        p.json_result({"b": 2})
+
+
+def test_confirm_raises_in_plain_mode_when_stdin_is_not_a_tty(monkeypatch):
+    """レビュー指摘3: `mode is JSON or not _stdin_is_tty()` の右側が実際に評価される
+    経路を、JSON 以外のモードで直接検証する(短絡評価で握りつぶされないことの担保)。
+    """
+    monkeypatch.setattr(sys.stdin, "isatty", lambda: False)
+    p = make(OutputMode.PLAIN)
+    err = None
+    try:
+        p.confirm("削除しますか", assume_yes=False)
+    except AppError as exc:
+        err = exc
+    assert err is not None
+    assert err.code == ErrorCode.INVALID_INPUT
+    assert "--yes" in (err.hint or "")

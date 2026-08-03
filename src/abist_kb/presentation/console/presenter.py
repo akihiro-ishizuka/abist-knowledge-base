@@ -7,6 +7,7 @@ CLI/TUI/Web はすべてこの `Presenter` を通して人間向けメッセー�
 
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import sys
@@ -35,6 +36,22 @@ def _stdin_is_tty() -> bool:
         return False
 
 
+def _reconfigure_utf8(stream: IO[str]) -> None:
+    """実ストリームを UTF-8/backslashreplace へ寄せ、cp932 等での書き込み失敗を防ぐ。
+
+    日本語ロケール Windows の既定コードページ(cp932)は SUCCESS トークンの記号
+    '✓'(U+2713)を表現できず、そのまま書き込むと UnicodeEncodeError で
+    クラッシュする。`reconfigure` を持たないストリーム(`io.StringIO` など)や
+    再設定を拒否するストリームは黙ってスキップする — Presenter は与えられた
+    ストリームが何であっても絶対にクラッシュしてはならない。
+    """
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is None:
+        return
+    with contextlib.suppress(AttributeError, OSError, ValueError):
+        reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 class Presenter:
     """出力モードに応じて人間向け表示と JSON 結果を振り分ける。"""
 
@@ -60,6 +77,13 @@ class Presenter:
         self._owns_stderr = stderr is None
         self._stdout_stream: IO[str] = io.StringIO() if stdout is None else stdout
         self._stderr_stream: IO[str] = io.StringIO() if stderr is None else stderr
+        self._json_emitted = False
+
+        # 実ストリーム(TextIOWrapper 等)が cp932 などの非 UTF-8 コードページに
+        # 固定されている場合でも、記号(✓ 等)の書き込みでクラッシュしないようにする。
+        # `io.StringIO` は `reconfigure` を持たないため何もしない。
+        _reconfigure_utf8(self._stdout_stream)
+        _reconfigure_utf8(self._stderr_stream)
 
         theme = build_theme()
         common: dict[str, Any] = {
@@ -202,7 +226,18 @@ class Presenter:
     # -- 機械可読出力 -----------------------------------------------------
 
     def json_result(self, payload: Any) -> None:
-        """`--output json` の唯一の stdout 出力。1 行の JSON。"""
+        """`--output json` の唯一の stdout 出力。1 行の JSON。
+
+        「stdout は payload のみ」という契約上、1プロセスにつき1回しか
+        呼び出せない。2回目は壊れた JSON を黙って連結するのではなく、
+        `RuntimeError` として直ちに失敗させる。
+        """
+        if self._json_emitted:
+            raise RuntimeError(
+                "json_result() は1度しか呼び出せません"
+                "(stdout は単一の JSON ドキュメントのみを保持する契約のため)"
+            )
+        self._json_emitted = True
         encoded = json.dumps(payload, ensure_ascii=False)
         self._console.print(encoded)
 
