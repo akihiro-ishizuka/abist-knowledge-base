@@ -109,6 +109,24 @@ def test_mask_secrets_handles_long_underscore_runs_quickly():
     assert elapsed < 1.0, f"mask_secrets が遅すぎます(elapsed={elapsed:.2f}s)"
 
 
+def test_mask_secrets_handles_long_hyphen_runs_quickly():
+    """I6 の作業中に発見した、本レビュー指摘対象外の既存 ReDoS の回帰テスト。
+
+    `_URL_CREDENTIAL_RE` のスキーム部が無制限の `[A-Za-z0-9+.\\-]*` だったため、
+    `://` を含まない長いハイフン/ドット区切り文字列(バージョン文字列・
+    kebab-case の識別子等)に対して二次関数的なバックトラックが発生し、
+    64,000文字で2秒、128,000文字で8.8秒も応答が止まっていた
+    (`test_mask_secrets_handles_long_underscore_runs_quickly` が使う
+    アンダースコア区切りのテキストはこの文字クラスに含まれないため、
+    既存のテストではこの不具合を検知できていなかった)。
+    """
+    text = "a-" * 32000  # 64,000 文字、`://` を一切含まない
+    start = time.perf_counter()
+    mask_secrets(text)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 1.0, f"mask_secrets が遅すぎます(elapsed={elapsed:.2f}s)"
+
+
 def test_mask_secrets_cookie_masks_to_end_of_line_with_multiple_pairs():
     """IMPORTANT 4 の回帰テスト。
 
@@ -131,6 +149,29 @@ def test_mask_secrets_json_key_word_boundary_masks_access_token():
     """
     masked = mask_secrets('{"access_token": "abc123"}')
     assert "abc123" not in masked
+    assert "***" in masked
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "X-Api-Key: SECRETVAL",
+        "x-api-key: SECRETVAL",
+        "X-Auth-Token: SECRETVAL",
+        "api-key=SECRETVAL",
+    ],
+)
+def test_mask_secrets_masks_hyphenated_header_names(raw):
+    """I6(IMPORTANT)の回帰テスト。
+
+    `_KEY_VALUE_RE` はサフィックス直前の区切り文字として `_` のみを許していたため、
+    `X-Api-Key: SECRETVAL` のようなハイフン区切りのヘッダ名(HTTP ヘッダの
+    実世界での主流の綴り。httpx 等は `request.headers` をハイフン区切りで
+    レンダリングする)を素通りさせていた。M3 の esa/Web アダプタが
+    `request.headers` をログへ流す経路でこれを見逃すと、資格情報全体が漏れる。
+    """
+    masked = mask_secrets(raw)
+    assert "SECRETVAL" not in masked
     assert "***" in masked
 
 
@@ -171,3 +212,66 @@ def test_configure_logging_masks_exception_traceback(capsys):
     assert "***" in out
     captured = capsys.readouterr()
     assert captured.out == ""
+
+
+# `configure_logging(log_file=...)` のテスト。以前は一切カバーされていなかった
+# (テスト計画書は §12 の「全ハンドラに SecretMaskingFilter」を要求しているが、
+# ファイルハンドラにも実際に付いているかを確認するテストが存在しなかった)。
+
+
+def _close_abist_kb_log_handlers() -> None:
+    """テスト後にファイルハンドラを明示的に閉じる。
+
+    Windows ではハンドルを閉じるまでファイルがロックされたままになり、
+    次のテストが同じ `tmp_path` を再利用しなければ pytest のクリーンアップが
+    `PermissionError` で失敗しうる。
+    """
+    logger = logging.getLogger("abist_kb")
+    for handler in list(logger.handlers):
+        handler.flush()
+        handler.close()
+    logger.handlers.clear()
+
+
+def test_configure_logging_log_file_creates_parent_directory(tmp_path):
+    log_file = tmp_path / "深い" / "階層" / "app.log"
+    assert not log_file.parent.exists()
+
+    try:
+        configure_logging(level="INFO", stream=io.StringIO(), log_file=log_file)
+        get_logger("abist_kb.test").info("作成確認")
+    finally:
+        _close_abist_kb_log_handlers()
+
+    assert log_file.parent.is_dir()
+    assert log_file.is_file()
+
+
+def test_configure_logging_log_file_is_utf8(tmp_path):
+    """ファイルハンドラが UTF-8 で書くこと(日本語を書いて読み戻して確認する)。"""
+    log_file = tmp_path / "app.log"
+    try:
+        configure_logging(level="INFO", stream=io.StringIO(), log_file=log_file)
+        get_logger("abist_kb.test").info("蛇腹形状の自動設計は正常に完了しました")
+    finally:
+        _close_abist_kb_log_handlers()
+
+    content = log_file.read_text(encoding="utf-8")
+    assert "蛇腹形状の自動設計は正常に完了しました" in content
+
+
+def test_configure_logging_log_file_masks_secrets_too(tmp_path):
+    """§12: ファイルハンドラにも `SecretMaskingFilter` が付いていること。
+    stderr のストリームハンドラだけがマスクされ、ファイルには秘密情報が生で
+    残る、という取りこぼしを防ぐ。
+    """
+    log_file = tmp_path / "app.log"
+    try:
+        configure_logging(level="INFO", stream=io.StringIO(), log_file=log_file)
+        get_logger("abist_kb.test").info("ESA_ACCESS_TOKEN=abcdef123456 を使って同期しました")
+    finally:
+        _close_abist_kb_log_handlers()
+
+    content = log_file.read_text(encoding="utf-8")
+    assert "abcdef123456" not in content
+    assert "***" in content

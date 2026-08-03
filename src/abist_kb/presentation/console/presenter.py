@@ -21,6 +21,7 @@ from rich.text import Text
 from rich.traceback import Traceback
 
 from abist_kb.domain.errors import AppError, ErrorCode
+from abist_kb.domain.redaction import mask_secrets
 from abist_kb.presentation.console.output import OutputMode
 from abist_kb.presentation.console.theme import TOKEN_STYLES, SemanticToken, build_theme
 
@@ -100,6 +101,21 @@ def _reconfigure_utf8(stream: IO[str]) -> IO[str]:
     return stream
 
 
+def _redact_details(details: dict[str, Any]) -> dict[str, Any]:
+    """`AppError.details` の文字列値だけを `mask_secrets` へ通した辞書を返す。
+
+    `wrap()` が保持する `cause_message`(捕捉した外部例外の生メッセージ)経由で
+    URL の資格情報やトークンが紛れ込みうるため、`Presenter.error()` が details を
+    表示する箇所(PLAIN/RICH の人間向け表示・JSON の機械可読出力の両方)で必ず通す。
+    数値・真偽値など文字列以外の値は型を保持したまま素通しする(JSON 出力の
+    型フィデリティを壊さないため)。
+    """
+    return {
+        key: mask_secrets(value) if isinstance(value, str) else value
+        for key, value in details.items()
+    }
+
+
 class Presenter:
     """出力モードに応じて人間向け表示と JSON 結果を振り分ける。"""
 
@@ -153,6 +169,7 @@ class Presenter:
             "theme": theme,
             "markup": False,
             "highlight": False,
+            "emoji": False,
             "soft_wrap": True,
             "safe_box": True,
             "width": width,
@@ -279,7 +296,14 @@ class Presenter:
     def panel(self, title: str, body: str) -> None:
         if self._quiet:
             return
-        self._target().print(Panel(body, title=title, safe_box=True))
+        # `Panel._title` calls `Text.from_markup(title)` internally *whenever title is
+        # a plain `str`*, with its own hardcoded `emoji=True` default — this bypasses
+        # the Console's `emoji=False` entirely (Console-level settings only govern
+        # `render_str()`, and Panel never routes the title through it). Pre-wrapping
+        # the title in `Text(...)` (which does not parse markup/emoji codes) is the
+        # only way to keep the title byte-identical; the body is unaffected because it
+        # is rendered via `console.render_lines()`, which does honour `emoji=False`.
+        self._target().print(Panel(body, title=Text(title), safe_box=True))
 
     def markdown(self, text: str) -> None:
         if self._quiet:
@@ -305,9 +329,19 @@ class Presenter:
         self._console.print(encoded)
 
     def error(self, err: AppError) -> None:
-        """エラー提示。順序は固定: コード→概要→原因→回復手順→--debug案内。"""
+        """エラー提示。順序は固定: コード→概要→原因→回復手順→--debug案内。
+
+        `details`(`wrap()` が保持する `cause_message` を含みうる)は捕捉した外部
+        例外の生メッセージをそのまま運ぶことがあるため、`--debug` の有無や
+        `--output json` かどうかに関わらず必ず `mask_secrets` を通す。「ユーザーが
+        `--debug` を頼んだのだから自己責任」は理由にならない(§15 はテスト
+        スナップショットからの秘密情報不在を、§13.2 は Rich レンダラのスナップショット
+        テストを要求しており、CI はこの stderr を Actions ログへそのまま残す)。
+        """
         if self._mode is OutputMode.JSON:
-            self._err_console.print(json.dumps(err.to_dict(), ensure_ascii=False))
+            payload = err.to_dict()
+            payload["details"] = _redact_details(payload["details"])
+            self._err_console.print(json.dumps(payload, ensure_ascii=False))
             return
 
         danger_symbol = TOKEN_STYLES[SemanticToken.DANGER].symbol
@@ -318,7 +352,7 @@ class Presenter:
 
         self._err_console.print(Text(err.message))
 
-        details = err.details if self._debug else err.to_dict()["details"]
+        details = _redact_details(err.details if self._debug else err.to_dict()["details"])
         if details:
             self._err_console.print(Text("原因:", style=SemanticToken.MUTED.value))
             for key, value in details.items():
@@ -340,7 +374,27 @@ class Presenter:
                 err.__cause__.__traceback__,
                 show_locals=False,
             )
-            self._err_console.print(traceback)
+            # Rich の Traceback をそのまま stderr の Console へ print すると、
+            # 例外メッセージ(URL の資格情報やトークンを含みうる)がマスクされずに
+            # そのまま出る。同じ幅の使い捨て Console でいったん文字列へレンダリング
+            # してから mask_secrets を通し、Text として再出力する。
+            # `no_color=True`/`color_system=None` で ANSI を含まない素のテキストに
+            # してから mask_secrets へ渡す(ANSI混じりの文字列だと秘密情報の一致箇所が
+            # エスケープシーケンスで分断され、パターンにマッチしなくなるおそれがある)。
+            capture_buffer = io.StringIO()
+            capture_console = Console(
+                file=capture_buffer,
+                width=self._err_console.width,
+                color_system=None,
+                no_color=True,
+                force_terminal=False,
+                highlight=False,
+                markup=False,
+                emoji=False,
+                safe_box=True,
+            )
+            capture_console.print(traceback)
+            self._err_console.print(Text(mask_secrets(capture_buffer.getvalue())))
 
     # -- 対話 -----------------------------------------------------------
 

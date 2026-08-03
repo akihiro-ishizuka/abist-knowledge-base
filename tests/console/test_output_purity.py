@@ -37,6 +37,21 @@ def test_no_ansi_anywhere_in_non_rich_modes(mode):
     assert not ANSI.search(p.stderr_value())
 
 
+def test_no_ansi_in_rich_mode_when_color_system_is_none():
+    """テスト網羅の抜け: 以前は PLAIN/JSON しか純度契約(ANSI皆無)を検証しておらず、
+    RICH モードで `color_system=None`(§6.3 の非TTY・`NO_COLOR` 解決結果。
+    `resolve_color_system()` が両方の場合に返す値そのもの)になったケースは
+    一切カバーされていなかった。§6.3 は「非TTY・NO_COLOR・TERM=dumb では ANSI
+    制御文字とアニメーションを一切出さない」ことを契約にしており、§15 も
+    受け入れ基準として挙げているため、RICH というモード名だけで判断せず、
+    実際に解決された `color_system` の値で純度を検証する。
+    """
+    p = Presenter(OutputMode.RICH, width=80, color_system=None)
+    exercise(p)
+    assert not ANSI.search(p.stdout_value())
+    assert not ANSI.search(p.stderr_value())
+
+
 def test_json_mode_stdout_stays_empty_until_a_result_is_emitted():
     p = Presenter(OutputMode.JSON, width=80)
     exercise(p)
@@ -98,3 +113,28 @@ def test_rich_mode_progress_scope_shows_live_bar_current_item_and_survives_excep
     assert "完了 2件" in out
     assert "失敗 1件" in out
     assert "docs/c.md" in out
+
+
+def test_progress_handle_set_total_updates_total_and_is_reflected_in_rich_display():
+    """`ProgressHandle.set_total` は M3 が必要とする「列挙が終わってから総数が
+    判明する」ケース(例: ディレクトリを再帰走査しながら総ファイル数が後から
+    確定する)向けの唯一の API だが、これまで一切演習されていなかった。
+    基底クラス(JSON/quiet 用)の単純な値更新と、RICH のライブ表示への反映
+    (`_RichProgressHandle._on_set_total` のフック配線)の両方を確認する。
+    """
+    from abist_kb.presentation.console.progress import ProgressHandle
+
+    handle = ProgressHandle(total=None)
+    assert handle.total is None
+    handle.set_total(42)
+    assert handle.total == 42
+
+    p = Presenter(OutputMode.RICH, width=80, color_system="truecolor", force_terminal=True)
+    with progress_scope(p, description="列挙中", total=None) as rich_handle:
+        # `set_total` だけを呼ぶ(直後に `advance` を呼ぶと、そちらの
+        # `_on_advance` が現在の `self._total` を読んでライブ表示を更新して
+        # しまい、`set_total` 自身のフック配線が実際に動いたかを区別できなく
+        # なる)。
+        rich_handle.set_total(5)
+    out = p.stdout_value()
+    assert "/5" in out

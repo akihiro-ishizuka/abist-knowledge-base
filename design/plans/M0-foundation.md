@@ -2030,9 +2030,14 @@ M0 の実装とレビューで確定した、後続が守らなければなら�
 
 ### M3(CLI にコマンド群を追加するとき)
 
-- **サブコマンド群は `typer.Typer()` ではなく `AppTyper()` で作ること。** `AppTyper` はコマンド本体から投げられた `AppError` を捕捉して `Presenter` で提示し、正しい終了コードへ変換する choke point を持つ。`add_typer()` は親の設定を子へ遡及適用しないため、素の `typer.Typer()` で作ったグループは保護されない。保護漏れの症状は分かりにくい: 実プロセスは `main()` の残置キャッチで正しく終了する一方、`CliRunner` では終了コード 1 になり、テストと本番が食い違う。`source` / `batch` / `sync` / `jobs` / `worker` / `document` の6グループすべてに適用する。
+- **サブコマンド群は `typer.Typer()` ではなく `AppTyper()` で作ること。** `AppTyper` はコマンド本体(`AppErrorHandlingCommand`)とグループ自身のコールバック(`@group.callback()`。`AppErrorHandlingGroup`)の両方から投げられた `AppError` を捕捉して `Presenter` で提示し、正しい終了コードへ変換する choke point を持つ。`add_typer()` は親の設定を子へ遡及適用しないため、素の `typer.Typer()` で作ったグループは保護されない。保護漏れの症状は分かりにくい: 実プロセスは `main()` の残置キャッチで正しく終了する一方、`CliRunner` では終了コード 1 になり、テストと本番が食い違う。`source` / `batch` / `sync` / `jobs` / `worker` / `document` の6グループすべてに適用する。**グループ共通オプション(`source --id`、`jobs --state` 等)はグループコールバックに乗せてよい**: レビューで一度は「`AppTyper` はコマンド本体しか保護しない」という抜けが見つかり(`Typer.command()` の既定 `cls` しか上書きしていなかったため)、`AppTyper.__init__` で `cls=AppErrorHandlingGroup` も既定にすることで解消済み。`tests/cli/test_app.py::test_group_callback_raising_app_error_still_maps_exit_code` がこの経路の回帰を守る。
 - ヘルプ文字列に日本語や記号を自由に使ってよい。`main()` が `app()` 呼び出し前に `sys.stdout` / `sys.stderr` を UTF-8 へ再設定するため、cp932 端末でもクラッシュしない。
 - 破壊的操作は `Presenter.confirm(prompt, assume_yes=ctx.assume_yes)` を使う。非対話時は `AppError(INVALID_INPUT)` で `--yes` を促す実装済み。
+
+### M5(MCP stdio モード)
+
+- **`Presenter` に新しい出力モードは追加しない。** §6.3 は MCP stdio モードの標準出力を JSON-RPC 専用と定めており、レビューでは「`Presenter` が stdout への書込を一切拒否するモード」を追加すべきか検討したが、不要と判断した。`Presenter.__init__` は既に `stdout=`/`stderr=` を明示指定できる(`stdout=None` の既定は内部 `io.StringIO`、CLI の `main_callback` は `stdout=sys.stdout` を明示している)。**`mcp serve` は `main_callback` が構築した(`sys.stdout` に結び付いた)共有 Presenter をそのまま使ってはならない。** 代わりに `stdout=sys.stderr` を指定した自前の `Presenter` をコマンド内で構築し、JSON-RPC ストリーム自体は Presenter を経由しない別経路で `sys.stdout` へ直接書くこと。
+- **`main_callback` はサブコマンドごとに毎回 stdout 結びの `Console` を構築する。** これは `mcp serve` コマンド本体が実行される「前」に必ず起きる(Typer のコールバックはサブコマンドより先に走る)。したがって `mcp serve` は、自前の stderr 結び Presenter へ差し替えるまでの間、`ctx.obj.presenter`(stdout 結び)の stdout へ書き込むメソッド(`line`/`success`/`warning`/`danger`/`info`/`muted`/`table`/`panel`/`markdown`/`json_result` 全て、`JSON` モードでも `json_result` は stdout へ書く)を一切呼ばないこと。診断・エラー提示が必要な場合は自前の stderr 結び Presenter か `sys.stderr` への直接出力を使う。
 
 ### 全マイルストーン共通
 

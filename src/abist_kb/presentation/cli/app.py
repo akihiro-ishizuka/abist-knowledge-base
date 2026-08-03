@@ -19,10 +19,16 @@ import typer
 
 from abist_kb import identity
 from abist_kb.config import load_settings
-from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
+from abist_kb.domain.errors import AppError, ErrorCode, ExitCode, wrap
 from abist_kb.infrastructure.observability.logging import configure_logging
 from abist_kb.presentation.cli.config_cmd import config_app
-from abist_kb.presentation.cli.context import AppTyper, CliContext, fail
+from abist_kb.presentation.cli.context import (
+    UNEXPECTED_ERROR_HINT,
+    UNEXPECTED_ERROR_MESSAGE,
+    AppTyper,
+    CliContext,
+    fail,
+)
 from abist_kb.presentation.cli.doctor_cmd import doctor
 from abist_kb.presentation.console.output import (
     ColorMode,
@@ -75,18 +81,35 @@ def _parse_color_mode(value: str) -> ColorMode:
         ) from exc
 
 
-def _resolve_log_level(*, debug: bool, verbose: bool, quiet: bool) -> str:
+def _resolve_log_level(setting_level: str, *, debug: bool, verbose: bool, quiet: bool) -> str:
+    """実効ログレベルを決める。優先順位は CLI フラグ > `settings.toml`/環境変数。
+
+    I5(IMPORTANT)の回帰修正: 以前はここが `settings.log_level` を一切読んでおらず、
+    `Settings` に宣言・検証され `config show` にも表示されるフィールドが実際の
+    ロギング挙動には何の影響も与えない死んだ設定になっていた
+    (`settings.toml` に `log_level = "DEBUG"` と書いてもロガーは INFO のまま)。
+    フラグは常に設定より優先する(`--debug`/`--verbose` は強制的に DEBUG へ、
+    `--quiet` は強制的に WARNING へ引き上げる)。
+    """
     if debug or verbose:
         return "DEBUG"
     if quiet:
         return "WARNING"
-    return "INFO"
+    return setting_level
 
 
 def _version_callback(value: bool) -> None:
     if not value:
         return
-    version = metadata.version(identity.DISTRIBUTION_NAME)
+    try:
+        version = metadata.version(identity.DISTRIBUTION_NAME)
+    except metadata.PackageNotFoundError:
+        # 未インストールのソースツリーから直接実行した場合(`uv sync` 前の
+        # チェックアウトや、配布物として構築されていない実行環境)、
+        # distribution メタデータが存在せず `PackageNotFoundError` が生の
+        # トレースバックとして `--version` を落としていた。バージョン確認は
+        # 補助的な操作であり、これだけでクラッシュさせる必要はない。
+        version = "unknown(パッケージ未インストール)"
     _fallback_presenter().line(version)
     raise typer.Exit()
 
@@ -141,7 +164,7 @@ def main_callback(
         )
         settings = load_settings(root=root)
         configure_logging(
-            level=_resolve_log_level(debug=debug, verbose=verbose, quiet=quiet),
+            level=_resolve_log_level(settings.log_level, debug=debug, verbose=verbose, quiet=quiet),
             stream=sys.stderr,
         )
     except AppError as err:
@@ -233,6 +256,21 @@ def main() -> None:
             )
         )
         sys.exit(int(ExitCode.CANCELLED))
+    except Exception as exc:
+        # デフォード#13 の回帰修正: `AppErrorHandlingCommand`/`AppErrorHandlingGroup`
+        # のどちらも経由しない箇所から生の例外がここまで届いた場合の最終防衛線。
+        # 以前はここに `except Exception` が無く、`AppError` に正規化されていない
+        # バグ(例: `KeyError`)が Python インタプリタの既定のハンドラまで
+        # そのまま突き抜けて、`--debug` の有無に関わらず生のトレースバックが
+        # コード無し・回復手順無しで出力されていた(§8 違反)。
+        err = wrap(
+            exc,
+            code=ErrorCode.FAILURE,
+            message=UNEXPECTED_ERROR_MESSAGE,
+            hint=UNEXPECTED_ERROR_HINT,
+        )
+        _fallback_presenter().error(err)
+        sys.exit(int(err.exit_code))
 
 
 __all__ = ["app", "main"]

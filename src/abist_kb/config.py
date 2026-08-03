@@ -7,7 +7,7 @@ import tomllib
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import Field, ValidationError, model_validator
+from pydantic import Field, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from abist_kb import identity
@@ -33,6 +33,20 @@ class Settings(BaseSettings):
     )
 
     root_dir: Path = Field(default_factory=Path.cwd)
+
+    @field_validator("root_dir", mode="before")
+    @classmethod
+    def _blank_root_dir_is_unset(cls, value: Any) -> Any:
+        """空白のみの `ABIST_KB_ROOT_DIR`(例: `"   "`)を未設定として扱う。
+
+        `pydantic_settings` は環境変数を生の文字列として渡すため、素朴な
+        `Path(value)` 変換だと `Path("   ")` という使い物にならないルートが
+        できてしまう(デフォード#3)。空白のみの文字列が来た場合はフィールド未指定
+        として扱い、`default_factory=Path.cwd` にフォールバックさせる。
+        """
+        if isinstance(value, str) and not value.strip():
+            return Path.cwd()
+        return value
 
     docs_dir: Path | None = None
     reports_dir: Path | None = None
@@ -115,16 +129,18 @@ def _read_toml(path: Path) -> dict[str, Any]:
 
 
 def _resolve_effective_root(root: Path | None) -> Path:
-    """`load_settings` が TOML 探索と root_dir 上書きの両方に使う唯一の root。
+    """`load_settings` が TOML 探索・`.env` 探索・root_dir 上書きの3箇所すべてに使う唯一の root。
 
     優先順位: 明示引数 `root` > `ABIST_KB_ROOT_DIR` 環境変数 > カレントディレクトリ。
+    空白のみの `ABIST_KB_ROOT_DIR`(例: `"   "`)は未設定として扱う(`Path("   ")`
+    という使い物にならないルートを組み立てないため)。
     `Settings` モデル自身も root_dir 未指定時にこの環境変数を同じ優先順位で解決するため、
-    ここで一度だけ解決した値を両方(TOML の場所と overrides)に使い、
-    「TOML はここ、Settings.root_dir はあそこ」というズレが起きないようにする。
+    ここで一度だけ解決した値を3箇所(TOML の場所、`.env` の場所、overrides の root_dir)に
+    使い、「TOML と .env はここ、Settings.root_dir はあそこ」というズレが起きないようにする。
     """
     if root is not None:
         return root.expanduser()
-    env_root = os.environ.get(identity.env_var("root_dir"))
+    env_root = os.environ.get(identity.env_var("root_dir"), "").strip()
     if env_root:
         return Path(env_root).expanduser()
     return Path.cwd()
@@ -155,6 +171,16 @@ def load_settings(root: Path | None = None, config_file: Path | None = None) -> 
     if config_file is not None:
         overrides["config_file"] = config_file
 
+    # `model_config` の `env_file=".env"` は pydantic-settings が呼び出しプロセスの
+    # カレントディレクトリを基準に解決するため、`root`/`ABIST_KB_ROOT_DIR` を指定しても
+    # `.env` だけは無関係な CWD から読まれてしまう(settings.toml は上で既に
+    # `effective_root` から明示的に読んでいるが、秘密情報を運ぶ `.env` はこの
+    # `_env_file` 上書きが無いと同じ扱いにならない)。`_env_file` は pydantic-settings
+    # が受け付ける init kwarg であり、`model_config` の既定値を1回の呼び出し限りで
+    # 上書きできる。§9.1 は `.env` を秘密情報の唯一の格納場所と定めており、2つの
+    # ナレッジベースを同一マシンで扱う運用では取り違えがそのまま資格情報の誤用になる。
+    overrides["_env_file"] = effective_root / ".env"
+
     try:
         return Settings(**overrides)
     except ValidationError as exc:
@@ -163,6 +189,15 @@ def load_settings(root: Path | None = None, config_file: Path | None = None) -> 
             code=ErrorCode.CONFIG_ERROR,
             message="設定値が不正です。",
             hint=f"`{identity.CLI_NAME} config validate` で詳細を確認してください。",
-            details={"errors": exc.errors(include_url=False)},
+            # `include_input=False`/`include_context=False`: pydantic の生の入力値
+            # (`input`)や検証コンテキスト(`ctx`)を機械可読出力へそのまま漏らさない。
+            # TOML はネイティブ型(`datetime.date` 等)を持つため、クォート忘れの
+            # ような単純な入力ミスで `input` に JSON化できないオブジェクトが
+            # 紛れ込み、`--output json` でこのエラー自体を報告しようとした
+            # `json.dumps` がその場で `TypeError` を送出してクラッシュしていた
+            # (エラー報告そのものが失敗するという最悪の失敗形態、実測で確認済み)。
+            details={
+                "errors": exc.errors(include_url=False, include_input=False, include_context=False)
+            },
             exit_code=ExitCode.CONFIG_ERROR,
         ) from exc

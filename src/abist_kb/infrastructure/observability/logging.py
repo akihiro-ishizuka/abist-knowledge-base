@@ -4,104 +4,23 @@
 `Cookie` ヘッダ、URL に埋め込まれた資格情報、JSON の `"api_key": "..."` 系の値を
 ログへ書き出す前に伏せる。ロギングは常に stderr(および任意でファイル)へ出し、
 stdout(`--output json` と MCP の JSON-RPC ストリームの専用領域)へは絶対に書かない。
+
+`mask_secrets`/`SECRET_PATTERNS` 本体は `abist_kb.domain.redaction` へ移設した
+(IMPORTANT 3: ロギングに依存しない純粋関数として `presentation/` からも直接
+import できるようにするため)。ここでは既存の import パス
+(`from abist_kb.infrastructure.observability.logging import mask_secrets`)を
+壊さないよう re-export のみ行う。
 """
 
 from __future__ import annotations
 
 import logging
-import re
 import sys
 from pathlib import Path
 from typing import TextIO
 
 from abist_kb import identity
-
-_SECRET_NAME_SUFFIX = r"(?:TOKEN|KEY|SECRET|PASSWORD)"
-
-_NAME_PREFIX_MAX_LEN = 64
-"""環境変数名・JSON キー名の接頭辞に許す最大長(ReDoS 対策)。
-
-以前は `[A-Za-z0-9_]*`(無制限の `*`)を使っていたが、この文字クラスは直後に必須の
-リテラル `_` を要求する構造と重複していた(`_` はどちらにもマッチしうる)ため、
-TOKEN/KEY/SECRET/PASSWORD を含まない長いアンダースコア連結文字列
-(長い Windows パス・ドキュメントID列・base64url・幅広い JSON キー等、
-日常的なログ行に現れうるもの)に対して二次関数的なバックトラックが発生し、
-64,000文字の入力で実測 81.6 秒も応答が止まっていた。`{0,64}` のように上限を
-設けることで、各開始位置でのバックトラック量を定数に抑え、全体の計算量を
-線形に戻す(実測で 64,000 文字が 1 秒未満になることを確認済み)。
-"""
-
-_KEY_VALUE_RE = re.compile(
-    rf"(?P<name>[A-Za-z_][A-Za-z0-9_]{{0,{_NAME_PREFIX_MAX_LEN}}}_{_SECRET_NAME_SUFFIX})"
-    r"(?P<sep>\s*[:=]\s*)"
-    r"(?P<value>\S+)",
-    re.IGNORECASE,
-)
-"""`NAME=value` / `NAME: value` 形式(NAME が *_TOKEN 等)。"""
-
-_AUTHORIZATION_RE = re.compile(
-    r"(?P<prefix>Authorization\s*:\s*\S+\s+)(?P<value>\S+)",
-    re.IGNORECASE,
-)
-"""`Authorization: <scheme> <value>` の value 部のみ。"""
-
-_COOKIE_RE = re.compile(
-    r"(?P<prefix>Cookie\s*:\s*)(?P<value>[^\r\n]+)",
-    re.IGNORECASE,
-)
-"""`Cookie: <value>` の行末までを value とする。
-
-実際の Cookie ヘッダは `a=1; b=2; ...` のように複数ペアを持つのが普通で、
-以前の `\\S+`(最初の空白区切りトークンのみ)では2つ目以降のペアがログに
-残っていた。行末(次の改行の直前)まで丸ごとマスクすることで取りこぼしを防ぐ。
-"""
-
-_URL_CREDENTIAL_RE = re.compile(
-    r"(?P<prefix>[A-Za-z][A-Za-z0-9+.\-]*://[^\s:/@]+:)(?P<password>[^@\s/]+)(?P<at_host>@)"
-)
-"""`scheme://user:pass@host` の pass 部のみ(scheme・user・host は保持)。"""
-
-_JSON_SECRET_RE = re.compile(
-    rf'(?P<key>"[A-Za-z_][A-Za-z0-9_]{{0,{_NAME_PREFIX_MAX_LEN}}}_{_SECRET_NAME_SUFFIX}")'
-    r'(?P<sep>\s*:\s*)"(?P<value>[^"]*)"',
-    re.IGNORECASE,
-)
-"""JSON の `"api_key": "..."` 系(キー名が `_key` 等で終わるもの)の値部分のみ。
-
-`_KEY_VALUE_RE` と同様、suffix の直前に `_` を要求する語境界の制約を課している。
-これが無いと `monkey` `donkey` `jockey` のように「たまたま key 等で終わる」だけの
-無害な JSON キーの値まで `***` に潰してしまう(このツールは任意のユーザー/API の
-JSON をログへ通すため、正当な内容の無言破壊は診断の信頼性を損なう)。
-`{0,64}` の上限は `_KEY_VALUE_RE` と同じ ReDoS 対策(こちらは `"` に守られて
-致命的ではなかったが、偶然の産物であり設計とは言えないため揃えて対策する)。
-"""
-
-SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
-    (_KEY_VALUE_RE, r"\g<name>\g<sep>***"),
-    (_AUTHORIZATION_RE, r"\g<prefix>***"),
-    (_COOKIE_RE, r"\g<prefix>***"),
-    (_URL_CREDENTIAL_RE, r"\g<prefix>***\g<at_host>"),
-    (_JSON_SECRET_RE, r'\g<key>\g<sep>"***"'),
-)
-"""適用順に並んだ (正規表現, 置換テンプレート) の組。
-
-キー名・スキーム・ホスト名は診断のため保持し、値だけを `***` に置換する。
-各パターンは互いに排他的な文字列構造(区切り文字・引用符・`://` の有無)を
-前提にしているため、順序を入れ替えても既知のテストケースには影響しない。
-"""
-
-
-def mask_secrets(text: str) -> str:
-    """既知の秘密情報パターンを `***` に置換したテキストを返す。
-
-    元のテキストに一致箇所が無ければ、そのままの文字列を返す
-    (`test_mask_secrets_leaves_innocent_text_alone` が保証する)。
-    """
-    masked = text
-    for pattern, replacement in SECRET_PATTERNS:
-        masked = pattern.sub(replacement, masked)
-    return masked
-
+from abist_kb.domain.redaction import SECRET_PATTERNS, mask_secrets
 
 _TRACEBACK_FORMATTER = logging.Formatter()
 """`formatException()` 専用に使う無地の `Formatter`。フォーマット文字列(`fmt`)は

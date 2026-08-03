@@ -5,6 +5,7 @@ import sys
 import pytest
 
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
+from abist_kb.domain.redaction import mask_secrets
 from abist_kb.presentation.console.output import OutputMode
 from abist_kb.presentation.console.presenter import Presenter
 from abist_kb.presentation.console.theme import SemanticToken
@@ -162,6 +163,13 @@ def test_success_does_not_crash_when_reconfigure_is_refused():
 
     written = buffer.getvalue().decode("cp932")
     assert "完了" in written
+    # テスト網羅の抜け: 上の1行だけでは「✓ が丸ごと落ちても」テストは通ってしまう。
+    # `_CrashSafeTextStream` の実際の存在意義は「エンコードできない文字を
+    # 消さずに `backslashreplace` で書き込み可能な形へ落とす」ことなので、
+    # 実際に `✓`(バックスラッシュ+u2713 という文字列そのもの。cp932 では
+    # '✓' が表現できないため `str.encode(..., "backslashreplace")` がこの
+    # ASCII 表現に変換する)が出力に含まれることまで確認する。
+    assert "\\u2713" in written
 
 
 def test_json_result_called_twice_raises_runtime_error():
@@ -172,6 +180,87 @@ def test_json_result_called_twice_raises_runtime_error():
     p.json_result({"a": 1})
     with pytest.raises(RuntimeError):
         p.json_result({"b": 2})
+
+
+def test_json_result_does_not_substitute_rich_emoji_codes():
+    """C1(CRITICAL)の回帰テスト: `Console.print(str)` は既定で `:100:` のような
+    Rich の絵文字コードを実際の絵文字へ置換してしまう(`markup=False`/`highlight=False`
+    は絵文字置換を止めない)。`json_result` はバイト同一性が契約であり、ユーザーの
+    文書タイトルやパスに `:xxx:` 形式の文字列がたまたま含まれていても、
+    出力は入力と完全に同じでなければならない。
+    """
+    p = make(OutputMode.JSON)
+    payload = {"title": "release :100: notes", "path": "docs/:cd:/a.md"}
+    p.json_result(payload)
+    assert json.loads(p.stdout_value()) == payload
+    assert "💯" not in p.stdout_value()
+    assert "💿" not in p.stdout_value()
+
+
+def test_error_json_mode_does_not_substitute_rich_emoji_codes():
+    p = make(OutputMode.JSON)
+    p.error(AppError(code=ErrorCode.FAILURE, message="release :100: failed"))
+    payload = json.loads(p.stderr_value())
+    assert payload["message"] == "release :100: failed"
+    assert "💯" not in p.stderr_value()
+
+
+def test_panel_does_not_substitute_rich_emoji_codes():
+    p = make(OutputMode.PLAIN)
+    p.panel("release :100:", "path docs/:cd:/a.md")
+    out = p.stdout_value()
+    assert "release :100:" in out
+    assert "docs/:cd:/a.md" in out
+    assert "💯" not in out
+    assert "💿" not in out
+
+
+def test_error_masks_secrets_in_details_and_traceback_under_debug():
+    """I3(IMPORTANT)の回帰テスト: `Presenter.error()` は `details`(`wrap()` が
+    保持する `cause_message` を含む)とトレースバックのどちらもマスクせずに
+    そのまま出力していた(`mask_secrets` は `presentation/` から一切 import
+    されていなかった)。`--debug` を付けると同じ秘密情報が details とトレース
+    バックの2箇所に生のまま現れる。CI がこの stderr をキャプチャするため、
+    `--debug` を付けたユーザーの自己責任では済まされない(§15/§13.2)。
+    """
+    from abist_kb.domain.errors import wrap
+
+    secret_url = "https://api.esa.io/v1/teams/abist/posts?access_token=SUPER-SECRET-abc123"
+    try:
+        raise ConnectionError(f"GET {secret_url} failed")
+    except ConnectionError as exc:
+        err = wrap(exc, code=ErrorCode.EXTERNAL_SERVICE, message="esa API に接続できません")
+
+    p = Presenter(OutputMode.PLAIN, width=120, debug=True)
+    p.error(err)
+    out = p.stderr_value()
+    assert "SUPER-SECRET-abc123" not in out
+    assert out.count("***") >= 2, "details とトレースバックの両方でマスクされていること"
+
+
+def test_error_json_mode_masks_secrets_in_details():
+    """I3 の派生ケース: `--output json` の details にも同じ `cause_message` が
+    載りうるため、JSON モードの機械可読エラー出力でもマスクされること。
+    """
+    from abist_kb.domain.errors import wrap
+
+    secret_url = "https://api.esa.io/v1/teams/abist/posts?access_token=SUPER-SECRET-abc123"
+    try:
+        raise ConnectionError(f"GET {secret_url} failed")
+    except ConnectionError as exc:
+        err = wrap(
+            exc,
+            code=ErrorCode.EXTERNAL_SERVICE,
+            message="esa API に接続できません",
+            details={"note": secret_url},
+        )
+
+    p = make(OutputMode.JSON)
+    p.error(err)
+    raw = p.stderr_value()
+    assert "SUPER-SECRET-abc123" not in raw
+    payload = json.loads(raw)
+    assert payload["details"]["note"] == mask_secrets(secret_url)
 
 
 def test_confirm_raises_in_plain_mode_when_stdin_is_not_a_tty(monkeypatch):

@@ -22,7 +22,7 @@ from abist_kb.infrastructure.db.connection import (
     MIN_SQLITE_VERSION,
     check_sqlite_capabilities,
 )
-from abist_kb.presentation.cli.context import fail, get_context
+from abist_kb.presentation.cli.context import get_context
 from abist_kb.presentation.console.presenter import Presenter
 from abist_kb.presentation.console.theme import TOKEN_STYLES, SemanticToken
 
@@ -74,39 +74,88 @@ def _check_sqlite_version(report_version: str) -> CheckResult:
     )
 
 
-def _check_fts5(ok: bool) -> CheckResult:
+def _first_problem(problems: tuple[str, ...], *, startswith: str) -> str | None:
+    """`CapabilityReport.problems` から、この検査に対応する実測メッセージを探す。
+
+    各 `_probe_*` はどれも識別可能な接頭辞を持つメッセージを最大1件だけ積むため、
+    接頭辞の前方一致で対応付けられる。見つからなければ `None`(理論上は
+    起きないが、`problems` の構造が変わっても検査自体はクラッシュしないための
+    防御)。
+    """
+    for problem in problems:
+        if problem.startswith(startswith):
+            return problem
+    return None
+
+
+def _check_fts5(ok: bool, problems: tuple[str, ...]) -> CheckResult:
     if ok:
         return _result("fts5", "ok", "FTS5 拡張を利用できます。")
+    detail = _first_problem(problems, startswith="FTS5") or "FTS5 拡張を利用できません。"
     return _result(
         "fts5",
         "fail",
-        "FTS5 拡張を利用できません。",
+        detail,
         hint="FTS5 が有効な SQLite を含む Python で実行してください。",
     )
 
 
-def _check_unicode61(ok: bool) -> CheckResult:
+def _check_unicode61(ok: bool, problems: tuple[str, ...]) -> CheckResult:
     if ok:
         return _result("unicode61", "ok", "unicode61 トークナイザを利用できます。")
+    detail = _first_problem(problems, startswith="unicode61")
+    detail = detail or "unicode61 トークナイザを利用できません。"
     return _result(
         "unicode61",
         "fail",
-        "unicode61 トークナイザを利用できません。",
+        detail,
         hint="FTS5 が有効な SQLite を含む Python で実行してください。",
     )
 
 
-def _check_trigram(ok: bool) -> CheckResult:
+def _check_trigram(ok: bool, problems: tuple[str, ...]) -> CheckResult:
     if ok:
         return _result("trigram", "ok", "trigram トークナイザを利用できます(3文字語で実測)。")
+    detail = _first_problem(problems, startswith="trigram")
+    detail = detail or "trigram トークナイザを利用できません。"
     return _result(
         "trigram",
         "fail",
-        "trigram トークナイザを利用できません。",
+        detail,
         hint=(
             "SQLite を trigram 対応版へ更新したうえで検索索引を再構築してください。"
             "検索精度が黙って劣化した状態のまま運用しないでください。"
         ),
+    )
+
+
+def _check_external_content(ok: bool, problems: tuple[str, ...]) -> CheckResult:
+    """§4 の実務/参照コーパス2索引が前提にする external-content FTS5 構成を実測する。"""
+    if ok:
+        return _result("external_content", "ok", "external-content FTS5 テーブルを利用できます。")
+    detail = (
+        _first_problem(problems, startswith="external-content")
+        or "external-content FTS5 テーブルを利用できません。"
+    )
+    return _result(
+        "external_content",
+        "fail",
+        detail,
+        hint="FTS5 が有効な SQLite を含む Python で実行してください。",
+    )
+
+
+def _check_bm25(ok: bool, problems: tuple[str, ...]) -> CheckResult:
+    """§4 の検索が関連度計算に使う `bm25()` ランキング関数を実測する。"""
+    if ok:
+        return _result("bm25", "ok", "bm25() ランキング関数を利用できます。")
+    detail = _first_problem(problems, startswith="bm25()")
+    detail = detail or "bm25() ランキング関数を利用できません。"
+    return _result(
+        "bm25",
+        "fail",
+        detail,
+        hint="FTS5 が有効な SQLite を含む Python で実行してください。",
     )
 
 
@@ -169,9 +218,11 @@ def _run_checks(settings: Settings) -> list[CheckResult]:
     return [
         _check_python(),
         _check_sqlite_version(report.sqlite_version),
-        _check_fts5(report.fts5),
-        _check_unicode61(report.unicode61),
-        _check_trigram(report.trigram),
+        _check_fts5(report.fts5, report.problems),
+        _check_unicode61(report.unicode61, report.problems),
+        _check_trigram(report.trigram, report.problems),
+        _check_external_content(report.external_content, report.problems),
+        _check_bm25(report.bm25, report.problems),
         _check_config_file(settings),
         _check_data_dir(settings),
         _check_ffmpeg(),
@@ -239,7 +290,14 @@ def doctor(ctx: typer.Context) -> None:
     _render(cli_ctx.presenter, checks)
     error = _first_failure_error(checks)
     if error is not None:
-        fail(cli_ctx.presenter, error)
+        # `fail()` を直接呼ぶのではなく `raise` する。`doctor` は
+        # `AppTyper.command()` 経由(既定 `cls=AppErrorHandlingCommand`)で
+        # 登録されているため、`AppError` を投げるだけで choke point が
+        # 拾って `Presenter` 提示・終了コード変換の両方を行う。ここで
+        # `fail()` を直接呼ぶと、この関所を経由しないコマンドの書き方を
+        # `doctor_cmd.py` というM3が模写する前提のテンプレート自身が
+        # 示してしまう(今日時点では外部から見た挙動に差は無いが、悪い手本)。
+        raise error
 
 
 __all__ = ["check_sqlite_capabilities", "doctor"]

@@ -29,6 +29,7 @@ venv/
 
 # Application data (regenerable / local)
 data/
+reports/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
@@ -53,7 +54,7 @@ tmp/
 temp/
 .temp/
 
-# Manim / media outputs (keep reports/ tracked selectively if needed)
+# Manim / media outputs
 media/
 
 # Agent scratch (subagent-driven-development ledger, briefs, review packages)

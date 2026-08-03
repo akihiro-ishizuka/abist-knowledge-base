@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -27,7 +27,7 @@ def sqlite_version_tuple() -> tuple[int, int, int]:
     return (major, minor, patch)
 
 
-def _build_uri(path: Path, *, read_only: bool) -> str:
+def _build_uri(path: Path, *, read_only: bool, immutable: bool = False) -> str:
     """SQLite の URI フィラメントを組み立てる。
 
     `Path.as_uri()` は使わない(Windows のドライブレターを持つ絶対パスに対して
@@ -36,18 +36,32 @@ def _build_uri(path: Path, *, read_only: bool) -> str:
     パーセントエンコードする。これを怠ると、たとえば `#` を含むパスは URI のフラグメント
     区切りと誤認され、`#` 以降が黙って切り捨てられた別ファイルが開かれてしまう
     (実測で確認済みの不具合)。
+
+    `immutable=True` は `?immutable=1` を付与する。WAL モードの DB を `mode=ro` のみで
+    開くと、変更しないことが分かっていても SQLite は整合性確認のために `-wal`/`-shm`
+    ファイルを元DBの隣に新規作成してしまう(実測で確認済み)。§11.1 は移行元DBを
+    無傷のまま残すことを要求しているため、M8 の移行元読み取りはこのフラグを必須で使う。
     """
     resolved = str(path.resolve())
     normalized = resolved.replace("\\", "/")
     escaped = normalized.replace("%", "%25").replace("?", "%3f").replace("#", "%23")
     uri = f"file:{escaped}"
+    params = []
     if read_only:
-        uri += "?mode=ro"
+        params.append("mode=ro")
+    if immutable:
+        params.append("immutable=1")
+    if params:
+        uri += "?" + "&".join(params)
     return uri
 
 
 def connect(
-    path: Path | str, *, read_only: bool = False, timeout_ms: int = 5000
+    path: Path | str,
+    *,
+    read_only: bool = False,
+    immutable: bool = False,
+    timeout_ms: int = 5000,
 ) -> sqlite3.Connection:
     """SQLite 接続を開く。
 
@@ -55,6 +69,11 @@ def connect(
     あたるため行わない)。`foreign_keys` と `busy_timeout` はどちらの接続種別でも
     設定する。`isolation_level=None` により暗黙のトランザクション開始を無効化し、
     `transaction()` による明示的な `BEGIN IMMEDIATE` 制御を可能にする。
+
+    `immutable=True` は `read_only=True` と組み合わせて使う(SQLite の `immutable`
+    クエリパラメータは読み取り専用接続の意味論を前提にしている)。DB が変更されない
+    ことが呼び出し元にとって既知の場合(§11.1 の移行元DBなど)に指定すると、
+    `-wal`/`-shm` ファイルを元DBの隣に新規作成せずに済む。
     """
     db_path = Path(path)
     if not read_only:
@@ -67,7 +86,7 @@ def connect(
                 message=f"データベース用のディレクトリを作成できません: {db_path.parent}",
             ) from exc
 
-    uri = _build_uri(db_path, read_only=read_only)
+    uri = _build_uri(db_path, read_only=read_only, immutable=immutable)
     try:
         conn = sqlite3.connect(uri, uri=True, isolation_level=None)
     except sqlite3.Error as exc:
@@ -101,6 +120,8 @@ class CapabilityReport:
     fts5: bool
     unicode61: bool
     trigram: bool
+    external_content: bool
+    bm25: bool
     problems: tuple[str, ...]
     ok: bool
 
@@ -137,8 +158,67 @@ def _probe_trigram(conn: sqlite3.Connection, problems: list[str]) -> bool:
     return True
 
 
+def _probe_external_content(conn: sqlite3.Connection, problems: list[str]) -> bool:
+    """external-content FTS5 テーブル(`content=`/`content_rowid=`)を実測する。
+
+    §4 の実務/参照コーパスの2索引はどちらも本文を別テーブル(Markdownチャンク等)
+    に持たせ、FTS5 側は索引のみを持つ external-content 構成を前提にしている。
+    通常の(内容を自前で持つ)FTS5 テーブルが作れても external-content 構成が
+    作れるとは限らないため、`fts5`/`unicode61` とは別に実測する。DDL 作成だけで
+    なく、`content_rowid` 経由で挿入した本文が実際に検索できることまで確認する。
+    """
+    try:
+        conn.execute("CREATE TABLE probe_content (id INTEGER PRIMARY KEY, body TEXT)")
+        conn.execute(
+            "CREATE VIRTUAL TABLE probe_external_content USING fts5("
+            "body, content='probe_content', content_rowid='id')"
+        )
+        conn.execute("INSERT INTO probe_content (id, body) VALUES (1, ?)", (_TRIGRAM_PROBE_TERM,))
+        conn.execute(
+            "INSERT INTO probe_external_content(rowid, body) VALUES (1, ?)",
+            (_TRIGRAM_PROBE_TERM,),
+        )
+        row = conn.execute(
+            "SELECT count(*) FROM probe_external_content WHERE probe_external_content MATCH ?",
+            (_TRIGRAM_PROBE_TERM,),
+        ).fetchone()
+    except sqlite3.Error as exc:
+        problems.append(f"external-content FTS5 テーブルが利用できません: {exc}")
+        return False
+    if row is None or row[0] == 0:
+        problems.append(
+            "external-content FTS5 テーブルの検索が0件を返しました"
+            "(content_rowid 経由の本文が索引に反映されていません)。"
+        )
+        return False
+    return True
+
+
+def _probe_bm25(conn: sqlite3.Connection, problems: list[str]) -> bool:
+    """`bm25()` ランキング関数を実測する。
+
+    §4 の検索は FTS5 + ベクトル検索 + RRF を組み合わせるが、FTS5 側の関連度は
+    `bm25()` で得る設計のため、拡張として提供されていない/無効化されたビルドを
+    実測なしで前提にすると、検索結果の並びが実行時までおかしいと分からない。
+    """
+    try:
+        conn.execute("CREATE VIRTUAL TABLE probe_bm25 USING fts5(body)")
+        conn.execute("INSERT INTO probe_bm25(body) VALUES (?)", (_TRIGRAM_PROBE_TERM,))
+        row = conn.execute(
+            "SELECT bm25(probe_bm25) FROM probe_bm25 WHERE probe_bm25 MATCH ?",
+            (_TRIGRAM_PROBE_TERM,),
+        ).fetchone()
+    except sqlite3.Error as exc:
+        problems.append(f"bm25() ランキング関数が利用できません: {exc}")
+        return False
+    if row is None or row[0] is None:
+        problems.append("bm25() ランキング関数が値を返しませんでした。")
+        return False
+    return True
+
+
 def check_sqlite_capabilities() -> CapabilityReport:
-    """FTS5・unicode61・trigram をメモリDB上で実測する。
+    """FTS5・unicode61・trigram・external-content・bm25() をメモリDB上で実測する。
 
     バージョン不足や機能欠如は `problems` に日本語の説明として積む。
     実測中の例外は握り潰さず、同じく `problems` へ記録する
@@ -165,15 +245,27 @@ def check_sqlite_capabilities() -> CapabilityReport:
             problems,
         )
         trigram = _probe_trigram(conn, problems)
+        external_content = _probe_external_content(conn, problems)
+        bm25 = _probe_bm25(conn, problems)
     finally:
         conn.close()
 
-    ok = version >= MIN_SQLITE_VERSION and fts5 and unicode61 and trigram and not problems
+    ok = (
+        version >= MIN_SQLITE_VERSION
+        and fts5
+        and unicode61
+        and trigram
+        and external_content
+        and bm25
+        and not problems
+    )
     return CapabilityReport(
         sqlite_version=sqlite3.sqlite_version,
         fts5=fts5,
         unicode61=unicode61,
         trigram=trigram,
+        external_content=external_content,
+        bm25=bm25,
         problems=tuple(problems),
         ok=ok,
     )
@@ -219,6 +311,31 @@ def wrap_begin_immediate_failure(exc: sqlite3.Error) -> AppError:
     )
 
 
+def _wrap_commit_failure(exc: sqlite3.Error) -> AppError:
+    """`COMMIT` の失敗を `AppError` へ正規化する。
+
+    `COMMIT` 自体がロック競合(他接続が同時に読取中で `SQLITE_BUSY` を返す等)で
+    失敗することもあるため、`BEGIN IMMEDIATE` の失敗と同じく `is_lock_contention`
+    で判定し、該当すれば再試行可能な `CONFLICT` として扱う。それ以外(外部キー制約
+    違反など、`PRAGMA defer_foreign_keys=ON` で `COMMIT` まで遅延されたチェックの
+    失敗を含む)は一般的な失敗として扱い、再試行可能とは見なさない。
+    """
+    if is_lock_contention(exc):
+        return wrap(
+            exc,
+            code=ErrorCode.CONFLICT,
+            message="データベースが他の接続でロックされているため、コミットできませんでした。",
+            hint="しばらく待ってから再試行してください。",
+            retryable=True,
+            exit_code=ExitCode.CONFLICT,
+        )
+    return wrap(
+        exc,
+        code=ErrorCode.FAILURE,
+        message="トランザクションをコミットできませんでした。",
+    )
+
+
 @contextmanager
 def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     """`BEGIN IMMEDIATE` で書込ロックを即座に取得する明示トランザクション。
@@ -229,18 +346,42 @@ def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     `sqlite3.OperationalError` がそのまま呼び出し側へ漏れてしまう(実測で確認済み)。
     そのため `BEGIN IMMEDIATE` も専用の `try/except` で保護し、
     `wrap_begin_immediate_failure` で正規化する。
+
+    `COMMIT` も同様に `try` の内側で発行する。以前は `else:` 節(`try` の外側)で
+    発行していたため、`COMMIT` 自体が失敗する経路(外部キー制約が `PRAGMA
+    defer_foreign_keys=ON` で `COMMIT` まで遅延されている場合など)で生の
+    `sqlite3.IntegrityError` がそのまま漏れるだけでなく、`ROLLBACK` が一切
+    発行されないまま接続がトランザクション内に取り残されてしまっていた(実測で
+    確認済み)。以降そのconnection上のあらゆる `transaction()` が
+    「トランザクションを開始できませんでした」という、原因と無関係でロック競合を
+    思わせるメッセージで失敗し続ける(§10.1 のワーカーは1つの接続を長時間保持する
+    ため、1回の制約違反がプロセス寿命全体を道連れにする)。
     """
     try:
         conn.execute("BEGIN IMMEDIATE")
     except sqlite3.Error as exc:
         raise wrap_begin_immediate_failure(exc) from exc
+
+    def _rollback_if_still_open() -> None:
+        # `ROLLBACK` 自体が失敗しても(例: 接続が既に閉じられている)元の例外を
+        # 隠さないよう抑制する。`in_transaction` は `COMMIT`/`ROLLBACK` 済みなら
+        # False になるため、二重 ROLLBACK で「no transaction is active」を
+        # 誘発することもない。
+        if conn.in_transaction:
+            with suppress(sqlite3.Error):
+                conn.execute("ROLLBACK")
+
     try:
         yield conn
     except BaseException:
-        conn.execute("ROLLBACK")
+        _rollback_if_still_open()
         raise
     else:
-        conn.execute("COMMIT")
+        try:
+            conn.execute("COMMIT")
+        except sqlite3.Error as exc:
+            _rollback_if_still_open()
+            raise _wrap_commit_failure(exc) from exc
 
 
 __all__ = [
