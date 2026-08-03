@@ -17,10 +17,10 @@ htmlcov/
 .nox/
 
 # Virtual environments / uv
+# .python-version is tracked on purpose: uv uses it to pin the interpreter.
 .venv/
 venv/
 .env/
-.python-version
 
 # Secrets and local config
 .env
@@ -55,3 +55,6 @@ temp/
 
 # Manim / media outputs (keep reports/ tracked selectively if needed)
 media/
+
+# Agent scratch (subagent-driven-development ledger, briefs, review packages)
+.superpowers/
