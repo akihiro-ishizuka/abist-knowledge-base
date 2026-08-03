@@ -11,6 +11,7 @@
 
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,11 @@ import mcp.types as types
 from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 
+from abist_kb.presentation.mcp.kb_download import KbDownloadTools
+from abist_kb.presentation.mcp.kb_download import list_tools as kb_download_list_tools
+from abist_kb.presentation.mcp.kb_download import (
+    validate_arguments as validate_kb_download_arguments,
+)
 from abist_kb.presentation.mcp.kb_search import KbSearchTools
 from abist_kb.presentation.mcp.kb_search import list_tools as kb_search_list_tools
 from abist_kb.presentation.mcp.payloads import error_result
@@ -57,22 +63,68 @@ def build_kb_search_server(
     return server
 
 
+def build_kb_download_server(*, app_db_path: Path) -> Server[Any, Any]:
+    """kb-download サーバー(8ツール、M5 task-3a: 契約駆動の半分のみ)を組み立てる。
+
+    `list_batches`/`run_batch`(未知バッチ名エラー)/`download_web`(URL 形式
+    エラー)/`download_esa_*`・`download_git`(スキーマ検証エラー)以外は
+    ハンドラ本体を呼ぶと `NotImplementedError` になる(`kb_download.py`
+    モジュール docstring 参照)。SQLite 接続はこの `Server` インスタンスの
+    寿命の間開いたままにする(`app.sqlite` は読み取り・書き込み両方に使う)。
+    """
+    from abist_kb.infrastructure.db.schema import open_app_db
+
+    server: Server[Any, Any] = Server("kb-download", version=_SERVER_VERSION)
+    conn: sqlite3.Connection = open_app_db(app_db_path)
+    tools = KbDownloadTools(conn)
+
+    @server.list_tools()
+    async def _list_tools() -> list[types.Tool]:
+        return kb_download_list_tools()
+
+    @server.call_tool(validate_input=False)
+    async def _call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
+        validation_error = validate_kb_download_arguments(name, arguments)
+        if validation_error is not None:
+            return validation_error
+        handler = {
+            "list_batches": tools.list_batches,
+            "run_batch": tools.run_batch,
+            "add_web_batch": tools.add_web_batch,
+            "download_esa_post": tools.download_esa_post,
+            "download_esa_category": tools.download_esa_category,
+            "download_esa_search": tools.download_esa_search,
+            "download_web": tools.download_web,
+            "download_git": tools.download_git,
+        }.get(name)
+        if handler is None:
+            return error_result(f"未知のツールです: {name}")
+        return handler(arguments)
+
+    return server
+
+
 def build_server(
     name: str,
     *,
     docs_dir: Path,
     work_index_path: Path,
     reference_index_path: Path,
+    app_db_path: Path | None = None,
 ) -> Server[Any, Any]:
-    """サーバー名から `Server` を組み立てる。kb-download/kb-visualize は後続マイルストーン。"""
+    """サーバー名から `Server` を組み立てる。kb-visualize は後続マイルストーン。"""
     if name == "kb-search":
         return build_kb_search_server(
             docs_dir=docs_dir,
             work_index_path=work_index_path,
             reference_index_path=reference_index_path,
         )
+    if name == "kb-download":
+        if app_db_path is None:
+            raise ValueError("kb-download サーバーには app_db_path が必要です")
+        return build_kb_download_server(app_db_path=app_db_path)
     raise NotImplementedError(
-        f"サーバー '{name}' は M5 task-1/2 の範囲外です(kb-search のみ実装済み)。"
+        f"サーバー '{name}' は M5 の範囲外です(kb-search/kb-download のみ実装済み)。"
     )
 
 
@@ -119,6 +171,7 @@ async def run_http(server: Server[Any, Any], *, host: str = "127.0.0.1", port: i
 
 __all__ = [
     "SERVER_NAMES",
+    "build_kb_download_server",
     "build_kb_search_server",
     "build_server",
     "run_http",

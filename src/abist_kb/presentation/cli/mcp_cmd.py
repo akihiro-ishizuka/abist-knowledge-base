@@ -32,12 +32,15 @@ def _stderr_presenter() -> Presenter:
     return Presenter(OutputMode.PLAIN, stdout=sys.stderr, stderr=sys.stderr)
 
 
-async def _serve_stdio(server_name: str, docs_dir, work_index_path, reference_index_path) -> None:  # type: ignore[no-untyped-def]
+async def _serve_stdio(
+    server_name: str, docs_dir, work_index_path, reference_index_path, app_db_path
+) -> None:  # type: ignore[no-untyped-def]
     server = build_server(
         server_name,
         docs_dir=docs_dir,
         work_index_path=work_index_path,
         reference_index_path=reference_index_path,
+        app_db_path=app_db_path,
     )
     await run_stdio(server)
 
@@ -47,6 +50,7 @@ async def _serve_http(
     docs_dir,
     work_index_path,
     reference_index_path,
+    app_db_path,
     port: int,  # type: ignore[no-untyped-def]
 ) -> None:
     server = build_server(
@@ -54,6 +58,7 @@ async def _serve_http(
         docs_dir=docs_dir,
         work_index_path=work_index_path,
         reference_index_path=reference_index_path,
+        app_db_path=app_db_path,
     )
     await run_http(server, port=port)
 
@@ -103,6 +108,7 @@ def serve(
                 settings.docs_dir,
                 settings.work_index_path,
                 settings.reference_index_path,
+                settings.app_db_path,
                 port,
             )
         else:
@@ -112,6 +118,7 @@ def serve(
                 settings.docs_dir,
                 settings.work_index_path,
                 settings.reference_index_path,
+                settings.app_db_path,
             )
     except NotImplementedError as exc:
         raise AppError(code=ErrorCode.INVALID_INPUT, message=str(exc)) from exc
