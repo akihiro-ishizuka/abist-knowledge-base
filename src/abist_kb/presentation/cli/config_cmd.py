@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import typer
 
-from abist_kb.presentation.cli.context import get_context
+from abist_kb.presentation.cli.context import AppTyper, get_context
 
-config_app = typer.Typer(help="設定の確認・検証。", no_args_is_help=True)
+config_app = AppTyper(help="設定の確認・検証。", no_args_is_help=True)
 
 
 @config_app.command("path")

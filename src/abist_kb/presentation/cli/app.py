@@ -13,7 +13,7 @@ import ctypes
 import sys
 from importlib import metadata
 from pathlib import Path
-from typing import Annotated
+from typing import IO, Annotated
 
 import typer
 
@@ -22,7 +22,7 @@ from abist_kb.config import load_settings
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
 from abist_kb.infrastructure.observability.logging import configure_logging
 from abist_kb.presentation.cli.config_cmd import config_app
-from abist_kb.presentation.cli.context import CliContext, fail
+from abist_kb.presentation.cli.context import AppTyper, CliContext, fail
 from abist_kb.presentation.cli.doctor_cmd import doctor
 from abist_kb.presentation.console.output import (
     ColorMode,
@@ -32,11 +32,16 @@ from abist_kb.presentation.console.output import (
 )
 from abist_kb.presentation.console.presenter import Presenter
 
-app = typer.Typer(
+app = AppTyper(
     name=identity.CLI_NAME,
     help=f"{identity.DISPLAY_NAME} — 複数のナレッジソースを横断する CLI。",
     no_args_is_help=True,
     add_completion=False,
+    # --debug の既定値(オフ)に合わせて無効化する。既定の True のままだと、
+    # AppError で正規化されていない未捕捉の例外(バグ)が --debug 無しでも
+    # Rich の詳細トレースバックを出してしまい、「生のトレースバックは --debug の
+    # ときだけ」という制約に反する(cp932 クラッシュがまさにこの経路で起きていた)。
+    pretty_exceptions_enable=False,
 )
 
 app.add_typer(config_app, name="config")
@@ -150,6 +155,37 @@ def main_callback(
     )
 
 
+def _reconfigure_stream_utf8(stream: IO[str]) -> None:
+    """`sys.stdout`/`sys.stderr` の実体を UTF-8/backslashreplace へ再設定する。
+
+    `TextIOWrapper` のエンコーディングはインタプリタ起動時にシステムロケールから
+    固定される(日本語ロケール Windows では既定で cp932)。`_enable_windows_utf8_console`
+    が行う `SetConsoleOutputCP(65001)` は Win32 コンソール側の *表示* コードページを
+    変えるだけで、この Python 側ストリームのエンコーディングには一切影響しない。
+
+    これが問題になるのは `--help`(および `no_args_is_help=True` による裸呼び出し)
+    のように、`main_callback` が実行される *前*(引数解析の途中)に Typer 自身が
+    内部で新しい `rich.console.Console` を作って描画する経路である。この経路は
+    `Presenter` を経由しないため、Task 2 で `Presenter._reconfigure_utf8` に実装した
+    cp932 対策の恩恵を受けない。`Typer(help=...)` に含む全角ダッシュ等の非ASCII文字が
+    cp932 で表現できず `UnicodeEncodeError` を送出し、`AppError` でも `ClickException`
+    でもないため `--debug` 抜きで生のトレースバックが出る、という実測済みの不具合が
+    起きる。ここで `main()` の最初(`app()` 呼び出しより前)に `sys.stdout`/
+    `sys.stderr` そのものを直接 UTF-8 化することで、Typer 自身が内部で作る Console も
+    含めて解消する(Rich の `Console.file` は既定で `sys.stdout`/`sys.stderr` を
+    その都度動的に参照するため、この時点での再設定で以降のすべての描画に効く)。
+
+    `reconfigure` を持たないストリーム、または(既に読み取り済み等の理由で)
+    `reconfigure` 自体を拒否するストリームは、静かにスキップする
+    (この関数自体が例外を送出することは無い)。
+    """
+    reconfigure = getattr(stream, "reconfigure", None)
+    if reconfigure is None:
+        return
+    with contextlib.suppress(AttributeError, OSError, ValueError):
+        reconfigure(encoding="utf-8", errors="backslashreplace")
+
+
 def _enable_windows_utf8_console() -> None:
     """Windows のコンソール出力コードページを UTF-8 へ切り替える(表示専用)。
 
@@ -159,6 +195,16 @@ def _enable_windows_utf8_console() -> None:
     *表示* するのはこのエントリポイントの責務である。非 Windows では no-op。
     コンソールを持たない実行形態(サービス化・パイプ経由など)でも CLI の起動を
     妨げてはならないため、あらゆる例外を握り潰す。
+
+    **重要 — 副作用**: `SetConsoleOutputCP`/`SetConsoleCP` はプロセス単位ではなく
+    *コンソール* 単位の設定であり、このCLIプロセスが終了した後もコンソール
+    (呼び出し元の PowerShell/cmd セッションなど)に恒久的に残る。手動で
+    `chcp 65001` を実行したのと同じ効果であり、同じコンソールを使い続ける他の
+    cp932 前提のレガシーツールへ影響しうる。Task 2 の
+    `Presenter._reconfigure_utf8` がプロセス内 Python ストリームの書き換えという
+    副作用を明示しているのと同様にここでも明示しておく。こちらは影響範囲が
+    プロセスの寿命を超えて親シェルのコンソールという OS レベルの状態にまで及ぶため、
+    より広い。
     """
     if sys.platform != "win32":
         return
@@ -170,6 +216,8 @@ def _enable_windows_utf8_console() -> None:
 
 def main() -> None:
     """コンソールスクリプトのエントリポイント(`pyproject.toml` の `project.scripts`)。"""
+    _reconfigure_stream_utf8(sys.stdout)
+    _reconfigure_stream_utf8(sys.stderr)
     _enable_windows_utf8_console()
     try:
         app()
