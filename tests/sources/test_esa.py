@@ -163,8 +163,11 @@ def test_front_matter_omits_empty_values() -> None:
     post = make_post(category="", tags=[], url="")
     content = generate_front_matter(post, {})
     assert "category:" not in content
-    assert "tags:" not in content
     assert "url:" not in content
+    # 旧 `generateFrontMatter`(download-article.js:124-133)は `value !== ''` だけで
+    # 判定するため空配列を弾かず、`tags: []` を常に出力する。Python も同じ規則に
+    # 合わせているので、空タグでも行自体は出る(値が空文字列の場合とは異なる)。
+    assert "tags: []" in content
 
 
 # ---------------------------------------------------------------------------

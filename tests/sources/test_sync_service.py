@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -292,6 +293,70 @@ def test_sync_all_continues_past_failed_batch_and_reports_it(
     assert by_name["成功バッチ"]["summary"]["totals"]["added"] == 1
 
 
+def test_sync_all_via_job_path_records_partial_state_on_batch_failure(
+    tmp_root: Path, esa_server: MockEsaServer
+) -> None:
+    """`sync_all` の部分失敗は CLI の終了コードだけでなく、ジョブ行そのものに
+    反映されなければならない(M5のMCPツール・M6のWeb/TUI画面はジョブ状態しか
+    読まないため)。CLI を経由せず `run_sync_inline`(ジョブ経路そのもの)を直接
+    呼び、`jobs` テーブルの行が `SUCCEEDED` ではなく `PARTIAL` であることを検証
+    する。
+    """
+    from abist_kb.application.sync_service import run_sync_inline
+    from abist_kb.domain.job import JobState
+    from abist_kb.infrastructure.jobs.repository import JobRepository
+
+    esa_server.add_post(make_post(category="対象カテゴリ"))
+    conn = connect(tmp_root / "app.sqlite")
+    ensure_app_schema(conn)
+    docs_dir = tmp_root / "docs"
+    docs_dir.mkdir(exist_ok=True)
+    sources = SourceRepository(conn)
+    batches = BatchRepository(conn)
+    source = sources.create(
+        type="esa",
+        display_name="テストesa",
+        connection={
+            "team": esa_server.team,
+            "access_token": FAKE_TOKEN,
+            "base_url": esa_server.base_url,
+        },
+        output_dir="docs/_job_all_test",
+    )
+    batches.create(
+        name="成功バッチ",
+        type="esa",
+        output_dir="docs/_job_all_test",
+        items=[{"source_id": source["id"], "target": "対象カテゴリ"}],
+    )
+    batches.create(
+        name="失敗バッチ",
+        type="git",
+        output_dir="docs/_job_all_fail",
+        items=[{"options": {}}],  # repository が無く実行時に必ず失敗する
+    )
+
+    result = run_sync_inline(
+        conn,
+        root_dir=tmp_root,
+        docs_dir=docs_dir,
+        reports_dir=tmp_root / "reports",
+        target="all",
+    )
+
+    assert result["state"] == str(JobState.PARTIAL)
+    by_name = {r["batch_name"]: r for r in result["results"]}
+    assert "error" in by_name["失敗バッチ"]
+    assert by_name["成功バッチ"]["summary"]["totals"]["added"] == 1
+
+    job_row = JobRepository(conn).get(result["id"])
+    assert job_row is not None
+    assert job_row.state == JobState.PARTIAL, (
+        f"ジョブ行が半分失敗した同期を SUCCEEDED として記録してしまっている: {job_row.state}"
+    )
+    assert job_row.error is not None
+
+
 # ---------------------------------------------------------------------------
 # 旧 batch-config.js からの一方向インポート → 実行までの往復(task-5b 必須要件)。
 # ---------------------------------------------------------------------------
@@ -356,3 +421,93 @@ def test_imported_web_and_git_batches_can_actually_be_run(
     assert git_summary.totals["added"] >= 2
     assert git_report is not None
     assert list((docs_dir / "catia-flotherm-prep-like").rglob("*.md"))
+
+
+def test_sync_batch_web_paces_requests_per_batch_items_options_delay(
+    tmp_root: Path, web_server: WebPageServer
+) -> None:
+    """`catiadoc` バッチの実設定(`delay: 1000`)が `batch_items.options.delay` を
+    経由して実際にクロールの節流へ渡ることを、`SyncService.sync_batch`
+    (`_sync_web_target` → `WebSyncRunner`)経由で検証する(task-6の
+    `HostRateLimiter` 配線が末端まで届いているかの確認)。単体では
+    `WebSyncRunner(delay_seconds=...)` を直接呼ぶテストで既に確認済みだが、ここでは
+    `options.delay`(ミリ秒、旧 `batch-config.js` 由来のキー)から実際に
+    `SyncService` が消費する経路そのものを通す。"""
+    base = web_server.base_url
+    web_server.state.body = f'<a href="{base}/a">a</a><a href="{base}/b">b</a>'
+    web_server.state.links = {"/a": "ページA", "/b": "ページB"}
+
+    conn = connect(tmp_root / "app.sqlite")
+    ensure_app_schema(conn)
+    docs_dir = tmp_root / "docs"
+    docs_dir.mkdir(exist_ok=True)
+    batches = BatchRepository(conn)
+    batch = batches.create(
+        name="catiadoc-like",
+        type="web",
+        output_dir="docs/_delay_test",
+        items=[{"options": {"url": f"{base}/", "max_depth": 1, "delay": 150}}],
+    )
+    sync_service = SyncService(
+        root_dir=tmp_root,
+        docs_dir=docs_dir,
+        reports_dir=tmp_root / "reports",
+        documents=DocumentRepository(conn),
+        sources=SourceRepository(conn),
+        batches=batches,
+    )
+
+    summary, _report = sync_service.sync_batch(batch["id"])
+
+    assert summary.totals["added"] >= 3  # トップページ + a + b
+    request_times = [r["time"] for r in web_server.state.requests]
+    assert len(request_times) >= 3
+    ordered = sorted(request_times)
+    gaps = [b - a for a, b in zip(ordered, ordered[1:])]  # noqa: B905 - pairwise, lengths differ by design
+    assert all(gap >= 0.14 for gap in gaps), (
+        f"batch_items.options.delay(150ms)未満の間隔でリクエストされた(配線漏れの疑い): {gaps}"
+    )
+
+
+def test_sync_batch_web_concurrent_requests_within_delay_window_still_overlap(
+    tmp_root: Path, web_server: WebPageServer
+) -> None:
+    """`HostRateLimiter` はリクエスト *開始* 間隔だけを空けるのであって、クロール
+    全体を直列化してはならない(brief要求: 「並行実行モデルを崩さない」)。
+    レスポンスをわざと遅くしたサーバーへ、delay(150ms)より短い応答時間の
+    ページを `concurrency=3` で3件取得させ、完了までの総時間が「直列実行した
+    場合の下限」(delay*3 + レスポンス時間*3)より明確に短いこと ── つまり
+    複数リクエストが実際に並行して *進行中* であることを確認する。"""
+    base = web_server.base_url
+    web_server.state.body = f'<a href="{base}/a">a</a><a href="{base}/b">b</a>'
+    web_server.state.links = {"/a": "ページA", "/b": "ページB"}
+
+    conn = connect(tmp_root / "app.sqlite")
+    ensure_app_schema(conn)
+    docs_dir = tmp_root / "docs"
+    docs_dir.mkdir(exist_ok=True)
+    batches = BatchRepository(conn)
+    batch = batches.create(
+        name="catiadoc-like-concurrent",
+        type="web",
+        output_dir="docs/_delay_concurrency_test",
+        items=[{"options": {"url": f"{base}/", "max_depth": 1, "delay": 150, "concurrency": 3}}],
+    )
+    sync_service = SyncService(
+        root_dir=tmp_root,
+        docs_dir=docs_dir,
+        reports_dir=tmp_root / "reports",
+        documents=DocumentRepository(conn),
+        sources=SourceRepository(conn),
+        batches=batches,
+    )
+
+    started = time.monotonic()
+    summary, _report = sync_service.sync_batch(batch["id"])
+    elapsed = time.monotonic() - started
+
+    assert summary.totals["added"] >= 3  # トップページ + a + b(深さ1で並行取得)
+    # 直列実行なら少なくとも delay(0.15s) * (3ページ-1) = 0.3s はかかる。
+    # 並行取得(asyncio.gather)であれば、開始間隔だけを守りつつ大きく重なるため
+    # 明確に速い(ネットワークがローカルループバックなので余裕を持たせても1s未満)。
+    assert elapsed < 1.0, f"delay がクロール全体を直列化している疑い: {elapsed:.2f}s"

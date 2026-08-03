@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any
 
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
-from abist_kb.domain.job import ResourceKind
+from abist_kb.domain.job import JobState, ResourceKind
 from abist_kb.domain.sync_policy import ACTION_BUCKET, SyncAction
 from abist_kb.infrastructure.db.batches_repo import BatchRepository
 from abist_kb.infrastructure.db.documents_repo import DocumentRepository
@@ -811,10 +811,21 @@ def make_sync_job_handler(
             outbox["results"] = results
             failed = [r for r in results if r.get("error")]
             # ここでは意図的に例外を送出しない(sync_all の partial-failure 方針:
-            # 続行して結果へ記録する、モジュール docstring参照)。ジョブ自体は
-            # SUCCEEDED として記録され、部分失敗を終了コードへ反映する責務は
-            # CLI 層(`presentation.cli.sync_cmd.sync_all`)が `outbox["results"]`
-            # を検査して負う。
+            # 続行して結果へ記録する、モジュール docstring参照)。しかし1件でも
+            # 失敗があれば `run.finish_as(PARTIAL)` でジョブ行自体を SUCCEEDED
+            # ではなく PARTIAL として終端させる — CLI の終了コード判定
+            # (`presentation.cli.sync_cmd._fail_if_partial`)だけに頼ると、
+            # M5のMCPツールやM6のWeb/TUI画面のようにジョブ状態しか見ない消費者に
+            # 半分失敗した同期がクリーンな成功として見えてしまうため。
+            if failed:
+                run.finish_as(
+                    JobState.PARTIAL,
+                    error={
+                        "code": "PARTIAL",
+                        "message": f"{len(failed)}/{len(results)} バッチの同期に失敗しました。",
+                        "failed_batches": [r["batch_id"] for r in failed],
+                    },
+                )
             run.emit(
                 phase="sync-all",
                 current=len(results),

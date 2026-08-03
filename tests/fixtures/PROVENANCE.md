@@ -273,10 +273,28 @@ Task 2 の初稿はこれを「web由来コンテンツが参照コーパスに�
   `C#ATIA`(`outputDir: C#ATIA`)の2件のみで、どちらの出力先ディレクトリも
   ディスク上に存在しない。つまり `docs/knowledge/catiadoc` は現行 `batch-config.js`
   とは別系統・別時期に取得された、管理DBに未登録のコンテンツである。
+- **旧 Web アダプタ(`download-web.js`)は `outputDir` に `docs/` を強制的に
+  前置しない。** `--output-dir` の値をそのままファイルパス組み立てに使うため、
+  `docs/` を含まないディレクトリ名(`C#ATIA` バッチが実例)を指定すると
+  `docs/` ツリーの外へ書き込まれ、`documents` テーブルからも見えない孤児文書に
+  なる。`docs/knowledge/catiadoc` 配下の約1,313ファイルは、この機構(または
+  同じ穴を突く別系統の取得)によって両方のDBに未登録のまま残ったものと推測される
+  (M3 `task-4-5-report.md` §「`docs/` 強制付与の逸脱記録」)。M3のPython版
+  `WebSyncRunner`/`EsaSyncRunner` は `infrastructure.sources.base.with_docs_prefix`
+  (`docs` 完全一致または `docs/` 始まりのみを「既にdocs配下」とみなす厳格な判定、
+  それ以外は `docs/` を前置した上でツリー内かを検証)でこれを是正した。ただし
+  git アダプタだけは brief指定により旧来の緩い判定(`with_docs_prefix_loose`、
+  `outputDir.startsWith('docs')`)を意図的に踏襲しており、3ソースで `docs/`
+  判定の厳密さが不揃いになっている。
 
 **M4/M8への帰結**(ledger 記載):
 - M8 の移行は `docs/` を実ファイルベースで棚卸しする必要があり、`sync-state.sqlite`
   や `reference-index.sqlite` のどちらか一方が完全な文書一覧だと信頼してはならない。
+- **M8 の棚卸しは「収集済みコンテンツが全て `docs/` 配下にある」と仮定してはならない。**
+  旧 Web アダプタの `docs/` 未強制付与により、バッチ設定のディレクトリ名次第では
+  `docs/` の外に書き込まれた文書が存在しうる(上記参照)。棚卸しはリポジトリ全体
+  (少なくとも `.gitignore` 対象を除く全ツリー)を対象にし、`docs/` 配下だけを
+  見て完全と判断しないこと。
 - M4 の reference-index 選定は `knowledge/B32doc` のみのスコープを再現しなければならない。
 - `design/system-design.md` §9.2 の documents テーブルは、上記の既定除外を明示するか、
   除外を外したフルツリーのバックフィルによって作られるべきである。

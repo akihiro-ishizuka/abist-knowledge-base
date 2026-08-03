@@ -64,6 +64,8 @@ class JobRunContext:
     job: Job
     emit: EmitFn
     _check_lease: Callable[[], None] | None = None
+    _finish_state: JobState | None = None
+    _finish_error: dict[str, object] | None = None
 
     def check_lease(self) -> None:
         """リース(resource lease / worker lease)が奪われていれば直ちに
@@ -75,6 +77,22 @@ class JobRunContext:
         """
         if self._check_lease is not None:
             self._check_lease()
+
+    def finish_as(self, state: JobState, *, error: dict[str, object] | None = None) -> None:
+        """ハンドラが例外を出さずに終わっても `SUCCEEDED` 以外で終端させたい
+        場合に呼ぶ(例: `sync all` で一部バッチが失敗したときの `PARTIAL`)。
+
+        `run_job`(`infrastructure.jobs.execution`)はハンドラが例外を出さずに
+        戻ってきたとき既定で `state=SUCCEEDED` として `finish` するが、
+        `SyncService.sync_all` のように「例外は投げないが完全成功でもない」
+        結果を返すハンドラは、ここで宣言しないとジョブ行が実態と異なる
+        `SUCCEEDED` のまま記録されてしまう(MCP・Web・TUI 等、CLI 終了コード
+        を見ない全ての消費者がそれを「クリーンな成功」と誤読する)。
+        `state=JobState.FAILED` を渡すことも可能(その場合は `error` を渡すこと
+        を推奨する)。
+        """
+        self._finish_state = state
+        self._finish_error = error
 
 
 JobHandler = Callable[[JobRunContext], None]

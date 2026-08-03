@@ -282,6 +282,7 @@ def run_job(
         else _no_resource_lease()
     )
 
+    run_ctx = JobRunContext(job=job, emit=emit)
     try:
         with resource_cm as resource_key_value:
             renew_fns = _build_renew_fns(
@@ -292,7 +293,8 @@ def run_job(
                 renew_worker_lease=renew_worker_lease,
             )
             with _lease_renewal(conn, ttl_seconds=ttl_seconds, renew_fns=renew_fns) as renewer:
-                handler(JobRunContext(job=job, emit=emit, _check_lease=renewer.check_alive))
+                run_ctx._check_lease = renewer.check_alive
+                handler(run_ctx)
     except AppError as exc:
         repo.finish(job.id, state=JobState.FAILED, error=exc.to_dict())
         if reraise:
@@ -304,7 +306,11 @@ def run_job(
         if reraise:
             raise
     else:
-        repo.finish(job.id, state=JobState.SUCCEEDED)
+        # ハンドラは例外を出さずに戻ったが、`JobRunContext.finish_as()` で
+        # SUCCEEDED 以外の終端状態(例: PARTIAL)を宣言している場合がある
+        # (`SyncService.sync_all` の partial-failure 方針参照)。
+        state = run_ctx._finish_state or JobState.SUCCEEDED
+        repo.finish(job.id, state=state, error=run_ctx._finish_error)
     result = repo.get(job.id)
     assert result is not None  # 直前に finish した行なので必ず存在する
     return result

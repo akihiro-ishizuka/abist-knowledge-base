@@ -230,16 +230,17 @@ def _date_only(value: str) -> str:
 def _yaml_scalar_line(key: str, value: Any) -> str | None:
     """front matter の1行を組み立てる。空値は `None`(=行を出さない)。
 
-    旧実装 `generateFrontMatter` と同じ規則: 配列は要素ごとにダブルクォート、
-    メタスキーマの4キー(`source`/`managed_by`/`document_type`/`status`)は
-    素の値、それ以外の文字列は常にダブルクォート(内部の `"` だけをエスケープ、
-    バックスラッシュは変換しない)。
+    旧実装 `generateFrontMatter` と同じ規則: `value !== null && value !==
+    undefined && value !== ''` のときだけ行を出す。この条件は空配列・`0`・
+    `false` を弾かない(型が違うので `''` と等しくならない)ため、それらは
+    値ありとして出力される。配列は要素ごとにダブルクォート(空配列は
+    `key: []` になる)、メタスキーマの4キー(`source`/`managed_by`/
+    `document_type`/`status`)は素の値、それ以外の文字列は常にダブルクォート
+    (内部の `"` だけをエスケープ、バックスラッシュは変換しない)。
     """
     if value is None or value == "":
         return None
     if isinstance(value, list):
-        if not value:
-            return None
         parts = ", ".join(f'"{v}"' for v in value)
         return f"{key}: [{parts}]"
     if isinstance(value, bool):

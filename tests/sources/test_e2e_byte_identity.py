@@ -216,22 +216,17 @@ def test_esa_docs_output_is_byte_identical_to_old_node(
     _assert_trees_byte_identical(python_docs, old_root / "docs", label="esa")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "既知のバイト不一致(task-6で発見、esa.py/download-article.js は未修正のまま報告のみ、"
-        "task-6-report.md参照): 旧 `generateFrontMatter`(download-article.js:124-133)は "
-        "`value !== ''` だけで空配列を弾かないため `tags: []` を常に出力するが、Python の "
-        "`esa._yaml_scalar_line` は `isinstance(value, list) and not value` で空配列を明示的に "
-        "スキップし `tags` 行自体を出力しない。tags が1件も無い記事すべてで front matter が "
-        "1行分バイト不一致になる。esa.py はこのタスクのスコープ外(スコープ: tests/sources/ と "
-        "web.pyのdelay修正のみ)のため、ここでは修正せず既知差分として固定する"
-        "(このテストが緑に変わったら、無断でどちらかの実装が変わった合図なのでstrict=Trueにしてある)。"
-    ),
-)
-def test_esa_empty_tags_diverges_from_old_node_known_finding(
+def test_esa_empty_tags_is_byte_identical_to_old_node(
     documents: DocumentRepository, tmp_root: Path, esa_server: MockEsaServer, sandbox: Path
 ) -> None:
+    """esa: `tags` が空配列の記事でも front matter がバイト同一であること(M3final)。
+
+    旧 `generateFrontMatter`(download-article.js:124-133)は `value !== null &&
+    value !== undefined && value !== ''` だけで判定するため、空配列は `''` と
+    型が異なり弾かれず `tags: []` を常に出力する。Python 側 `esa._yaml_scalar_line`
+    はかつて `isinstance(value, list) and not value` で空配列を明示的にスキップし
+    `tags` 行自体を省略していたため1バイト不一致になっていたが、旧実装と同じ
+    「空配列も出力する」規則に修正済み。"""
     post = {
         "number": 100,
         "name": "タグ無し記事",
