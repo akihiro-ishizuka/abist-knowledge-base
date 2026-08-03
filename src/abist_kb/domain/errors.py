@@ -39,6 +39,16 @@ class ErrorCode(StrEnum):
     MIGRATION_FAILED = "MIGRATION_FAILED"
 
 
+_DEBUG_ONLY_DETAIL_KEYS = frozenset({"cause_message"})
+"""to_dict() から除外する details キー。
+
+cause_message は元例外の生メッセージをそのまま保持するため、URL の認証情報や
+トークンなど秘密情報を含み得る。`--output json` / MCP 応答などの機械可読出力に
+そのまま混ぜない。値自体は details に残すので `--debug` 時にはプログラムから
+参照できる(自由文字列のマスキングはログ層の mask_secrets が担当する)。
+"""
+
+
 _EXIT_CODE_BY_ERROR: dict[ErrorCode, ExitCode] = {
     ErrorCode.INVALID_INPUT: ExitCode.INVALID_INPUT,
     ErrorCode.CONFIG_ERROR: ExitCode.CONFIG_ERROR,
@@ -70,12 +80,20 @@ class AppError(Exception):
         self.exit_code = exit_code if exit_code is not None else ExitCode.FAILURE
 
     def to_dict(self) -> dict[str, Any]:
-        """`--output json` と MCP 応答で使う辞書表現。"""
+        """`--output json` と MCP 応答で使う辞書表現。
+
+        `details` のうち `_DEBUG_ONLY_DETAIL_KEYS` に列挙したキー(cause_message)は
+        秘密情報を含み得るため除外する。cause_type はクラス名でしかなく
+        秘密情報を含まないため、診断に有用な情報としてそのまま残す。
+        """
+        safe_details = {
+            key: value for key, value in self.details.items() if key not in _DEBUG_ONLY_DETAIL_KEYS
+        }
         return {
             "code": str(self.code),
             "message": self.message,
             "hint": self.hint,
-            "details": self.details,
+            "details": safe_details,
             "retryable": self.retryable,
         }
 

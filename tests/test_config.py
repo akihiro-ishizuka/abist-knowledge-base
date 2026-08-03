@@ -104,3 +104,36 @@ def test_redacted_dict_masks_secrets(tmp_root: Path, monkeypatch: pytest.MonkeyP
 def test_settings_is_constructible_directly_for_tests(tmp_root: Path):
     s = Settings(root_dir=tmp_root)
     assert s.docs_dir == tmp_root / "docs"
+
+
+def test_root_none_uses_root_dir_env_var(tmp_root: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setenv("ABIST_KB_ROOT_DIR", str(tmp_root))
+    s = load_settings(root=None)
+    assert s.root_dir == tmp_root
+    assert s.docs_dir == tmp_root / "docs"
+    assert s.config_file == tmp_root / "config" / "settings.toml"
+
+
+def test_root_none_reads_toml_from_env_var_root(tmp_root: Path, monkeypatch: pytest.MonkeyPatch):
+    cfg = tmp_root / "config" / "settings.toml"
+    cfg.parent.mkdir(parents=True)
+    cfg.write_text('log_level = "WARNING"\n', encoding="utf-8")
+    monkeypatch.setenv("ABIST_KB_ROOT_DIR", str(tmp_root))
+    s = load_settings(root=None)
+    assert s.log_level == "WARNING"
+
+
+def test_root_none_falls_back_to_cwd(tmp_root: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.chdir(tmp_root)
+    s = load_settings(root=None)
+    assert s.root_dir == tmp_root
+
+
+def test_root_param_overrides_root_dir_env_var(
+    tmp_root: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    other_root = tmp_path / "他のルート"
+    other_root.mkdir()
+    monkeypatch.setenv("ABIST_KB_ROOT_DIR", str(other_root))
+    s = load_settings(root=tmp_root)
+    assert s.root_dir == tmp_root

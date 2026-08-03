@@ -62,6 +62,19 @@ def test_wrap_preserves_cause_and_does_not_leak_raw_type_into_message():
     assert err.details["cause_type"] == "ValueError"
 
 
+def test_to_dict_omits_cause_message_but_keeps_cause_type():
+    original = ConnectionError(
+        "failed to reach https://api.esa.io/v1/teams?access_token=super-secret-abc123"
+    )
+    err = wrap(original, code=ErrorCode.EXTERNAL_SERVICE, message="esa API に接続できません")
+    dumped = err.to_dict()
+    assert "cause_message" not in dumped["details"]
+    assert dumped["details"]["cause_type"] == "ConnectionError"
+    assert "super-secret-abc123" not in repr(dumped)
+    # details 自体には --debug 用に cause_message を残す。
+    assert "cause_message" in err.details
+
+
 def test_error_code_values_are_screaming_snake_strings():
     for member in ErrorCode:
         assert member.value == member.name

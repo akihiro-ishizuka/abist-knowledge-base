@@ -114,10 +114,26 @@ def _read_toml(path: Path) -> dict[str, Any]:
         ) from exc
 
 
+def _resolve_effective_root(root: Path | None) -> Path:
+    """`load_settings` が TOML 探索と root_dir 上書きの両方に使う唯一の root。
+
+    優先順位: 明示引数 `root` > `ABIST_KB_ROOT_DIR` 環境変数 > カレントディレクトリ。
+    `Settings` モデル自身も root_dir 未指定時にこの環境変数を同じ優先順位で解決するため、
+    ここで一度だけ解決した値を両方(TOML の場所と overrides)に使い、
+    「TOML はここ、Settings.root_dir はあそこ」というズレが起きないようにする。
+    """
+    if root is not None:
+        return root.expanduser()
+    env_root = os.environ.get(identity.env_var("root_dir"))
+    if env_root:
+        return Path(env_root).expanduser()
+    return Path.cwd()
+
+
 def load_settings(root: Path | None = None, config_file: Path | None = None) -> Settings:
     """設定を読み込む。優先順位は 環境変数 > .env > settings.toml > 既定。"""
-    root_dir = (root or Path.cwd()).expanduser()
-    toml_path = config_file or (root_dir / "config" / "settings.toml")
+    effective_root = _resolve_effective_root(root)
+    toml_path = config_file or (effective_root / "config" / "settings.toml")
 
     file_values: dict[str, Any] = {}
     if toml_path.is_file():
@@ -132,9 +148,10 @@ def load_settings(root: Path | None = None, config_file: Path | None = None) -> 
     overrides: dict[str, Any] = dict(file_values)
     # root が明示されていない場合は root_dir を overrides に入れない。
     # pydantic-settings の優先順位は「引数 > 環境変数」なので、ここで root_dir を
-    # 常に渡すと ABIST_KB_ROOT_DIR 環境変数が無視されてしまう。
+    # 常に渡すと ABIST_KB_ROOT_DIR 環境変数が無視されてしまう
+    # (Settings 自身が同じ環境変数を読んで解決する)。
     if root is not None:
-        overrides["root_dir"] = root_dir
+        overrides["root_dir"] = effective_root
     if config_file is not None:
         overrides["config_file"] = config_file
 
