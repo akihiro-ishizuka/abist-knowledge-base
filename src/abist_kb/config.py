@@ -1,0 +1,151 @@
+"""設定の読み込みとパス解決(設計書 §9.1)。"""
+
+from __future__ import annotations
+
+import os
+import tomllib
+from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import Field, ValidationError, model_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from abist_kb import identity
+from abist_kb.domain.errors import ErrorCode, ExitCode, wrap
+
+LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
+
+_SECRET_FIELDS = frozenset({"esa_access_token", "openai_api_key"})
+
+
+class Settings(BaseSettings):
+    """アプリケーション設定。
+
+    パス系フィールドは未指定なら root_dir から派生する。
+    秘密情報は .env / 環境変数からのみ読み、settings.toml へは書かない。
+    """
+
+    model_config = SettingsConfigDict(
+        env_prefix=identity.ENV_PREFIX,
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
+
+    root_dir: Path = Field(default_factory=Path.cwd)
+
+    docs_dir: Path | None = None
+    reports_dir: Path | None = None
+    data_dir: Path | None = None
+    config_file: Path | None = None
+    app_db_path: Path | None = None
+    work_index_path: Path | None = None
+    reference_index_path: Path | None = None
+    cache_dir: Path | None = None
+
+    log_level: LogLevel = "INFO"
+    embedding_model: str = "intfloat/multilingual-e5-small"
+    missing_threshold: int = Field(default=3, ge=1)
+
+    esa_team_name: str | None = None
+    esa_access_token: str | None = None
+    openai_api_key: str | None = None
+
+    @model_validator(mode="after")
+    def _derive_paths(self) -> Settings:
+        root = self.root_dir.expanduser()
+        self.root_dir = root
+        defaults: dict[str, Path] = {
+            "docs_dir": root / "docs",
+            "reports_dir": root / "reports",
+            "data_dir": root / "data",
+            "config_file": root / "config" / "settings.toml",
+        }
+        for name, value in defaults.items():
+            if getattr(self, name) is None:
+                setattr(self, name, value)
+
+        data = self.data_dir
+        assert data is not None  # 直上で必ず埋まる
+        derived_from_data: dict[str, Path] = {
+            "app_db_path": data / "app.sqlite",
+            "work_index_path": data / "work-index.sqlite",
+            "reference_index_path": data / "reference-index.sqlite",
+            "cache_dir": data / "cache",
+        }
+        for name, value in derived_from_data.items():
+            if getattr(self, name) is None:
+                setattr(self, name, value)
+        return self
+
+    def ensure_directories(self) -> None:
+        """書込先ディレクトリを作成する(docs は移行時に作られるため対象外)。"""
+        for path in (self.data_dir, self.reports_dir, self.cache_dir):
+            if path is not None:
+                path.mkdir(parents=True, exist_ok=True)
+
+    def redacted_dict(self) -> dict[str, Any]:
+        """秘密情報を伏せた表示用辞書(config show / 診断出力で使う)。"""
+        dumped = self.model_dump(mode="json")
+        for name in _SECRET_FIELDS:
+            if dumped.get(name):
+                dumped[name] = "***"
+        return dumped
+
+
+def _read_toml(path: Path) -> dict[str, Any]:
+    try:
+        with path.open("rb") as fh:
+            return tomllib.load(fh)
+    except tomllib.TOMLDecodeError as exc:
+        raise wrap(
+            exc,
+            code=ErrorCode.CONFIG_ERROR,
+            message=f"設定ファイルを解析できません: {path}",
+            hint="TOML の構文を確認してください。",
+            exit_code=ExitCode.CONFIG_ERROR,
+        ) from exc
+    except OSError as exc:
+        raise wrap(
+            exc,
+            code=ErrorCode.CONFIG_ERROR,
+            message=f"設定ファイルを読み込めません: {path}",
+            exit_code=ExitCode.CONFIG_ERROR,
+        ) from exc
+
+
+def load_settings(root: Path | None = None, config_file: Path | None = None) -> Settings:
+    """設定を読み込む。優先順位は 環境変数 > .env > settings.toml > 既定。"""
+    root_dir = (root or Path.cwd()).expanduser()
+    toml_path = config_file or (root_dir / "config" / "settings.toml")
+
+    file_values: dict[str, Any] = {}
+    if toml_path.is_file():
+        file_values = {k: v for k, v in _read_toml(toml_path).items() if v is not None}
+    # ファイル値は既定値の置き換えであり、環境変数より弱い。
+    # BaseSettings は「引数 > 環境変数」の順なので、ファイル値は引数として渡さず
+    # 既定値の上書きとして扱うため、環境変数に存在するキーは除外する。
+    for key in list(file_values):
+        if identity.env_var(key) in os.environ:
+            del file_values[key]
+
+    overrides: dict[str, Any] = dict(file_values)
+    # root が明示されていない場合は root_dir を overrides に入れない。
+    # pydantic-settings の優先順位は「引数 > 環境変数」なので、ここで root_dir を
+    # 常に渡すと ABIST_KB_ROOT_DIR 環境変数が無視されてしまう。
+    if root is not None:
+        overrides["root_dir"] = root_dir
+    if config_file is not None:
+        overrides["config_file"] = config_file
+
+    try:
+        return Settings(**overrides)
+    except ValidationError as exc:
+        raise wrap(
+            exc,
+            code=ErrorCode.CONFIG_ERROR,
+            message="設定値が不正です。",
+            hint=f"`{identity.CLI_NAME} config validate` で詳細を確認してください。",
+            details={"errors": exc.errors(include_url=False)},
+            exit_code=ExitCode.CONFIG_ERROR,
+        ) from exc
