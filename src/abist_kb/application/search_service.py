@@ -39,8 +39,45 @@ CORPORA: tuple[str, ...] = ("work", "reference")
 ProviderFactory = Callable[[str], EmbeddingProvider]
 
 
-def _default_provider_factory(model_identity: str) -> EmbeddingProvider:
+def default_provider_factory(model_identity: str) -> EmbeddingProvider:
+    """既定の埋め込みプロバイダファクトリ(`LocalEmbeddingProvider`)。
+
+    `application.audit.search_quality` の hybrid 評価が本番と同じ既定を使うため公開する。
+    """
     return LocalEmbeddingProvider(model_identity=model_identity)
+
+
+def resolve_query_vector(
+    conn: Any,
+    query: str,
+    *,
+    identifier_only: bool,
+    embedding_provider_factory: ProviderFactory = default_provider_factory,
+) -> list[float] | None:
+    """クエリのベクトルを解決する(埋め込み未生成・識別子クエリなら `None`)。
+
+    `SearchService`/`application.audit.search_quality` の両方から使う共通ロジック
+    (task-5-brief の hybrid 評価は本番の検索経路と同じベクトル解決を使うこと)。
+    """
+    if identifier_only:
+        return None
+    model = conn.execute("SELECT value FROM meta WHERE key = 'embedding_model'").fetchone()
+    if model is None or not model["value"]:
+        return None
+    count = conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+    if count == 0:
+        return None
+
+    model_identity = model["value"]
+    provider = embedding_provider_factory(model_identity)
+    try:
+        text = query_input(query, model_identity)
+        vectors = provider.embed_batch([text])
+        return list(vectors[0])
+    finally:
+        close = getattr(provider, "close", None)
+        if close is not None:
+            close()
 
 
 class SearchService:
@@ -52,7 +89,7 @@ class SearchService:
         docs_dir: Path,
         work_index_path: Path,
         reference_index_path: Path,
-        embedding_provider_factory: ProviderFactory = _default_provider_factory,
+        embedding_provider_factory: ProviderFactory = default_provider_factory,
     ) -> None:
         self._docs_dir = docs_dir
         self._index_paths: dict[str, Path] = {
@@ -78,29 +115,6 @@ class SearchService:
             )
         return path
 
-    def _resolve_query_vector(
-        self, conn: Any, query: str, *, identifier_only: bool
-    ) -> list[float] | None:
-        if identifier_only:
-            return None
-        model = conn.execute("SELECT value FROM meta WHERE key = 'embedding_model'").fetchone()
-        if model is None or not model["value"]:
-            return None
-        count = conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
-        if count == 0:
-            return None
-
-        model_identity = model["value"]
-        provider = self._embedding_provider_factory(model_identity)
-        try:
-            text = query_input(query, model_identity)
-            vectors = provider.embed_batch([text])
-            return list(vectors[0])
-        finally:
-            close = getattr(provider, "close", None)
-            if close is not None:
-                close()
-
     def search(
         self,
         query: str,
@@ -117,7 +131,12 @@ class SearchService:
         conn = connect(index_path, read_only=True)
         try:
             identifier_only = is_pure_identifier_query(query)
-            query_vector = self._resolve_query_vector(conn, query, identifier_only=identifier_only)
+            query_vector = resolve_query_vector(
+                conn,
+                query,
+                identifier_only=identifier_only,
+                embedding_provider_factory=self._embedding_provider_factory,
+            )
             options = SearchOptions(
                 limit=limit,
                 source=source,
@@ -148,4 +167,12 @@ class SearchService:
         }
 
 
-__all__ = ["CORPORA", "EMBEDDING_MISSING_NOTE", "STALE_NOTE", "SearchService"]
+__all__ = [
+    "CORPORA",
+    "EMBEDDING_MISSING_NOTE",
+    "STALE_NOTE",
+    "ProviderFactory",
+    "SearchService",
+    "default_provider_factory",
+    "resolve_query_vector",
+]

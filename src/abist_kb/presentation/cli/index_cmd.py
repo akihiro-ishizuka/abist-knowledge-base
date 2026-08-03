@@ -7,11 +7,19 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 import typer
 
+from abist_kb.application.audit.search_quality import (
+    DEFAULT_QUERIES_RELATIVE_PATH,
+    compare_tokenizers,
+)
+from abist_kb.application.audit.search_quality import load_queries as load_eval_queries
 from abist_kb.application.index_service import CORPORA, IndexService, run_index_inline
+from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
+from abist_kb.infrastructure.db.connection import connect
 from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.presentation.cli.context import AppTyper, get_context
 
@@ -118,6 +126,50 @@ def index_status(ctx: typer.Context) -> None:
         ["corpus", "label", "state", "documents", "chunks", "embedded_chunks", "last_indexed_at"],
         rows,
     )
+
+
+@index_app.command("compare-tokenizers")
+def index_compare_tokenizers(
+    ctx: typer.Context,
+    corpus: Annotated[str, _CORPUS_OPTION] = "work",
+    queries: Annotated[
+        Path | None, typer.Option("--queries", help="評価クエリの JSON Lines ファイル。")
+    ] = None,
+) -> None:
+    """`unicode61` と `trigram` を同条件(bm25_raw相当)で比較する(task-5-brief Step2後段)。"""
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    queries_path = queries or (settings.root_dir / DEFAULT_QUERIES_RELATIVE_PATH)
+    if not queries_path.is_file():
+        raise AppError(
+            code=ErrorCode.INVALID_INPUT,
+            message=f"評価クエリファイルが見つかりません: {queries_path}",
+            exit_code=ExitCode.INVALID_INPUT,
+        )
+    index_path = settings.work_index_path if corpus == "work" else settings.reference_index_path
+    if not index_path.is_file():
+        raise AppError(
+            code=ErrorCode.INVALID_INPUT,
+            message=f"コーパス '{corpus}' の索引がまだありません: {index_path}",
+            hint="`index build` を先に実行してください。",
+            exit_code=ExitCode.INVALID_INPUT,
+        )
+
+    query_list = load_eval_queries(queries_path)
+    conn = connect(index_path, read_only=True)
+    try:
+        result = compare_tokenizers(conn, query_list)
+    finally:
+        conn.close()
+
+    if cli_ctx.presenter.is_json:
+        cli_ctx.presenter.json_result(result)
+        return
+    for tokenizer, metrics in result["tokenizers"].items():
+        cli_ctx.presenter.line(
+            f"{tokenizer}: recall5={metrics['recall5']:.4f} mrr={metrics['mrr']:.4f} "
+            f"ndcg10={metrics['ndcg10']:.4f} zero_hit={metrics['zero_hit_queries']}"
+        )
 
 
 __all__ = ["index_app"]

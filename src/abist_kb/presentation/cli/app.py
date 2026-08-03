@@ -21,6 +21,7 @@ from abist_kb import identity
 from abist_kb.config import load_settings
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode, wrap
 from abist_kb.infrastructure.observability.logging import configure_logging
+from abist_kb.presentation.cli.audit_cmd import audit_app
 from abist_kb.presentation.cli.batch_cmd import batch_app
 from abist_kb.presentation.cli.config_cmd import config_app
 from abist_kb.presentation.cli.context import (
@@ -66,6 +67,7 @@ app.add_typer(batch_app, name="batch")
 app.add_typer(sync_app, name="sync")
 app.add_typer(document_app, name="document")
 app.add_typer(index_app, name="index")
+app.add_typer(audit_app, name="audit")
 app.command("search")(search)
 app.command("doctor")(doctor)
 
