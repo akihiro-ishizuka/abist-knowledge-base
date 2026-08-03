@@ -1,0 +1,57 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Virtual environments / uv
+.venv/
+venv/
+.env/
+.python-version
+
+# Secrets and local config
+.env
+.env.*
+!.env.example
+
+# Application data (regenerable / local)
+data/
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Caches and models
+.cache/
+__model_cache__/
+*.onnx
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs and temp
+*.log
+tmp/
+temp/
+.temp/
+
+# Manim / media outputs (keep reports/ tracked selectively if needed)
+media/
