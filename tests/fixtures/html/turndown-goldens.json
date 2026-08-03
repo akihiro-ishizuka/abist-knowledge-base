@@ -1,0 +1,120 @@
+{
+  "cases": [
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "headings_atx",
+      "input_html_b64": "PGgxPuOCv+OCpOODiOODqzwvaDE+PHA+5pys5paHMTwvcD48aDI+56ugMTwvaDI+PHA+5pys5paHMjwvcD48aDM+56+AMS0xPC9oMz48cD7mnKzmloczPC9wPjxoND7lsI/opovlh7rjgZc8L2g0PjxwPuacrOaWhzQ8L3A+PGg1Pkg16KaL5Ye644GXPC9oNT48aDY+SDbopovlh7rjgZc8L2g2Pg==",
+      "note": "h1〜h6の見出し。headingStyle:'atx'なのでMarkdownは#の数で表現される。",
+      "output_markdown_b64": "IyDjgr/jgqTjg4jjg6sKCuacrOaWhzEKCiMjIOeroDEKCuacrOaWhzIKCiMjIyDnr4AxLTEKCuacrOaWhzMKCiMjIyMg5bCP6KaL5Ye644GXCgrmnKzmloc0CgojIyMjIyBINeimi+WHuuOBlwoKIyMjIyMjIEg26KaL5Ye644GX"
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "nested_unordered_list",
+      "input_html_b64": "PHVsPjxsaT7poIXnm65BPHVsPjxsaT7lrZBBLTE8L2xpPjxsaT7lrZBBLTI8L2xpPjwvdWw+PC9saT48bGk+6aCF55uuQjwvbGk+PC91bD4=",
+      "note": "2階層の入れ子箇条書き。bulletListMarker:'-'。",
+      "output_markdown_b64": "LSAgIOmgheebrkEKICAgIC0gICDlrZBBLTEKICAgIC0gICDlrZBBLTIKLSAgIOmgheebrkI="
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "nested_ordered_list",
+      "input_html_b64": "PG9sPjxsaT7miYvpoIYxPG9sPjxsaT7miYvpoIYxLTE8L2xpPjxsaT7miYvpoIYxLTI8L2xpPjwvb2w+PC9saT48bGk+5omL6aCGMjwvbGk+PC9vbD4=",
+      "note": "2階層の入れ子番号付きリスト。",
+      "output_markdown_b64": "MS4gIOaJi+mghjEKICAgIDEuICDmiYvpoIYxLTEKICAgIDIuICDmiYvpoIYxLTIKMi4gIOaJi+mghjI="
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "mixed_list_types",
+      "input_html_b64": "PHVsPjxsaT7nrofmnaHmm7jjgY0xPC9saT48bGk+566H5p2h5pu444GNMjxvbD48bGk+55Wq5Y+3MTwvbGk+PGxpPueVquWPtzI8L2xpPjwvb2w+PC9saT48L3VsPg==",
+      "note": "箇条書きの中に番号付きリストが入れ子になったケース。",
+      "output_markdown_b64": "LSAgIOeuh+adoeabuOOBjTEKLSAgIOeuh+adoeabuOOBjTIKICAgIDEuICDnlarlj7cxCiAgICAyLiAg55Wq5Y+3Mg=="
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "table_basic",
+      "input_html_b64": "PHRhYmxlPjx0aGVhZD48dHI+PHRoPuWIl0E8L3RoPjx0aD7liJdCPC90aD48L3RyPjwvdGhlYWQ+PHRib2R5Pjx0cj48dGQ+YTE8L3RkPjx0ZD5iMTwvdGQ+PC90cj48dHI+PHRkPmEyPC90ZD48dGQ+YjI8L3RkPjwvdHI+PC90Ym9keT48L3RhYmxlPg==",
+      "note": "基本的なテーブル。旧システムは turndown-plugin-gfm を導入していない(package.jsonにもnode_modulesにも存在しないことを確認済み)ため、vanilla turndown が table 要素をどう扱うか(GFM形式のパイプテーブルにはならない可能性が高い)を実測で記録する — M3実装が markdownify 等でGFMテーブルを生成すると、ここが最大の既知の差分になりうる。",
+      "output_markdown_b64": "5YiXQQoK5YiXQgoKYTEKCmIxCgphMgoKYjI="
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "code_block_language_js",
+      "input_html_b64": "PHByZT48Y29kZSBjbGFzcz0ibGFuZ3VhZ2UtamF2YXNjcmlwdCI+ZnVuY3Rpb24gYWRkKGEsIGIpIHsKICByZXR1cm4gYSArIGI7Cn08L2NvZGU+PC9wcmU+",
+      "note": "pre>code.language-javascript。turndownの既定fencedコードブロックルールは子codeのclassから`language-(\\S+)`を抽出する(turndown.cjs.js:191-192、プラグイン不要の組み込み挙動)。",
+      "output_markdown_b64": "YGBgamF2YXNjcmlwdApmdW5jdGlvbiBhZGQoYSwgYikgewogIHJldHVybiBhICsgYjsKfQpgYGA="
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "code_block_no_language",
+      "input_html_b64": "PHByZT48Y29kZT5wbGFpbiB0ZXh0IGJsb2NrCmxpbmUyPC9jb2RlPjwvcHJlPg==",
+      "note": "言語クラスの無いコードブロック。",
+      "output_markdown_b64": "YGBgCnBsYWluIHRleHQgYmxvY2sKbGluZTIKYGBg"
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "inline_code",
+      "input_html_b64": "PHA+5aSJ5pWwIDxjb2RlPnNocmlua19jbGFtcF9iZWxsb3dfb3ZlcmxhcF9tbTwvY29kZT4g44KS5L2/44GG44CCPC9wPg==",
+      "note": "段落内のインラインcode要素(識別子を含む)。",
+      "output_markdown_b64": "5aSJ5pWwIGBzaHJpbmtfY2xhbXBfYmVsbG93X292ZXJsYXBfbW1gIOOCkuS9v+OBhuOAgg=="
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "links_relative_and_absolute",
+      "input_html_b64": "PHA+PGEgaHJlZj0iLi4vcmVmZXJlbmNlL290aGVyLmh0bWwiPuebuOWvvuODquODs+OCrzwvYT4gLyA8YSBocmVmPSJodHRwczovL2V4YW1wbGUuY29tL2FicyI+57W25a++44Oq44Oz44KvPC9hPiAvIDxhIGhyZWY9Im1haWx0bzp1c2VyQGV4YW1wbGUuY29tIj7jg6Hjg7zjg6vjg6rjg7Pjgq88L2E+IC8gPGEgaHJlZj0iI3NlY3Rpb24yIj7jgqLjg7Pjgqvjg7zjg6rjg7Pjgq88L2E+PC9wPg==",
+      "note": "相対リンク(絶対URL化される)・絶対リンク(そのまま)・mailto:(対象外)・#アンカー(対象外)の4種を1文書に混在させ、書き換え条件の境界を確認する。",
+      "output_markdown_b64": "W+ebuOWvvuODquODs+OCr10oaHR0cHM6Ly9leGFtcGxlLmNvbS9kb2NzL3JlZmVyZW5jZS9vdGhlci5odG1sKSAvIFvntbblr77jg6rjg7Pjgq9dKGh0dHBzOi8vZXhhbXBsZS5jb20vYWJzKSAvIFvjg6Hjg7zjg6vjg6rjg7Pjgq9dKG1haWx0bzp1c2VyQGV4YW1wbGUuY29tKSAvIFvjgqLjg7Pjgqvjg7zjg6rjg7Pjgq9dKCNzZWN0aW9uMik="
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "images_relative_and_absolute",
+      "input_html_b64": "PHA+PGltZyBzcmM9Ii4vaW1hZ2VzL2RpYWdyYW0ucG5nIiBhbHQ9IuWbszEiPjxpbWcgc3JjPSJodHRwczovL2V4YW1wbGUuY29tL2Ficy5wbmciIGFsdD0i5ZuzMiI+PGltZyBzcmM9ImRhdGE6aW1hZ2UvcG5nO2Jhc2U2NCxBQUFBIiBhbHQ9IuWbszMiPjwvcD4=",
+      "note": "相対src(絶対URL化)・絶対src(そのまま)・data:URI(対象外)の3種。",
+      "output_markdown_b64": "IVvlm7MxXShodHRwczovL2V4YW1wbGUuY29tL2RvY3MvZ3VpZGUvaW1hZ2VzL2RpYWdyYW0ucG5nKSFb5ZuzMl0oaHR0cHM6Ly9leGFtcGxlLmNvbS9hYnMucG5nKSFb5ZuzM10oZGF0YTppbWFnZS9wbmc7YmFzZTY0LEFBQUEp"
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "inline_emphasis_mix",
+      "input_html_b64": "PHA+PHN0cm9uZz7lpKrlrZc8L3N0cm9uZz7jgag8ZW0+5pac5L2TPC9lbT7jgag8Yj5C44K/44KwPC9iPuOBqDxpPknjgr/jgrA8L2k+44GoPHM+5Y+W44KK5raI44GX57eaPC9zPuOBrjxzdHJvbmc+PGVtPua3t+WcqDwvZW0+PC9zdHJvbmc+44CCPC9wPg==",
+      "note": "strong/em/b/i/s、およびstrong>emの入れ子。emDelimiter:'*'、strongDelimiter:'**'。",
+      "output_markdown_b64": "KirlpKrlrZcqKuOBqCrmlpzkvZMq44GoKipC44K/44KwKirjgagqSeOCv+OCsCrjgajlj5bjgormtojjgZfnt5rjga4qKirmt7flnKgqKirjgII="
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "removed_elements",
+      "input_html_b64": "PG5hdj7jg4rjg5PjgrLjg7zjgrfjg6fjg7M8L25hdj48aGVhZGVyPuODmOODg+ODgOODvOWGheODhuOCreOCueODiDwvaGVhZGVyPjxtYWluPjxoMT7mnKzmlofjgr/jgqTjg4jjg6s8L2gxPjxwPuaui+OCi+acrOaWhzwvcD48L21haW4+PGFzaWRlPuOCteOCpOODieODkOODvDwvYXNpZGU+PGRpdiBjbGFzcz0ic2lkZWJhciI+5pen44K144Kk44OJ44OQ44O8PC9kaXY+PGRpdiBjbGFzcz0ibmF2aWdhdGlvbiI+44OK44OTMjwvZGl2Pjxmb290ZXI+44OV44OD44K/44O8PC9mb290ZXI+",
+      "note": "nav/header/aside/.sidebar/.navigation/footerを丸ごと削除する仕様の確認。header内のh1・aside内のテキストも中身ごと消えることを記録する(要素単位の削除であり、中身を残して外側タグだけ剥がすのではない)。",
+      "output_markdown_b64": "IyDmnKzmlofjgr/jgqTjg4jjg6sKCuaui+OCi+acrOaWhw=="
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "japanese_fullwidth_punctuation",
+      "input_html_b64": "PGgyPuaXpeacrOiqnuOBruimi+WHuuOBl+OAjOODhuOCueODiOOAjTwvaDI+PHA+44GT44KM44Gv44CB5YWo6KeS5Y+l6Kqt54K544O76KiY5Y+3KOS+izrjgIzjgI3jgI7jgI/jg7vjg7zjgJwp44KS5ZCr44KA5pys5paH44Gn44GZ44CCQ0FUSUHjga7oqK3lrprjga/mrKHjga7pgJrjgorjgII8L3A+",
+      "note": "全角句読点・かぎ括弧・中点・長音記号を含む日本語本文。",
+      "output_markdown_b64": "IyMg5pel5pys6Kqe44Gu6KaL5Ye644GX44CM44OG44K544OI44CNCgrjgZPjgozjga/jgIHlhajop5Llj6Xoqq3ngrnjg7voqJjlj7co5L6LOuOAjOOAjeOAjuOAj+ODu+ODvOOAnCnjgpLlkKvjgoDmnKzmlofjgafjgZnjgIJDQVRJQeOBruioreWumuOBr+asoeOBrumAmuOCiuOAgg=="
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "definition_list",
+      "input_html_b64": "PGRsPjxkdD7nlKjoqp5BPC9kdD48ZGQ+6Kqs5piOQTwvZGQ+PGR0PueUqOiqnkI8L2R0PjxkZD7oqqzmmI5CMTwvZGQ+PGRkPuiqrOaYjkIyPC9kZD48L2RsPg==",
+      "note": "dl/dt/dd構造。turndownに組み込みのdl専用ルールは無く、どう変換されるかを実測で記録する。",
+      "output_markdown_b64": "55So6KqeQQoK6Kqs5piOQQoK55So6KqeQgoK6Kqs5piOQjEKCuiqrOaYjkIy"
+    },
+    {
+      "base_url": "https://example.com/docs/guide/page.html",
+      "id": "messy_realworld_page",
+      "input_html_b64": "PCFkb2N0eXBlIGh0bWw+PGh0bWw+PGhlYWQ+PHRpdGxlPuODmuODvOOCuOOCv+OCpOODiOODqzwvdGl0bGU+PC9oZWFkPjxib2R5PjxuYXY+44K144Kk44OI5YaF44OK44OTPC9uYXY+PGhlYWRlcj48aDE+Q0FUSUHjg57jgq/jg63oqK3lrprjgqzjgqTjg4k8L2gxPjwvaGVhZGVyPjxtYWluPjxhcnRpY2xlPjxoMj7mpoLopoE8L2gyPjxwPuOBk+OBruiomOS6i+OBrzxzdHJvbmc+Q0FUSUE8L3N0cm9uZz7jga48ZW0+44Oe44Kv44Ot6Kit5a6aPC9lbT7jgavjgaTjgYTjgaboqqzmmI7jgZfjgb7jgZnjgILoqbPntLDjga88YSBocmVmPSIuLi9yZWZlcmVuY2UvZGV0YWlsLmh0bWwiPuips+e0sOODmuODvOOCuDwvYT7jgb7jgZ/jga88YSBocmVmPSJodHRwczovL2V4YW1wbGUuY29tL3NwZWMiPuS7leanmOabuDwvYT7jgpLlj4LnhafjgZfjgabjgY/jgaDjgZXjgYTjgII8L3A+PGgzPuaJi+mghjwvaDM+PG9sPjxsaT7mupblgpk8dWw+PGxpPueSsOWig+WkieaVsOOCkuioreWumjwvbGk+PGxpPuaoqemZkOOCkueiuuiqjTwvbGk+PC91bD48L2xpPjxsaT7lrp/ooYw8L2xpPjwvb2w+PGgzPuioreWumuS+izwvaDM+PHByZT48Y29kZSBjbGFzcz0ibGFuZ3VhZ2UtdmJzIj5TdWIgTWFpbigpCiAgTXNnQm94ICLjgZPjgpPjgavjgaHjga8iCkVuZCBTdWI8L2NvZGU+PC9wcmU+PGgzPuODkeODqeODoeODvOOCv+ihqDwvaDM+PHRhYmxlPjx0aGVhZD48dHI+PHRoPuWQjeWJjTwvdGg+PHRoPuaXouWumuWApDwvdGg+PC90cj48L3RoZWFkPjx0Ym9keT48dHI+PHRkPnNocmlua19jbGFtcF9iZWxsb3dfb3ZlcmxhcF9tbTwvdGQ+PHRkPjAuNTwvdGQ+PC90cj48L3Rib2R5PjwvdGFibGU+PHA+PGltZyBzcmM9Ii4vaW1hZ2VzL3NjcmVlbnNob3QucG5nIiBhbHQ9IuOCueOCr+ODquODvOODs+OCt+ODp+ODg+ODiCI+PC9wPjxwPuWCmeiAgzog5YWo6KeS6KiY5Y+3KOOAjOOAjeODu+OAnCnjgavjgoLlr77lv5zjgII8L3A+PC9hcnRpY2xlPjwvbWFpbj48YXNpZGUgY2xhc3M9InNpZGViYXIiPumWoumAo+ODquODs+OCrzwvYXNpZGU+PGZvb3Rlcj7CqSAyMDI2IEV4YW1wbGU8L2Zvb3Rlcj48L2JvZHk+PC9odG1sPg==",
+      "note": "上記の要素(見出し・入れ子リスト・言語付きコードブロック・テーブル・相対リンク・相対画像・除去対象要素・日本語全角記号)を1ページに組み合わせた実サイト風の合成HTML。header内のh1・nav/aside/footerの内容は削除仕様により消えることを期待する(removed_elementsケースと同じ仕様)。",
+      "output_markdown_b64": "44Oa44O844K444K/44Kk44OI44OrCgojIyDmpoLopoEKCuOBk+OBruiomOS6i+OBryoqQ0FUSUEqKuOBrirjg57jgq/jg63oqK3lrpoq44Gr44Gk44GE44Gm6Kqs5piO44GX44G+44GZ44CC6Kmz57Sw44GvW+ips+e0sOODmuODvOOCuF0oaHR0cHM6Ly9leGFtcGxlLmNvbS9kb2NzL3JlZmVyZW5jZS9kZXRhaWwuaHRtbCnjgb7jgZ/jga9b5LuV5qeY5pu4XShodHRwczovL2V4YW1wbGUuY29tL3NwZWMp44KS5Y+C54Wn44GX44Gm44GP44Gg44GV44GE44CCCgojIyMg5omL6aCGCgoxLiAg5rqW5YKZCiAgICAtICAg55Kw5aKD5aSJ5pWw44KS6Kit5a6aCiAgICAtICAg5qip6ZmQ44KS56K66KqNCjIuICDlrp/ooYwKCiMjIyDoqK3lrprkvosKCmBgYHZicwpTdWIgTWFpbigpCiAgTXNnQm94ICLjgZPjgpPjgavjgaHjga8iCkVuZCBTdWIKYGBgCgojIyMg44OR44Op44Oh44O844K/6KGoCgrlkI3liY0KCuaXouWumuWApAoKc2hyaW5rXF9jbGFtcFxfYmVsbG93XF9vdmVybGFwXF9tbQoKMC41CgohW+OCueOCr+ODquODvOODs+OCt+ODp+ODg+ODiF0oaHR0cHM6Ly9leGFtcGxlLmNvbS9kb2NzL2d1aWRlL2ltYWdlcy9zY3JlZW5zaG90LnBuZykKCuWCmeiAgzog5YWo6KeS6KiY5Y+3KOOAjOOAjeODu+OAnCnjgavjgoLlr77lv5zjgII="
+    }
+  ],
+  "comparison_policy": "advisory — unlike tests/fixtures/kernel/**(ビット互換の契約)、このフィクスチャはM3のPython実装(markdownify等)との差分を事前に把握するための資料であり、完全一致は要求しない。差分が見つかった場合は許容できる逸脱か設計レビューで判断する。",
+  "schema": 1,
+  "source": "download-web.js turndownService config (:37-43) + htmlToMarkdown (:126-161, logic reproduced, not exported)",
+  "turndown_addRule_count": 0,
+  "turndown_options": {
+    "bulletListMarker": "-",
+    "codeBlockStyle": "fenced",
+    "emDelimiter": "*",
+    "headingStyle": "atx",
+    "strongDelimiter": "**"
+  }
+}
