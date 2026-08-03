@@ -144,6 +144,26 @@ def test_success_does_not_crash_on_cp932_console_stream():
     assert "✓" in written
 
 
+def test_success_does_not_crash_when_reconfigure_is_refused():
+    """レビュー再指摘A: 既に読み取り済みの `TextIOWrapper` は `reconfigure()` 自体を
+    `io.UnsupportedOperation`(`OSError`/`ValueError` の両方のサブクラス)で拒否する
+    ことがある。`contextlib.suppress` で握りつぶすだけでは、ストリームが cp932/strict
+    のまま残り、修正前に直したはずの `UnicodeEncodeError` がそのまま再発する。
+    フォールバックの書き込みプロキシで、この場合でもクラッシュしないことを検証する。
+    """
+    buffer = io.BytesIO("初期データ".encode("cp932"))
+    stream = io.TextIOWrapper(buffer, encoding="cp932", errors="strict")
+    stream.read(1)  # 一度でも読むと reconfigure() が拒否されるようになる
+    assert stream.encoding == "cp932"  # 前提: reconfigure 前はまだ cp932
+
+    p = Presenter(OutputMode.PLAIN, stdout=stream, width=80)
+    p.success("完了")  # ここで UnicodeEncodeError を起こしてはならない
+    stream.flush()
+
+    written = buffer.getvalue().decode("cp932")
+    assert "完了" in written
+
+
 def test_json_result_called_twice_raises_runtime_error():
     """レビュー指摘2: stdout は「payload のみ」の契約。二重出力は壊れた JSON を
     黙って生成せず、はっきり失敗させる。

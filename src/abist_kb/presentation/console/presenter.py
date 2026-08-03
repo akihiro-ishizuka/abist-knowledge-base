@@ -7,7 +7,6 @@ CLI/TUI/Web はすべてこの `Presenter` を通して人間向けメッセー�
 
 from __future__ import annotations
 
-import contextlib
 import io
 import json
 import sys
@@ -36,20 +35,69 @@ def _stdin_is_tty() -> bool:
         return False
 
 
-def _reconfigure_utf8(stream: IO[str]) -> None:
+class _CrashSafeTextStream:
+    """`reconfigure()` 自体が拒否された実ストリームに対する最終防衛線。
+
+    既に読み取り済みの `TextIOWrapper` などは `reconfigure(encoding=...)` を
+    呼んだ時点で `io.UnsupportedOperation`(`OSError` と `ValueError` の
+    両方のサブクラス)を送出して再設定そのものを拒否することがある。その場合
+    ストリームは元のコードページ(例: cp932/strict)のまま残り、`write()` に
+    エンコードできない文字(SUCCESS トークンの `✓` など)を渡すと
+    `UnicodeEncodeError` でクラッシュしてしまう。
+
+    このクラスは `write()` だけをフックし、失敗したらその場で
+    `backslashreplace` により書き込み可能な文字列へ作り直して再送する。
+    `backslashreplace` の出力は常に ASCII になるため、strict なストリームへの
+    再送は必ず成功する。`flush`/`isatty`/`fileno`/`encoding` など、それ以外の
+    属性はすべて元のストリームへ委譲する(Rich の Console が触れるものを含む)。
+    """
+
+    def __init__(self, stream: IO[str]) -> None:
+        self._stream = stream
+
+    def write(self, text: str) -> int:
+        try:
+            return self._stream.write(text)
+        except UnicodeEncodeError:
+            encoding = getattr(self._stream, "encoding", None) or "ascii"
+            safe_text = text.encode(encoding, "backslashreplace").decode(encoding)
+            return self._stream.write(safe_text)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._stream, name)
+
+
+def _reconfigure_utf8(stream: IO[str]) -> IO[str]:
     """実ストリームを UTF-8/backslashreplace へ寄せ、cp932 等での書き込み失敗を防ぐ。
 
     日本語ロケール Windows の既定コードページ(cp932)は SUCCESS トークンの記号
     '✓'(U+2713)を表現できず、そのまま書き込むと UnicodeEncodeError で
-    クラッシュする。`reconfigure` を持たないストリーム(`io.StringIO` など)や
-    再設定を拒否するストリームは黙ってスキップする — Presenter は与えられた
-    ストリームが何であっても絶対にクラッシュしてはならない。
+    クラッシュする。`reconfigure` を持たないストリーム(`io.StringIO` など)は
+    そのまま返す(エンコード層が無く、そもそもクラッシュしない)。
+
+    **重要 — 副作用**: `reconfigure` に成功した場合、呼び出し元が渡した実ストリーム
+    (典型的には `sys.stdout`/`sys.stderr`)はその場で UTF-8/backslashreplace へ
+    *恒久的に* 書き換えられる。この変更は Presenter インスタンスのライフサイクルに
+    縛られず、Presenter が破棄された後もプロセスが終了するまで残る。これは意図した
+    挙動である — Presenter はこのプロジェクトの全 CLI/TUI/MCP エントリポイントに
+    とって唯一の出力経路であり、プロセス全体で UTF-8 stdout/stderr を既定にすることが
+    狙いだからである。レガシーな cp932 前提のツールへパイプする呼び出し元は、この
+    副作用を踏まえてストリームを扱うこと。
+
+    `reconfigure` が存在しても呼び出し自体が拒否される場合(既に読み取り済みの
+    `TextIOWrapper` など、`AttributeError`/`OSError`/`ValueError` を送出する場合)は、
+    元のストリームを書き換えずに `_CrashSafeTextStream` でラップして返す
+    ("最良の結果(UTF-8 化)が得られないなら、せめてクラッシュしない"という
+    フォールバック)。
     """
     reconfigure = getattr(stream, "reconfigure", None)
     if reconfigure is None:
-        return
-    with contextlib.suppress(AttributeError, OSError, ValueError):
+        return stream
+    try:
         reconfigure(encoding="utf-8", errors="backslashreplace")
+    except (AttributeError, OSError, ValueError):
+        return _CrashSafeTextStream(stream)
+    return stream
 
 
 class Presenter:
@@ -68,6 +116,18 @@ class Presenter:
         verbose: bool = False,
         debug: bool = False,
     ) -> None:
+        """`stdout`/`stderr` に実ストリームを渡した場合の副作用に注意。
+
+        `stdout`/`stderr` に `None` 以外の実ストリーム(例: `sys.stdout`)を渡すと、
+        そのストリームが `reconfigure()` に対応していれば UTF-8/backslashreplace へ
+        **その場で恒久的に書き換える**(`_reconfigure_utf8` 参照)。この変更は
+        Presenter インスタンスより長生きし、Presenter が破棄された後もプロセスが
+        終了するまで残る。これは意図した挙動である — Presenter はこのプロジェクトの
+        全 CLI/TUI/MCP エントリポイントにとって唯一の出力経路であり、プロセス全体で
+        UTF-8 の stdout/stderr を既定にすることが狙いだからである。レガシーな
+        cp932 前提のツールへ後段でパイプする場合はこの副作用を踏まえること。
+        `None`(既定)を渡した場合は内部の `io.StringIO` を使うため副作用は無い。
+        """
         self._mode = OutputMode(mode)
         self._quiet = quiet
         self._verbose = verbose
@@ -81,9 +141,12 @@ class Presenter:
 
         # 実ストリーム(TextIOWrapper 等)が cp932 などの非 UTF-8 コードページに
         # 固定されている場合でも、記号(✓ 等)の書き込みでクラッシュしないようにする。
-        # `io.StringIO` は `reconfigure` を持たないため何もしない。
-        _reconfigure_utf8(self._stdout_stream)
-        _reconfigure_utf8(self._stderr_stream)
+        # 成功すれば渡されたストリームをその場で UTF-8 へ恒久的に書き換える
+        # (プロセス終了までその変更は残る。`_reconfigure_utf8` のドキュメント参照)。
+        # `io.StringIO` は `reconfigure` を持たないため何もしない。再設定自体が
+        # 拒否された場合はクラッシュ安全な書き込みプロキシへ差し替える。
+        self._stdout_stream = _reconfigure_utf8(self._stdout_stream)
+        self._stderr_stream = _reconfigure_utf8(self._stderr_stream)
 
         theme = build_theme()
         common: dict[str, Any] = {
