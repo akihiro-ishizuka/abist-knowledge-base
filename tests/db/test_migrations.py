@@ -222,18 +222,62 @@ def test_migration_sql_as_tuple_bypasses_splitting(tmp_root: Path):
 
 
 def test_apply_migrations_raises_conflict_on_lock_contention(tmp_root: Path):
-    """`_apply_one` 内の `BEGIN IMMEDIATE` がロック競合で失敗した場合、
+    """`_apply_one` 自身の `BEGIN IMMEDIATE` がロック競合で失敗した場合、
     生の `sqlite3.OperationalError` ではなく再試行可能な `AppError(CONFLICT)` になること。
 
     ジョブキューのワーカー・リース取得など、複数プロセスが同時に
     `BEGIN IMMEDIATE` を試みるのは M1 以降で通常運用となるため、
     生の sqlite3 例外が漏れてはならない。
+
+    このテストは意図的に `schema_migrations` を先に作成してから競合させることで、
+    `_apply_one` 自身の `BEGIN IMMEDIATE` 保護だけを切り分けて検証する対象にしている
+    (`_ensure_schema_migrations_table` 側の `CREATE TABLE IF NOT EXISTS` の保護は、
+    未初期化DBでしか再現しないため
+    `test_apply_migrations_raises_conflict_on_lock_contention_on_fresh_database` が
+    別途担当する)。
     """
     db_path = tmp_root / "m.sqlite"
     holder = open_db(tmp_root)
-    # 先にテーブルを作っておき、`current_version` 自体の暗黙 CREATE TABLE が
-    # ロック競合に巻き込まれないようにする(それ自体は今回の検証対象ではない)。
+    # schema_migrations を先に作っておくことで、このテストの対象を
+    # `_apply_one` 自身の BEGIN IMMEDIATE 保護に限定する。
     assert current_version(holder) == 0
+    holder.execute("BEGIN IMMEDIATE")
+
+    contender = connect(db_path, timeout_ms=300)
+    try:
+        with pytest.raises(AppError) as excinfo:
+            apply_migrations(contender, [M1])
+        assert excinfo.value.code == ErrorCode.CONFLICT
+        assert excinfo.value.retryable is True
+    finally:
+        holder.execute("ROLLBACK")
+        holder.close()
+        contender.close()
+
+
+def test_apply_migrations_raises_conflict_on_lock_contention_on_fresh_database(tmp_root: Path):
+    """`current_version` が内部で呼ぶ `_ensure_schema_migrations_table` の
+    `CREATE TABLE IF NOT EXISTS schema_migrations ...` 自体がロック競合で
+    失敗する場合の回帰テスト。
+
+    このステートメントはオートコミットモードで発行される素朴な DDL だが、
+    `schema_migrations` がまだ存在しない**真っさらな**データベースでは実際の
+    書込(テーブル作成)であり書込ロックを要求する。テーブルが既に存在すれば
+    単なるメタデータ参照に短絡され、WAL の読者は書き手にブロックされないため
+    問題にならない ―― つまり未初期化DBに限って踏み抜く経路である。
+
+    これはまさに Important-5 が対象とした「複数プロセスが同時に未初期化DBへ
+    マイグレーションを試みる」(Web/TUI/CLI/MCP を同時起動すると各エントリ
+    ポイントの WorkerSupervisor が未初期化DBへ同時に `apply_migrations` を
+    呼びうる)状況そのものであり、通常運用として扱わなければならない。
+    素の `sqlite3.OperationalError` ではなく、`_apply_one` の2つの
+    `BEGIN IMMEDIATE` 呼び出しと同じ `AppError(ErrorCode.CONFLICT, retryable=True)`
+    にならなければならない。
+    """
+    db_path = tmp_root / "fresh.sqlite"
+    holder = connect(db_path)
+    # `current_version`/`apply_migrations` を一度も呼ばず、`schema_migrations` が
+    # 存在しない真っさらな状態のまま先にロックを取得する。
     holder.execute("BEGIN IMMEDIATE")
 
     contender = connect(db_path, timeout_ms=300)

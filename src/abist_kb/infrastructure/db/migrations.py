@@ -59,13 +59,29 @@ def _split_sql_statements(sql: str) -> list[str]:
 
 
 def _ensure_schema_migrations_table(conn: sqlite3.Connection) -> None:
-    conn.execute(
-        "CREATE TABLE IF NOT EXISTS schema_migrations ("
-        "version INTEGER PRIMARY KEY, "
-        "name TEXT NOT NULL, "
-        "applied_at TEXT NOT NULL"
-        ")"
-    )
+    """`schema_migrations` が無ければ作る。
+
+    このステートメントはオートコミットモードで発行される素朴な DDL だが、
+    `schema_migrations` がまだ存在しない真っさらなデータベースでは実際の
+    書込(テーブル作成)であり書込ロックを要求する(テーブルが既に存在すれば
+    メタデータ参照に短絡され、WAL の読者は書き手にブロックされないため
+    問題にならない ―― 未初期化DBに限って踏み抜く経路)。複数プロセスが
+    同時に未初期化DBへ `apply_migrations` を試みるのは通常運用(Web/TUI/CLI/MCP
+    の同時起動)であるため、`transaction()`/`_apply_one` の `BEGIN IMMEDIATE` と
+    同じく `wrap_begin_immediate_failure` を再利用してロック競合を
+    `AppError(ErrorCode.CONFLICT, retryable=True)` へ正規化する
+    (判定ロジックを重複させず、他の2箇所と同一の正規化結果にするため)。
+    """
+    try:
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS schema_migrations ("
+            "version INTEGER PRIMARY KEY, "
+            "name TEXT NOT NULL, "
+            "applied_at TEXT NOT NULL"
+            ")"
+        )
+    except sqlite3.Error as exc:
+        raise wrap_begin_immediate_failure(exc) from exc
 
 
 def current_version(conn: sqlite3.Connection) -> int:
