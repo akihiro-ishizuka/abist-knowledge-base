@@ -48,6 +48,7 @@ node tests/fixtures/capture/capture-mcp.mjs
 node tests/fixtures/capture/capture-eval.mjs
 node tests/fixtures/capture/capture-embeddings.mjs
 node tests/fixtures/capture/capture-html.mjs
+node tests/fixtures/capture/capture-reference-index-columns.mjs
 node tests/fixtures/capture/build-manifest.mjs
 uv run pytest tests/fixtures_check -q
 ```
@@ -220,6 +221,18 @@ Python移植の正しさの基準がフィクスチャ作成者の主観にす�
   一切アクセスしない。`comparison_policy: "advisory"` — kernel/ のビット
   互換契約と違い、M3のPython実装(markdownify等)との差分を事前に把握する
   ための資料であり、完全一致は要求しない。
+- `capture-reference-index-columns.mjs` — M4 Task1b で見つかったギャップ(reference
+  コーパスの `documents` 列値が brief 未指定・fixture 未採取のまま実装者の推測
+  (`source="b32doc"`)で埋められていた)を埋める追加採取。`data/reference-index.sqlite`
+  をサンドボックスへコピーし(このDBを better-sqlite3 で開くだけで mtime が変化する
+  ことは Task 3(M1)で実測済み。上記「読み取り専用SQLiteの教訓」参照)、コピーを
+  `{readonly: true, fileMustExist: true}` で開いて `documents`(7,563行)の
+  `source`/`document_type`/`status`/`post_number`/`url`/`category` の分布・
+  `embeddings` の行数・`meta` テーブルを集計する。title の取得元検証として
+  `docs/knowledge/B32doc` の実ファイル先頭5件(path-sorted)を読み、
+  `tools/lib/b32doc-filter.js` の `extractSummaryKeys()` を実行して DB の title 列と
+  突き合わせる。出力: `tests/fixtures/reference-index/columns.json`。詳細は
+  `../PROVENANCE.md` §4 を参照。
 - `build-manifest.mjs` — `tests/fixtures/` 配下の全カテゴリ
   (kernel/real-docs/mcp/eval/embedding/html/capture/root)を集計し、
   カテゴリごとのファイル数・総バイト数・各ファイルのSHA-256、

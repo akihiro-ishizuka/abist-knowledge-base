@@ -27,6 +27,7 @@ Python 移植は「この fixture と一致すること」で正しさを判定�
 | eval | `tests/fixtures/eval/{queries.jsonl,baseline.json}` | ビット互換(ランキング・指標) | 22クエリ × `bm25_raw`/`hybrid` の2方式のランク付き結果・Recall@5/RR/nDCG@10 | M4(検索移植の受け入れゲート) |
 | embedding | `tests/fixtures/embedding/gate-samples.json` | ビット互換(入力・保存済みベクトル) / 判定自体はadvisory | 100件の埋め込み入力・input_hash・保存済みベクトルBLOB | M8(埋め込み再利用ゲート判定の入力) |
 | html | `tests/fixtures/html/turndown-goldens.json` | **advisory**(`comparison_policy: "advisory"`) | turndown(vanilla、gfmプラグイン無し)によるHTML→Markdown変換の15ケース | M3(差分は前提。完全一致は要求しない) |
+| reference-index | `tests/fixtures/reference-index/columns.json` | ビット互換 | 旧 `data/reference-index.sqlite` の `documents` テーブルが reference コーパス(B32doc)7,563行に実際に書き込んでいた `source`/`document_type`/`status`/`post_number`/`url`/`category` の分布、`embeddings` の行数、`meta` テーブル、title の取得元(`## Summary Keys` 由来であることの実測検証) | M4(`select_reference_targets` の列値そのもの)・M8(旧DBとの行単位突合) |
 
 ### M4 受け入れゲートの基準値
 
@@ -263,6 +264,27 @@ Task 2 の初稿はこれを「web由来コンテンツが参照コーパスに�
 - **`reference-index.sqlite` は `knowledge/B32doc` だけをカバーする。**
   `b32doc-filter.js` のスコープにより7,563行全件が `knowledge/B32doc/` 始まりで、
   `knowledge/catiadoc` 配下は0件(直接クエリで確認済み)。
+- **`reference-index.sqlite` の `documents` 列値は `source='manual'` であり
+  `source='b32doc'` ではない(実測で確定。M4 Task1 の推測を上書きする)。**
+  M4 Task1 実装時点では brief に reference 行の列値指定が無く、fixture 化も
+  されていなかったため `select_reference_targets`(`src/abist_kb/infrastructure/search/corpus.py`)
+  が `source = "b32doc"` を決め打ちしていた。`data/reference-index.sqlite` を
+  サンドボックスコピー経由で直接クエリした結果(`tests/fixtures/reference-index/columns.json`、
+  採取スクリプト `capture-reference-index-columns.mjs`)、`documents` 7,563行全件は
+  以下の一意な値を持つ: `source='manual'`(旧 `sync-state.sqlite` の3値
+  `esa`/`git`/`manual` のうちの1つで、`b32doc` という値はどの列にも存在しない)・
+  `document_type='reference'`・`status='active'`・`post_number=NULL`・`url=NULL`・
+  `category='html'`(B32doc フィルタが `not_html_category` を1つの棄却理由として
+  持つため、採用された行は必然的に `html` のみになる)。`embeddings` テーブルは
+  0行(reference コーパスはベクトル埋め込みを持たない)。`meta` テーブルは
+  `schema_version=1`・`tokenizers=["unicode61","trigram"]` を記録している。
+  title 列は先頭5件(path-sorted)を実測検証した結果、全件でファイル名(ハッシュ付き
+  スラッグ)とは一致せず、`tools/lib/b32doc-filter.js` の `extractSummaryKeys()` が
+  本文の `## Summary Keys` セクションの `- タイトル:` 行から抽出した値と完全一致する
+  (`title_source_verification` フィールド)。この fixture が
+  `select_reference_targets` の `source`(`"manual"` に修正済み)・`document_type`・
+  `status`・`post_number`・`url`・`category`・title取得元の唯一の実測根拠であり、
+  M4 Task1 時点の推測値を置き換える。M8 の旧DB行単位突合もこの値と一致すべきである。
 - **`docs/knowledge/catiadoc`(1,313ファイル、frontmatterに `source: web`・
   2026年1月クロール日時)と `docs/knowledge/generated`(4ファイル)は、
   どちらのDBにも登録されていないメタデータ孤児である。** 「参照コーパス側に

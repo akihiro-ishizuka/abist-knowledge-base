@@ -1,0 +1,92 @@
+{
+  "distinct_values": {
+    "category": [
+      {
+        "count": 7563,
+        "value": "html"
+      }
+    ],
+    "document_type": [
+      {
+        "count": 7563,
+        "value": "reference"
+      }
+    ],
+    "post_number": [
+      {
+        "count": 7563,
+        "value": null
+      }
+    ],
+    "source": [
+      {
+        "count": 7563,
+        "value": "manual"
+      }
+    ],
+    "status": [
+      {
+        "count": 7563,
+        "value": "active"
+      }
+    ],
+    "url": [
+      {
+        "count": 7563,
+        "value": null
+      }
+    ]
+  },
+  "embeddings_row_count": 0,
+  "meta": [
+    {
+      "key": "schema_version",
+      "value": "1"
+    },
+    {
+      "key": "tokenizers",
+      "value": "[\"unicode61\",\"trigram\"]"
+    }
+  ],
+  "note": "M4 Task1 の select_reference_targets が推測していた reference コーパスの列値(source='b32doc')を実測で置き換えるための fixture。実測値は source='manual' (sync-state.sqlite と同じ3値のうちの1つ)であり、b32doc という値はどの列にも存在しない。詳細は tests/fixtures/PROVENANCE.md 参照。",
+  "schema": 1,
+  "source": "data/reference-index.sqlite (documents/embeddings/meta テーブル、サンドボックスコピー経由)",
+  "title_source_verification": [
+    {
+      "db_title": "Abaqus for CATIA V5 自動インタフェースを使用する例",
+      "extract_summary_keys_title": "Abaqus for CATIA V5 自動インタフェースを使用する例",
+      "matches_extract_summary_keys": true,
+      "matches_filename": false,
+      "path": "knowledge/B32doc/md_out/online/Japanese/afcug_C2/afcugappautomationexample.htm.htm.c26bdc60.md"
+    },
+    {
+      "db_title": "自動インタフェースの説明",
+      "extract_summary_keys_title": "自動インタフェースの説明",
+      "matches_extract_summary_keys": true,
+      "matches_filename": false,
+      "path": "knowledge/B32doc/md_out/online/Japanese/afcug_C2/afcugappautomationref.htm.htm.a609b442.md"
+    },
+    {
+      "db_title": "Abaqus for CATIA V5 の設定",
+      "extract_summary_keys_title": "Abaqus for CATIA V5 の設定",
+      "matches_extract_summary_keys": true,
+      "matches_filename": false,
+      "path": "knowledge/B32doc/md_out/online/Japanese/afcug_C2/afcugappconfigure.htm.htm.791fec36.md"
+    },
+    {
+      "db_title": "Abaqus for CATIA V5 Prerequisite (ACP) および Abaqus for CATIA V5 のライセンスの設定",
+      "extract_summary_keys_title": "Abaqus for CATIA V5 Prerequisite (ACP) および Abaqus for CATIA V5 のライセンスの設定",
+      "matches_extract_summary_keys": true,
+      "matches_filename": false,
+      "path": "knowledge/B32doc/md_out/online/Japanese/afcug_C2/afcugappconfigurelicensingacp.htm.htm.99ece821.md"
+    },
+    {
+      "db_title": "Abaqus for CATIA V5 ダイアログボックス内のカスタマイズ可能で永続的なデフォルト値",
+      "extract_summary_keys_title": "Abaqus for CATIA V5 ダイアログボックス内のカスタマイズ可能で永続的なデフォルト値",
+      "matches_extract_summary_keys": true,
+      "matches_filename": false,
+      "path": "knowledge/B32doc/md_out/online/Japanese/afcug_C2/afcugappconventionsdefaults.htm.htm.0a7eb45c.md"
+    }
+  ],
+  "total_documents": 7563
+}

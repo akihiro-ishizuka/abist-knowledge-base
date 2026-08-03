@@ -277,6 +277,20 @@ const exclusionsRegistry = [
     reference:
       ".superpowers/sdd/M1-fixture-capture/progress.md 'CORRECTED BY REVIEWER' セクション, task-2-report.md §2",
   },
+  {
+    id: "reference_index_source_guess_corrected",
+    category: "reference-index",
+    source_task: "M4 Task1b (capture-reference-index-columns.mjs)",
+    excluded_count: 0,
+    description:
+      "M4 Task1 の select_reference_targets は brief 未指定・fixture 未採取のまま" +
+      "reference コーパスの source 列を 'b32doc' と決め打ちしていた。" +
+      "data/reference-index.sqlite をサンドボックスコピー経由で実測した結果、" +
+      "documents 7,563行全件は source='manual'(b32doc という値はどの列にも存在しない)・" +
+      "document_type='reference'・status='active'・post_number=NULL・url=NULL・" +
+      "category='html' であることが判明し、実装を source='manual' に修正した。",
+    reference: "tests/fixtures/PROVENANCE.md §4, tests/fixtures/reference-index/columns.json",
+  },
 ];
 
 const nondeterministicItems = [

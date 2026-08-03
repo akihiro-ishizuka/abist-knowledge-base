@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from abist_kb.infrastructure.search.corpus import (
     select_reference_targets,
     select_work_targets,
+)
+
+_REFERENCE_INDEX_FIXTURE = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "reference-index" / "columns.json"
 )
 
 
@@ -157,6 +162,33 @@ def test_reference_targets_are_selected_via_b32doc_filter(tmp_root: Path):
     target = result.targets[0]
     assert target["path"] == "knowledge/B32doc/md_out/a.md"
     assert target["document_type"] == "reference"
+
+
+def test_reference_target_field_values_match_measured_old_db_fixture(tmp_root: Path):
+    """tests/fixtures/reference-index/columns.json(旧 reference-index.sqlite を実測して
+    採取したfixture)が記録する列値と一致すること。M4 Task1 実装時点では brief 未指定・
+    fixture 未採取のまま source='b32doc' を決め打ちしていたが、実測の結果は
+    source='manual' だった(PROVENANCE.md §4)。この推測が再び忍び込むことを防ぐための
+    ピン留めテスト。"""
+    fixture = json.loads(_REFERENCE_INDEX_FIXTURE.read_text(encoding="utf-8"))
+    distinct = fixture["distinct_values"]
+
+    docs_dir = tmp_root / "docs"
+    _write(
+        docs_dir,
+        "knowledge/B32doc/md_out/a.md",
+        _B32DOC_FRONTMATTER + _b32doc_body("整備手順の説明"),
+    )
+    result = select_reference_targets(docs_dir)
+    target = result.targets[0]
+
+    assert target["source"] == distinct["source"][0]["value"]
+    assert target["document_type"] == distinct["document_type"][0]["value"]
+    assert target["status"] == distinct["status"][0]["value"]
+    assert target["post_number"] == distinct["post_number"][0]["value"]
+    assert target["url"] == distinct["url"][0]["value"]
+    assert target["category"] == distinct["category"][0]["value"]
+    assert target["source"] != "b32doc"
 
 
 def test_reference_target_title_comes_from_summary_keys_not_filename(tmp_root: Path):

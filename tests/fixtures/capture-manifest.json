@@ -1,14 +1,14 @@
 {
   "capture_dates": {
     "capture": {
-      "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
-      "date": "2026-08-04T00:47:12+09:00",
-      "subject": "fix(m1): 埋め込みゲート入力材料を追加採取し100/100カバレッジを達成"
+      "commit": "f957a05985737d512df35c26c22f2f5e261080d4",
+      "date": "2026-08-04T00:48:34+09:00",
+      "subject": "docs(m1): readonly:true でも -shm の mtime が動くことを実測し記載を訂正"
     },
     "capture-manifest.json (this file)": {
-      "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
-      "date": "2026-08-04T00:47:12+09:00",
-      "subject": "fix(m1): 埋め込みゲート入力材料を追加採取し100/100カバレッジを達成"
+      "commit": "658da8e405cb2833cc59650b9d5b2ed65e5cb0b1",
+      "date": "2026-08-04T04:59:37+09:00",
+      "subject": "fix(m3): クローズ前の指摘4件を修正(esa空tags/PARTIAL反映/docs逸脱記録/delay配線確認)"
     },
     "embedding": {
       "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
@@ -40,20 +40,26 @@
       "date": "2026-08-03T20:54:02+09:00",
       "subject": "feat(m1): 実データ層化サンプルを旧sync-state.sqliteから採取"
     },
+    "reference-index": {
+      "commit": null,
+      "date": null,
+      "note": "このカテゴリの全ファイルがまだ未コミット(manifest生成時点)",
+      "subject": null
+    },
     "root": {
-      "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
-      "date": "2026-08-04T00:47:12+09:00",
-      "subject": "fix(m1): 埋め込みゲート入力材料を追加採取し100/100カバレッジを達成"
+      "commit": "658da8e405cb2833cc59650b9d5b2ed65e5cb0b1",
+      "date": "2026-08-04T04:59:37+09:00",
+      "subject": "fix(m3): クローズ前の指摘4件を修正(esa空tags/PARTIAL反映/docs逸脱記録/delay配線確認)"
     }
   },
   "categories": {
     "capture": {
-      "file_count": 12,
+      "file_count": 13,
       "files": [
         {
-          "bytes": 18529,
+          "bytes": 19671,
           "path": "capture/README.md",
-          "sha256": "bdf787c6c40f15820a9c881e3e088f7ed429fdd48afe98e07a31a4eb866e70f4"
+          "sha256": "e974d313e45c2eda4d7cfddd914ed9ea667abae34c8f9a4383b2025005b7ad7a"
         },
         {
           "bytes": 9546,
@@ -61,9 +67,9 @@
           "sha256": "7d461909ae3d8f44d4e1d0f1e73a32a0e225bd709cffc921fd66fe611663ec7b"
         },
         {
-          "bytes": 17090,
+          "bytes": 17973,
           "path": "capture/build-manifest.mjs",
-          "sha256": "b28623cfd4457f42dfa12a33c65d54771712e35ed65cbfdc55a1aa16811cdea9"
+          "sha256": "6ca0ab9cd7d4ebf1a0cadcfd0b7fb954773e334f6bf372a02df700384479d221"
         },
         {
           "bytes": 28859,
@@ -106,12 +112,17 @@
           "sha256": "0e93d29880902ed6bf4853f753b8ab63c5f018dd1ac97d22ff68684fbe18eb36"
         },
         {
+          "bytes": 7038,
+          "path": "capture/capture-reference-index-columns.mjs",
+          "sha256": "48e2775c69c0209e8d38acc38a6a28f8492b322b56d6ab38c92584b31f211a5e"
+        },
+        {
           "bytes": 28344,
           "path": "capture/capture-sync-status.mjs",
           "sha256": "a092b8c8ea84fec98f472cc7d901ebe2714ed35bcaae35e5812b7fbed078dc35"
         }
       ],
-      "total_bytes": 247471
+      "total_bytes": 256534
     },
     "embedding": {
       "file_count": 1,
@@ -364,6 +375,17 @@
       ],
       "total_bytes": 1859439
     },
+    "reference-index": {
+      "file_count": 1,
+      "files": [
+        {
+          "bytes": 3300,
+          "path": "reference-index/columns.json",
+          "sha256": "65164e63531e85f23085cda31502067a168633f43c607c3a911a5ef33f5a3b5d"
+        }
+      ],
+      "total_bytes": 3300
+    },
     "root": {
       "file_count": 2,
       "files": [
@@ -373,12 +395,12 @@
           "sha256": "11dce4ae76a450fa325a88133d4282cff549f31fe82312927b1e16b74be90ef0"
         },
         {
-          "bytes": 41085,
+          "bytes": 43640,
           "path": "PROVENANCE.md",
-          "sha256": "40f4a5add4015e12dbc8ab846a45e67e3e669177f4a99bfc702eeba15ef2657b"
+          "sha256": "dad2d90c902eac628d266c60312fb4c3d0bccdbc54e907f20803b5e2d693380e"
         }
       ],
-      "total_bytes": 41106
+      "total_bytes": 43661
     }
   },
   "exclusions_registry": [
@@ -447,6 +469,14 @@
       "id": "web_and_reference_layers_empty_corrected",
       "reference": ".superpowers/sdd/M1-fixture-capture/progress.md 'CORRECTED BY REVIEWER' セクション, task-2-report.md §2",
       "source_task": "Task 2 (レビューにより訂正)"
+    },
+    {
+      "category": "reference-index",
+      "description": "M4 Task1 の select_reference_targets は brief 未指定・fixture 未採取のままreference コーパスの source 列を 'b32doc' と決め打ちしていた。data/reference-index.sqlite をサンドボックスコピー経由で実測した結果、documents 7,563行全件は source='manual'(b32doc という値はどの列にも存在しない)・document_type='reference'・status='active'・post_number=NULL・url=NULL・category='html' であることが判明し、実装を source='manual' に修正した。",
+      "excluded_count": 0,
+      "id": "reference_index_source_guess_corrected",
+      "reference": "tests/fixtures/PROVENANCE.md §4, tests/fixtures/reference-index/columns.json",
+      "source_task": "M4 Task1b (capture-reference-index-columns.mjs)"
     }
   ],
   "generated_by": "tests/fixtures/capture/build-manifest.mjs (再実行可能・決定的。再実行手順はcapture/README.md参照)",

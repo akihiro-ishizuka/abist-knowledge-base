@@ -171,7 +171,7 @@ def select_reference_targets(docs_dir: Path) -> ReferenceSelection:
                 "path": rel,
                 "post_number": None,
                 "title": summary.title,
-                "source": "b32doc",
+                "source": "manual",
                 "document_type": "reference",
                 "status": "active",
                 "url": None,
