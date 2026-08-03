@@ -21,7 +21,7 @@ Python 移植は「この fixture と一致すること」で正しさを判定�
 
 | カテゴリ | パス | 契約の種類 | 何を保証するか | 消費するマイルストーン |
 |---|---|---|---|---|
-| kernel | `tests/fixtures/kernel/*.json` | ビット互換 | frontmatter / chunker / line-range / e5入力 / sync-planner / metadata-schema / batch-config の関数単位の入出力 | M2(カーネル移植の合否そのもの) |
+| kernel | `tests/fixtures/kernel/*.json` | ビット互換 | frontmatter / chunker / line-range / e5入力 / sync-planner / metadata-schema / batch-config / b32doc-filter の関数単位の入出力 | M2(カーネル移植の合否そのもの) |
 | real-docs | `tests/fixtures/real-docs/samples.json` | ビット互換 | 実 `docs/` から層化抽出した40件に対する同カーネル出力(手書き境界ケースだけでは拾えない実データ分布の確認) | M2 |
 | mcp | `tests/fixtures/mcp/**` | ビット互換(ただし `sdk_validation_error` の4ケースは prose 除く。§3参照) | 15ツールの `tools/list` スキーマと `tools/call` の生 JSON-RPC 応答 | M5(MCP 互換性検証) |
 | eval | `tests/fixtures/eval/{queries.jsonl,baseline.json}` | ビット互換(ランキング・指標) | 22クエリ × `bm25_raw`/`hybrid` の2方式のランク付き結果・Recall@5/RR/nDCG@10 | M4(検索移植の受け入れゲート) |
@@ -90,12 +90,11 @@ M7の監査・可視化)が**シナリオそのものを新実装に対して再
 | `kb-search-mcp.test.js` | 転記せず・別方式で捕捉 | `mcp/kb-search/**` | 同上 |
 | `kb-visualize-mcp.test.js` | 転記せず・別方式で捕捉 | `mcp/kb-visualize/**` | 同上 |
 | `search-engine.test.js` | 転記せず・別方式で捕捉 | `eval/baseline.json` | インライン定数は転記していないが、Task 4 が `search-engine.js` の `search`/`keywordSearch` を実クエリ(`eval/queries.jsonl`)で直接実行し、ランキング・指標を記録した |
+| `b32doc-filter.test.js` | `kernel/b32doc-filter.json`(43ケース: ルール別ケース23+抽出系5+優先順位食い違い2+実文書8+定数7) | 転記済み(当初のM1範囲の取りこぼしを別タスクで解消。§3参照) | `decideIndexable`/`extractedContent`/`extractSummaryKeys` を転記・実行。6ルール(path_excluded/toc_or_default/not_html_category/language_excluded/empty_content/too_short)すべてにaccept/rejectの両方を用意し、除外理由の文字列も記録した。加えて `docs/knowledge/B32doc` から path-sorted に実文書8件(64KB超過は0件)を採取。**JS/Python(filters.py)の優先順位食い違いを実測して記録**(§3参照) |
 
-### M2範囲だが未fixture化(1ファイル) — 既知のギャップ
+### M2範囲だが未fixture化(0ファイル) — 既知のギャップは解消済み
 
-| 旧テストファイル | 対応モジュール(M0-foundation.md 対応表) | 状態 | 引き継ぎメモ |
-|---|---|---|---|
-| `b32doc-filter.test.js` | `tools/lib/b32doc-filter.js` → `domain/b32doc_filter.py`(**M2**、他のkernelモジュールと同じビット互換階層) | fixture化されていない | Task 1 は「ブリーフのStep 2/3のリストに無い」ことを理由に転記対象外としたが、対応表を見る限り b32doc-filter.js は他のkernelモジュール(frontmatter/chunker等)と**同じM2のビット互換対象**であり、これは意図した後回しではなくM1の**取りこぼし**である可能性が高い。M2着手時に `capture-kernel.mjs` と同じ手法で `b32doc-filter.test.js` の転記+実行結果採取を行い、`kernel/b32doc-filter.json` を追加してからPython実装に着手すること。 |
+かつて `b32doc-filter.test.js` がここに記載されていたが、上表の通り `kernel/b32doc-filter.json` として採取済みになったため、このセクションは現在空である。
 
 ### M2範囲・DBスキーマ/CRUD統合テストのためfixture化不要(1ファイル)
 
@@ -132,7 +131,8 @@ M7の監査・可視化)が**シナリオそのものを新実装に対して再
 |---|---|---|
 | `deprecation-notice.test.js` | 未確認 | `tools/deprecation-notice.js`(`chat`/`ui`コマンドへ非推奨警告をstderrに出しMCPへの移行を案内するCLIシム)を検証するが、この`deprecation-notice.js`自体が `design/plans/M0-foundation.md` のNode→Pythonモジュール対応表に**存在しない**(移植する91行の表にも「移植しない」リストの4ファイルにも無い)。案内先の`chat`/`ui`コマンド自体は新設計でネイティブに実装される(M6/M7)ため、この非推奨シムを新システムが再現すべきかどうか対応表からは判断できない。M9のカットオーバー計画者が旧CLIの`chat`/`ui`をどう扱うか(単純に廃止/移行案内を残す)を決める際にこの点を確認する必要がある。 |
 
-集計(28ファイル): M1でfixture化済み12 + M2範囲だが未fixture化(既知のギャップ)1 +
+集計(28ファイル): M1でfixture化済み13(`b32doc-filter.test.js` を含む) +
+M2範囲だが未fixture化(既知のギャップ)0 +
 M2範囲でDB統合テストのためfixture化不要1 + 後続マイルストーンの統合シナリオとして
 引き継ぐもの14(M3が3、M7が11) + 真に未確認1 = 28。
 
@@ -148,6 +148,7 @@ M2範囲でDB統合テストのためfixture化不要1 + 後続マイルスト�
 | eval baseline は base64 でなくプレーンJSON | 他カテゴリ(kernel/real-docs/mcp)はBOM/CRLFを保持する必要がある生テキストを扱うため `*_b64` で格納するが、`eval/baseline.json` は検索結果の構造化データ(パス・スコア・行番号等)のみでBOM/CRLFを保持すべき生テキストを含まないため、素のJSON文字列で記録した | フォーマットの意図的な違いであり、欠陥ではない |
 | embeddings テーブルの孤立20行 | `kb-index.sqlite` の `embeddings`(51,411件)が `chunks⋈embeddings`(51,391件)より20件多い。chunkが削除された後も残った孤立embeddings行と推測される | `gate-samples.json` の `db_counts` にそのまま記録(揃えていない)。M8での「全chunkの再利用判定」実装時、embeddings側にのみ存在する孤立行の扱いを設計判断する必要がある |
 | `search_kb.diagnostics.elapsedMs` が唯一の非決定フィールド | MCP fixture 全28ケースを2回ずつ実行して構造的diffを取った結果、非決定だったのは `search_kb` の5ケース全ての `diagnostics.elapsedMs` のみ。他23ケースは完全に決定的だった | M5の比較器はこのフィールドだけを正規化(無視)すればよく、それ以外は全フィールドの一致を要求してよい |
+| `b32doc-filter.js` は「食い違えば `filters.py` を正とする」と自称するが、実測すると `filters.py` 内部で2つの答えがある | `tools/lib/b32doc-filter.js` の冒頭コメントは「元の判定と食い違いが出たら `tools/knowledge-curator/filters.py` 側を正とすること」と明記する。しかし `filters.py` を実際に実行して確認すると、(a) `filters.py` が持つ `decide()` 関数(判定優先順位を1つにまとめた関数)は `not_html_category` を最初に判定する優先順位を持つが、`build_index.py` から一度も呼ばれない**死んだコード**である。(b) 実際に `procedures-index.jsonl` を生成する `build_index.py` 本体は `decide()` とは異なる優先順位(`is_excluded_path` を最初に呼ぶ)で個々の判定関数を直接呼んでいる。`tools/lib/b32doc-filter.js` の `decideIndexable()` は **(b) の実際に実行される優先順位と一致し、(a) の未使用の `decide()` とは一致しない**。加えて、目次/ランディングページ判定(`toc_or_default`)についても、`b32doc-filter.js` と `filters.decide()` は frontmatter の `source_name` を見るが、`build_index.py` 本体は実際にはディスク上のファイル名(`md_path.name`)だけを見ており、両者が食い違えば判定も食い違いうる(実データでは通常両者は一致するため実害は稀と推測されるが未検証)。両方の実測値は `kernel/b32doc-filter.json` の case id `js_vs_python_priority_order_divergence` / `js_vs_python_noise_filename_source_divergence` に、旧リポジトリの `filters.py` を実際に実行して得た値として記録してある(推測ではない) | **M2は `tools/lib/b32doc-filter.js`(=このfixtureの `decideIndexable` ケース群)の優先順位を移植すること。** これは `filters.py` の `decide()` 関数ではなく、実際にB32doc索引(`docs/knowledge/generated/b32doc`)を生成している `build_index.py` 本体の挙動と一致するため、M4のreference-index選定の実際の再現性にはこちらが正しい。`filters.py` のコメントが指す「正」は本文中では未使用の `decide()` であり、実行結果としての「正」ではない点に注意 |
 
 ## 4. 旧システムのデータ層に関する訂正事実(§9.2 を上書きする)
 

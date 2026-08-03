@@ -41,6 +41,7 @@ Python 実装の「正しさ」は、ここで採取した値と一致するか�
 ```bash
 node tests/fixtures/capture/capture-kernel.mjs
 node tests/fixtures/capture/capture-batch-config.mjs
+node tests/fixtures/capture/capture-b32doc-filter.mjs
 node tests/fixtures/capture/capture-real-docs.mjs
 node tests/fixtures/capture/capture-mcp.mjs
 node tests/fixtures/capture/capture-eval.mjs
@@ -115,6 +116,21 @@ Python移植の正しさの基準がフィクスチャ作成者の主観にす�
 - `capture-batch-config.mjs` — `tools/lib/batch-config-store.js` の
   `formatConfig` / `loadBatchConfigsFresh` と、実物の `batch-config.js` との
   ラウンドトリップ結果を `tests/fixtures/kernel/batch-config.json` に出力する。
+- `capture-b32doc-filter.mjs` — `tools/lib/b32doc-filter.js` の
+  `decideIndexable`/`extractedContent`/`extractSummaryKeys` を実行し、
+  6ルール(path_excluded/toc_or_default/not_html_category/language_excluded/
+  empty_content/too_short)それぞれの accept/reject ケース(除外理由文字列も
+  記録)・`docs/knowledge/B32doc` からの実文書サンプル(path-sorted、64KB超は
+  除外し件数を記録)を `tests/fixtures/kernel/b32doc-filter.json` に出力する。
+  この JS モジュールは「食い違えば `tools/knowledge-curator/filters.py` を正と
+  すること」と自称するが、実際に旧リポジトリの `filters.py` を実行して確認した
+  ところ、`filters.py` 自身が持つ `decide()`(優先順位を1つにまとめた関数)は
+  `build_index.py` から一度も呼ばれない死んだコードであり、実際にインデックスを
+  生成する `build_index.py` 本体は `decide()` とは異なる優先順位で個々の判定
+  関数を呼んでいる。`b32doc-filter.js` は `build_index.py` 本体の実際の優先順位
+  と一致する(`decide()` とは一致しない)。詳細は `../PROVENANCE.md` §3 と
+  fixture 内の case id `js_vs_python_priority_order_divergence` /
+  `js_vs_python_noise_filename_source_divergence` を参照。
 - `capture-real-docs.mjs` — `data/sync-state.sqlite`（read-only）の
   `documents` から9層（esa/web/git/reference/日本語パス/長いパス/BOM付き/
   CRLF本文/frontmatter無し）を決定的に層化抽出し、選ばれた各実文書について
