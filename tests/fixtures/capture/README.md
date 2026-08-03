@@ -86,6 +86,16 @@ diff /tmp/run1.sha256 /tmp/run2.sha256   # 差分が無いこと
   記録する(採取そのものは決定的でなくてよいが、どのフィールドが揺れるかは
   記録する。詳細は `.superpowers/sdd/M1-fixture-capture/task-3-report.md`)。
 
+  **M5 への注意(`response_kind: "sdk_validation_error"` の4ケース):**
+  `download_esa_post`/`download_esa_category`/`download_esa_search`/
+  `download_git` の zod スキーマ検証エラーは `content[0].text` が
+  `"MCP error -32602: Input validation error: ..."` という平文になるが、
+  この文言は旧リポジトリの zod + `@modelcontextprotocol/sdk` の
+  バージョンに固有の生成物であり、Python 版(pydantic + MCP Python SDK)は
+  必然的に異なる文言を返す。M5 の比較器はこの4ケースを `content[0].text` の
+  素の文字列一致で比較してはいけない。`response_kind`・`isError`・
+  JSON-RPC エラーコード `-32602` の一致で判定すること。
+
 ## フィクスチャの形式
 
 各 JSON は `{"schema": 1, "source": "<旧リポジトリ内のモジュールパス>", "cases": [...]}`

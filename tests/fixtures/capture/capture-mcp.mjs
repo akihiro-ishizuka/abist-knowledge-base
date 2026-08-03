@@ -342,6 +342,13 @@ async function runCase(client, { server, tool, id, args, timeoutMs, notes, devia
   //   - "tool_result_json": ツール自身の JSON エラー/成功応答(content[0].text が JSON としてパース可能)
   //   - "sdk_validation_error": zod スキーマ検証失敗を McpServer が横取りして返す平文プロース
   //     (例: "MCP error -32602: Input validation error: ..."。JSON としてパースできない)
+  //
+  // 【M5向け注意】"sdk_validation_error" の文言は旧リポジトリに入っている
+  // zod + @modelcontextprotocol/sdk のバージョン固有の生成物であり、
+  // Python 版(pydantic + MCP Python SDK)は必然的に異なる文言を返す。
+  // M5 の比較器はこの4ケースの content[0].text を素の文字列一致で比較しては
+  // いけない。response_kind( === "sdk_validation_error") と isError(true)と
+  // JSON-RPC エラーコード "-32602" という数字部分の一致を見ること。
   let responseKind = "unknown";
   let textParsed = null;
   const content0 = result1?.content?.[0];
