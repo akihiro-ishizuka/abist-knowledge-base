@@ -1,19 +1,19 @@
 {
   "capture_dates": {
     "capture": {
-      "commit": "7eeda228db760c80cb03d2ebae2e4ee5c074a1f4",
-      "date": "2026-08-03T23:28:22+09:00",
-      "subject": "fix(m1): sync_status_for を実行結果として採取し、b32doc accept実文書ギャップを解消"
+      "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
+      "date": "2026-08-04T00:47:12+09:00",
+      "subject": "fix(m1): 埋め込みゲート入力材料を追加採取し100/100カバレッジを達成"
     },
     "capture-manifest.json (this file)": {
-      "commit": "a722d4a09b019923f1b8abedc452e7a59ed3750d",
-      "date": "2026-08-04T00:11:31+09:00",
-      "subject": "fix(m2): 全体レビュー指摘のCRITICAL/IMPORTANT/MINORを一括修正"
+      "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
+      "date": "2026-08-04T00:47:12+09:00",
+      "subject": "fix(m1): 埋め込みゲート入力材料を追加採取し100/100カバレッジを達成"
     },
     "embedding": {
-      "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
-      "date": "2026-08-03T22:09:37+09:00",
-      "subject": "feat(m1): 埋め込みゲート素材・HTML変換ゴールデン・capture-manifestを採取"
+      "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
+      "date": "2026-08-04T00:47:12+09:00",
+      "subject": "fix(m1): 埋め込みゲート入力材料を追加採取し100/100カバレッジを達成"
     },
     "eval": {
       "commit": "0d9088fbe553dde10c47c8051a64669876da7282",
@@ -41,9 +41,9 @@
       "subject": "feat(m1): 実データ層化サンプルを旧sync-state.sqliteから採取"
     },
     "root": {
-      "commit": "a722d4a09b019923f1b8abedc452e7a59ed3750d",
-      "date": "2026-08-04T00:11:31+09:00",
-      "subject": "fix(m2): 全体レビュー指摘のCRITICAL/IMPORTANT/MINORを一括修正"
+      "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
+      "date": "2026-08-04T00:47:12+09:00",
+      "subject": "fix(m1): 埋め込みゲート入力材料を追加採取し100/100カバレッジを達成"
     }
   },
   "categories": {
@@ -51,9 +51,9 @@
       "file_count": 12,
       "files": [
         {
-          "bytes": 18243,
+          "bytes": 18529,
           "path": "capture/README.md",
-          "sha256": "b2b5450e76196db874c58d439b564420055bf0155edbe4f743f5f4b9490b419e"
+          "sha256": "bdf787c6c40f15820a9c881e3e088f7ed429fdd48afe98e07a31a4eb866e70f4"
         },
         {
           "bytes": 9546,
@@ -111,7 +111,7 @@
           "sha256": "a092b8c8ea84fec98f472cc7d901ebe2714ed35bcaae35e5812b7fbed078dc35"
         }
       ],
-      "total_bytes": 247185
+      "total_bytes": 247471
     },
     "embedding": {
       "file_count": 1,
