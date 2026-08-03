@@ -22,6 +22,7 @@ from pathlib import Path
 from abist_kb.application.job_service import JobService
 from abist_kb.domain.errors import AppError
 from abist_kb.domain.job import ResourceKind
+from abist_kb.domain.job import resource_key as build_resource_key
 from abist_kb.infrastructure.db.connection import connect
 from abist_kb.infrastructure.jobs import leases
 from abist_kb.infrastructure.jobs.db import ensure_jobs_schema
@@ -145,6 +146,75 @@ def cmd_run_inline_job(args: argparse.Namespace) -> None:
         conn.close()
 
 
+def _make_write_handler(owner: str, count: int, interval: float):
+    """`count` 回、`interval` 秒間隔で「書き込み」を記録するハンドラ(fix2 再現用)。
+
+    レビューが実測した状況(0.1秒間隔で20回書き込む間にリースが奪われ、20回中
+    16回が奪取後に実行された)を再現するための最小のハンドラ。各反復の間で
+    `run.check_lease()` を呼び(fix2 で追加された契約どおり)、リースが奪われて
+    いれば `AppError(CONFLICT)` が送出されて即座にループを打ち切る。書き込み
+    そのものは実ファイルではなく標準出力への1行(NDJSON)として記録し、
+    テスト側がどの書き込みが実際に実行されたかを正確に数えられるようにする。
+    """
+
+    def handler(run: JobRunContext) -> None:
+        for index in range(count):
+            run.check_lease()
+            _emit({"owner": owner, "status": "write", "index": index, "t": time.time()})
+            time.sleep(interval)
+
+    return handler
+
+
+def cmd_run_inline_job_writes(args: argparse.Namespace) -> None:
+    """`run.check_lease()` を毎回呼ぶ「1件ずつ書き込む」ハンドラを実行する(fix2 再現用)。"""
+    conn = connect(Path(args.db))
+    ensure_jobs_schema(conn)
+    resource_for_kind = (
+        {args.kind: (ResourceKind(args.resource), args.key)} if args.resource else {}
+    )
+    service = JobService(
+        conn,
+        owner_id=args.owner,
+        handlers={args.kind: _make_write_handler(args.owner, args.count, args.interval)},
+        resource_for_kind=resource_for_kind,
+        lease_ttl_seconds=args.ttl,
+    )
+    try:
+        service.run_inline(args.kind)
+        _emit({"owner": args.owner, "status": "succeeded", "t": time.time()})
+    except AppError as exc:
+        _emit({"owner": args.owner, "status": "failed", "code": str(exc.code), "t": time.time()})
+    finally:
+        conn.close()
+
+
+def cmd_steal_resource_lease(args: argparse.Namespace) -> None:
+    """`victim` が保持する resource lease を横から奪う(fix2 再現用)。
+
+    `test_run_job_surfaces_conflict_when_resource_lease_is_stolen_mid_handler`
+    (同一プロセス内テスト)が使う手法をそのまま別プロセスから行う: 被害者の
+    リース行を強制的に解放してから、別オーナーとして取得し直す。TTL切れ等で
+    実際に他プロセスに奪われた状況を模する。
+    """
+    conn = connect(Path(args.db))
+    ensure_jobs_schema(conn)
+    kind = ResourceKind(args.kind)
+    resource_key_value = build_resource_key(kind, args.key)
+    leases.release_resource_lease(conn, resource_key_value, args.victim)
+    try:
+        with leases.acquire_resource_lease(
+            conn, kind, key=args.key, owner_id=args.owner, ttl_seconds=args.ttl, wait=False
+        ):
+            _emit({"owner": args.owner, "status": "stole", "t": time.time()})
+            time.sleep(args.hold)
+        _emit({"owner": args.owner, "status": "released", "t": time.time()})
+    except AppError as exc:
+        _emit({"owner": args.owner, "status": "steal_failed", "code": str(exc.code)})
+    finally:
+        conn.close()
+
+
 def cmd_worker_run_job(args: argparse.Namespace) -> None:
     """`WorkerSupervisor` 経由でキューのジョブを消費し続ける
     (Critical 2/Important 4 再現用: キュー経由でも resource lease を取り、
@@ -226,6 +296,27 @@ def main() -> None:
     run_inline_job.add_argument("--resource", default=None)
     run_inline_job.add_argument("--key", default=None)
     run_inline_job.set_defaults(func=cmd_run_inline_job)
+
+    run_inline_job_writes = sub.add_parser("run-inline-job-writes")
+    run_inline_job_writes.add_argument("--db", required=True)
+    run_inline_job_writes.add_argument("--owner", required=True)
+    run_inline_job_writes.add_argument("--kind", default="sync")
+    run_inline_job_writes.add_argument("--count", type=int, default=20)
+    run_inline_job_writes.add_argument("--interval", type=float, default=0.1)
+    run_inline_job_writes.add_argument("--ttl", type=float, default=2.0)
+    run_inline_job_writes.add_argument("--resource", default=None)
+    run_inline_job_writes.add_argument("--key", default=None)
+    run_inline_job_writes.set_defaults(func=cmd_run_inline_job_writes)
+
+    steal_resource_lease = sub.add_parser("steal-resource-lease")
+    steal_resource_lease.add_argument("--db", required=True)
+    steal_resource_lease.add_argument("--owner", required=True)
+    steal_resource_lease.add_argument("--victim", required=True)
+    steal_resource_lease.add_argument("--kind", required=True)
+    steal_resource_lease.add_argument("--key", default=None)
+    steal_resource_lease.add_argument("--ttl", type=float, default=5.0)
+    steal_resource_lease.add_argument("--hold", type=float, default=1.0)
+    steal_resource_lease.set_defaults(func=cmd_steal_resource_lease)
 
     worker_run_job = sub.add_parser("worker-run-job")
     worker_run_job.add_argument("--db", required=True)

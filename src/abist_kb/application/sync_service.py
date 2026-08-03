@@ -200,6 +200,7 @@ class SyncService:
         summary: SyncSummary,
         prune_orphans: bool,
         emit: Any = None,
+        check_lease: Any = None,
     ) -> None:
         # ここに到達するまでに一覧取得(search_posts)が例外を投げていれば
         # 呼び出し元(ジョブハンドラ)まで伝播して同期全体が失敗として終わる
@@ -221,6 +222,12 @@ class SyncService:
                 continue
 
             for index, post in enumerate(posts):
+                # fix2: 1件ずつファイルを書く(`runner.save_post`)ループなので、
+                # 次の書き込みを行う前に毎回リース生存確認を挟む
+                # (`JobRunContext.check_lease` の契約、レビュー再現: リースを
+                # 奪われた後も書き込みを続けてしまう不具合の直接の対象箇所)。
+                if check_lease is not None:
+                    check_lease()
                 item = runner.save_post(post)
                 record_sync_result(summary, item)
                 if emit is not None:
@@ -251,6 +258,7 @@ class SyncService:
         dry_run: bool,
         prune_orphans: bool,
         emit: Any = None,
+        check_lease: Any = None,
     ) -> SyncSummary:
         connection = source.get("connection") or {}
         summary = new_sync_summary("esa")
@@ -285,6 +293,7 @@ class SyncService:
                 summary=summary,
                 prune_orphans=prune_orphans and not dry_run,
                 emit=emit,
+                check_lease=check_lease,
             )
         summary.finished_at = datetime.now(UTC).isoformat()
         return summary
@@ -298,6 +307,7 @@ class SyncService:
         dry_run: bool = False,
         prune_orphans: bool = False,
         emit: Any = None,
+        check_lease: Any = None,
     ) -> tuple[SyncSummary, Path | None]:
         """1つの esa ソースを指定カテゴリで同期する。"""
         source = self._require_esa_source(source_id)
@@ -309,6 +319,7 @@ class SyncService:
                 dry_run=dry_run,
                 prune_orphans=prune_orphans,
                 emit=emit,
+                check_lease=check_lease,
             )
         )
         if dry_run:
@@ -346,6 +357,7 @@ class SyncService:
         dry_run: bool = False,
         prune_orphans: bool = False,
         emit: Any = None,
+        check_lease: Any = None,
     ) -> tuple[SyncSummary, Path | None]:
         """バッチに登録された全カテゴリを同期する。"""
         batch = self._batches.get(batch_id)
@@ -372,6 +384,7 @@ class SyncService:
                 dry_run=dry_run,
                 prune_orphans=prune_orphans,
                 emit=emit,
+                check_lease=check_lease,
             )
         )
         if dry_run:
@@ -386,6 +399,7 @@ class SyncService:
         dry_run: bool = False,
         prune_orphans: bool = False,
         emit: Any = None,
+        check_lease: Any = None,
     ) -> list[dict[str, Any]]:
         """有効な esa バッチをすべて同期する。"""
         results: list[dict[str, Any]] = []
@@ -393,7 +407,12 @@ class SyncService:
             if batch["type"] != "esa" or not batch["enabled"]:
                 continue
             summary, report_path = self.sync_batch(
-                batch["id"], force=force, dry_run=dry_run, prune_orphans=prune_orphans, emit=emit
+                batch["id"],
+                force=force,
+                dry_run=dry_run,
+                prune_orphans=prune_orphans,
+                emit=emit,
+                check_lease=check_lease,
             )
             results.append(
                 {
@@ -470,6 +489,7 @@ def make_sync_job_handler(
                 dry_run=dry_run,
                 prune_orphans=prune_orphans,
                 emit=run.emit,
+                check_lease=run.check_lease,
             )
             outbox["summary"] = summary.to_report_dict()
             outbox["report_path"] = str(report_path) if report_path else None
@@ -486,12 +506,17 @@ def make_sync_job_handler(
                 dry_run=dry_run,
                 prune_orphans=prune_orphans,
                 emit=run.emit,
+                check_lease=run.check_lease,
             )
             outbox["summary"] = summary.to_report_dict()
             outbox["report_path"] = str(report_path) if report_path else None
         elif target == "all":
             results = service.sync_all(
-                force=force, dry_run=dry_run, prune_orphans=prune_orphans, emit=run.emit
+                force=force,
+                dry_run=dry_run,
+                prune_orphans=prune_orphans,
+                emit=run.emit,
+                check_lease=run.check_lease,
             )
             outbox["results"] = results
             run.emit(

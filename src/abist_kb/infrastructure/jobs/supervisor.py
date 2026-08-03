@@ -36,14 +36,54 @@ EmitFn = Callable[..., None]
 
 @dataclass(slots=True)
 class JobRunContext:
-    """ジョブハンドラへ渡す実行コンテキスト。"""
+    """ジョブハンドラへ渡す実行コンテキスト。
+
+    **リース生存確認の契約(重要、ハンドラ作成者は必読)**: `run_job`
+    (`infrastructure.jobs.execution`)はバックグラウンドスレッドで resource
+    lease / worker lease を TTL の1/3ごとに更新し続けるが、更新に失敗した
+    (=他プロセスに奪われた)ことをハンドラの実行中に伝える手段は Python では
+    安全な強制割り込みができないため存在しない。そのため検知は**協調的**
+    (cooperative)であり、ハンドラ自身が `check_lease()` をポーリングする
+    必要がある。
+
+    - **複数回の副作用(ファイル書き込み・API呼び出し等)を繰り返すハンドラ**
+      (バッチ内で1件ずつ書く sync、ツリーをファイル単位でミラーする git 連携、
+      チャンクをループで書き込むインデクサ等)は、**各反復の間**(次の副作用を
+      行う前)に必ず `check_lease()` を呼ぶこと。呼ばなければ、リースが奪われた
+      後も検知されるまで副作用を出し続けてしまう(実際にレビューで、TTL内に
+      横取りが起きたのに20回中16回の書き込みが横取り後に実行された事例がある)。
+    - **一度きりの不可分な操作しか行わないハンドラ**は呼ぶ必要がない
+      (`run_job` が `with` を抜ける際に最終確認するため、後述のバックストップで
+      十分)。
+    - `check_lease()` を一度も呼ばないハンドラでも、ジョブは最終的に
+      `FAILED` として記録される(`run_job` がハンドラ終了後にバックグラウンド
+      スレッドの失敗を検知して `AppError(CONFLICT)` を送出するため)。ただし
+      それまでの副作用は止められない。
+    """
 
     job: Job
     emit: EmitFn
+    _check_lease: Callable[[], None] | None = None
+
+    def check_lease(self) -> None:
+        """リース(resource lease / worker lease)が奪われていれば直ちに
+        `AppError(ErrorCode.CONFLICT)` を送出する。
+
+        属性1回分の読み取り程度で軽量なので、タイトなループ(1件ずつの書き込み
+        ループ等)の中で毎回呼んでも支配的なコストにはならない。奪われていな
+        ければ何もせずそのまま戻る。
+        """
+        if self._check_lease is not None:
+            self._check_lease()
 
 
 JobHandler = Callable[[JobRunContext], None]
-"""ジョブ種別ごとのハンドラ。失敗は例外(`AppError` 推奨)で表す。"""
+"""ジョブ種別ごとのハンドラ。失敗は例外(`AppError` 推奨)で表す。
+
+**複数回の副作用を行うハンドラは `JobRunContext.check_lease()` の契約を守る
+こと**(`JobRunContext` のクラスdocstring参照)。各反復の間で呼ばなければ、
+リースを奪われた後も検知されるまで副作用を出し続けてしまう。
+"""
 
 
 class WorkerSupervisor:

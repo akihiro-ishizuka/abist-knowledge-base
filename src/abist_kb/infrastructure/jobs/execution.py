@@ -115,6 +115,18 @@ class _LeaseRenewalThread:
         if self._error is not None:
             raise self._error
 
+    def check_alive(self) -> None:
+        """ハンドラが協調的に呼ぶ用: 既に更新が失敗していれば直ちに送出する。
+
+        `self._error` への代入(このスレッド)と読み取り(ハンドラを実行する
+        呼び出し元スレッド)がスレッドをまたぐが、CPythonのGILの下では単純な
+        属性の代入/参照は不可分であり、ロック無しでも「化けた値」を読むことは
+        ない(高々1回の更新周期分だけ検知が遅れうるだけで、それは
+        `RENEWAL_FRACTION` の設計上織り込み済み)。
+        """
+        if self._error is not None:
+            raise self._error
+
     def _run(self) -> None:
         conn = connect(self._db_path)
         try:
@@ -148,17 +160,21 @@ class _LeaseRenewalThread:
 @contextmanager
 def _lease_renewal(
     conn: sqlite3.Connection, *, ttl_seconds: float, renew_fns: list[RenewFn]
-) -> Iterator[None]:
+) -> Iterator[_LeaseRenewalThread]:
     """`with` の間、`renew_fns` をバックグラウンドスレッドで更新し続ける。
 
     `with` の本体(ハンドラ呼び出し)が例外を出さずに終わった場合のみ、更新が
     一度でも失敗していれば `AppError` を送出する。本体が独自の例外を出した場合は
     そちらをそのまま伝える(リース喪失より先に起きた本来の失敗を隠さないため)。
+
+    呼び出し元へ `_LeaseRenewalThread` 自体を渡す(`check_alive` 経由で
+    `JobRunContext.check_lease()` を配線するため、fix2: ハンドラ実行中に協調的に
+    生存確認できるようにする)。
     """
     renewer = _LeaseRenewalThread(conn, ttl_seconds=ttl_seconds, renew_fns=renew_fns)
     renewer.start()
     try:
-        yield
+        yield renewer
     except BaseException:
         renewer.stop()
         raise
@@ -218,6 +234,17 @@ def run_job(
     よる失敗を `finish(FAILED)` の記録後にそのまま再送出する(CLIの終了コードに
     直結させるため)。`reraise=False`(`WorkerSupervisor` 用)は記録するだけで
     再送出しない(ハンドラのバグでワーカー自体を落とさないため)。
+
+    **fix2: リース喪失は「事後」にしか検知できない場合がある**。バックグラウンド
+    更新スレッドがリース喪失を検知しても、実行中のハンドラを Python から安全に
+    強制中断する手段は無いため、`run_job` はハンドラが戻ってくるまで
+    `AppError(CONFLICT)` を送出できない。複数回の副作用(1件ずつの書き込み等)を
+    繰り返すハンドラは、この「事後検知」だけに頼ると横取り後も副作用を出し
+    続けてしまう。そのためハンドラには `JobRunContext.check_lease()` という
+    協調的なポーリング手段を渡す(このメソッド自身のdocstring参照)。各反復の
+    間で呼ぶことで、事後検知を待たずに早期に打ち切れる。ここでの事後検知は、
+    `check_lease()` を呼ばない(または呼べない)ハンドラのためのバックストップ
+    として引き続き機能する。
     """
     from abist_kb.infrastructure.jobs.supervisor import JobRunContext  # 循環import回避
 
@@ -264,8 +291,8 @@ def run_job(
                 resource_key_value=resource_key_value,
                 renew_worker_lease=renew_worker_lease,
             )
-            with _lease_renewal(conn, ttl_seconds=ttl_seconds, renew_fns=renew_fns):
-                handler(JobRunContext(job=job, emit=emit))
+            with _lease_renewal(conn, ttl_seconds=ttl_seconds, renew_fns=renew_fns) as renewer:
+                handler(JobRunContext(job=job, emit=emit, _check_lease=renewer.check_alive))
     except AppError as exc:
         repo.finish(job.id, state=JobState.FAILED, error=exc.to_dict())
         if reraise:

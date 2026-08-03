@@ -715,6 +715,110 @@ def test_leadership_survives_a_single_job_longer_than_the_lease_ttl(db_path: Pat
         _terminate(proc_b)
 
 
+def test_handler_writes_stop_after_resource_lease_is_stolen_mid_run(db_path: Path) -> None:
+    """fix2 の再現テスト: resource lease を横取りされた後、ハンドラの書き込みが
+    即座に止まること(ジョブが最終的に `FAILED` になるだけでは不十分、という
+    レビュー指摘の直接検証)。
+
+    レビューが実測した状況そのもの: 0.1秒間隔で20回書き込むハンドラの、t=0.35秒
+    付近でリースが奪われたケースで、修正前は20回中16回(t=0.40〜1.91秒)が
+    奪取後に実行されていた。ここでは実プロセス2つ(書き込み側・横取り側)を
+    使う(brief の指示どおり: スレッドは同一インタプリタを共有してしまい、
+    `JobRunContext.check_lease()` がインプロセスの状態に頼っているだけでも
+    通ってしまいかねないため)。
+    """
+    proc_writer = _spawn(
+        "run-inline-job-writes",
+        "--db",
+        str(db_path),
+        "--owner",
+        "A",
+        "--kind",
+        "sync",
+        "--resource",
+        "docs-write",
+        "--ttl",
+        "0.05",  # 更新間隔 ~0.017秒: 書き込み間隔(0.1秒)より十分短くし、
+        # 奪取から次の書き込みまでの間に高確率で検知できるようにする。
+        "--count",
+        "20",
+        "--interval",
+        "0.1",
+    )
+    reader_writer = _LineReader(proc_writer.stdout)
+
+    # 4回目の書き込み(index=3, 理論上 t≈0.3秒)まで見届けてから奪う
+    # (レビューの再現条件 t=0.35秒 相当のタイミング)。書き込み間隔(0.1秒)の
+    # ちょうど中間まで少し待ってから奪うことで、次の書き込み(index=4, t≈0.4秒)
+    # までの間に更新スレッドが確実に何周期か回る余裕を作る(でなければ「奪った
+    # 直後」と「次の確認」がほぼ同時に競合し、確認が単なるノイズで1回だけ
+    # すり抜けるレアケースを拾ってしまい、fix2 の本質(長時間書き込み続ける
+    # 致命的な破損)とは無関係なフレークになる)。
+    writes_before_steal: list[dict] = []
+    for _ in range(4):
+        payload = reader_writer.read_json_matching(
+            lambda p: p.get("status") == "write", timeout=5.0
+        )
+        assert payload is not None, "A が書き込みを開始できなかった"
+        writes_before_steal.append(payload)
+    time.sleep(0.05)
+
+    proc_stealer = _spawn(
+        "steal-resource-lease",
+        "--db",
+        str(db_path),
+        "--owner",
+        "thief",
+        "--victim",
+        "A",
+        "--kind",
+        "docs-write",
+        "--ttl",
+        "30.0",
+        "--hold",
+        "3.0",
+    )
+    reader_stealer = _LineReader(proc_stealer.stdout)
+    stolen = reader_stealer.read_json_matching(lambda p: p.get("status") == "stole", timeout=5.0)
+    assert stolen is not None, "別プロセスがリースを奪えなかった"
+    steal_time = stolen["t"]
+
+    remaining_writes: list[dict] = []
+    final_status: dict | None = None
+    while True:
+        payload = reader_writer.read_json(timeout=5.0)
+        if payload is None:
+            break
+        if payload.get("status") == "write":
+            remaining_writes.append(payload)
+            continue
+        if payload.get("status") in ("succeeded", "failed"):
+            final_status = payload
+            break
+
+    try:
+        proc_writer.wait(timeout=5)
+    finally:
+        _terminate(proc_writer)
+        _terminate(proc_stealer)
+
+    assert final_status is not None, "A のジョブが終了ステータスを報告しなかった"
+
+    all_writes = writes_before_steal + remaining_writes
+    writes_before = [w for w in all_writes if w["t"] < steal_time]
+    writes_after = [w for w in all_writes if w["t"] >= steal_time]
+    print(
+        f"[fix2 repro] writes before theft (t<{steal_time:.3f}): {len(writes_before)}, "
+        f"writes after theft: {len(writes_after)}"
+    )
+
+    assert final_status["status"] == "failed", f"ジョブが FAILED で終わらなかった: {final_status}"
+    assert final_status["code"] == "CONFLICT"
+    assert writes_after == [], (
+        f"リース横取り後にも書き込みが実行された(fix2 が機能していない再現): {writes_after}"
+    )
+
+
 def test_exactly_one_process_claims_the_same_queued_job(db_path: Path) -> None:
     """複数プロセスが同一ジョブを claim しようとして1つだけ成功すること(brief Step 4)。"""
     conn = connect(db_path)

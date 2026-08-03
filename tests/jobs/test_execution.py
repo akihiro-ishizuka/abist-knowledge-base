@@ -74,6 +74,14 @@ def test_run_job_surfaces_conflict_when_resource_lease_is_stolen_mid_handler(con
     """Critical 1: リースが(TTL切れ等で)他者に奪われたら、ハンドラが正常に
     終わっても成功として記録せず `AppError(CONFLICT)` を送出すること
     (「リースを失ったジョブがそのまま成功したことにされる」事態を防ぐ)。
+
+    fix2 補足: このハンドラは `run.check_lease()` を一度も呼ばない。つまり
+    本テストは「協調的な確認を一切行わないハンドラ」に対する事後検知の
+    バックストップが引き続き機能することの回帰テストでもある(fix2 は
+    バックストップを置き換えるのではなく、事前に早期打ち切りできる手段を
+    追加するものであるため)。書き込みが実際に横取り後止まることの直接検証は
+    `test_multiprocess_leases.py::test_handler_writes_stop_after_resource_lease_is_stolen_mid_run`
+    が行う。
     """
     repo = JobRepository(conn)
     job = repo.submit("sync")
@@ -108,6 +116,82 @@ def test_run_job_surfaces_conflict_when_resource_lease_is_stolen_mid_handler(con
 
     finished = repo.get(job.id)
     assert finished.state is JobState.FAILED
+
+
+def test_check_lease_does_not_false_positive_during_normal_run(conn) -> None:
+    """fix2: 更新が常に成功する通常実行では `check_lease()` が誤って送出しないこと。
+
+    `JobRunContext.check_lease()` はハンドラが各反復の間で呼ぶ協調的な確認だが、
+    横取りが起きていない通常運用でこれが誤発火すると、正常なジョブが不要に
+    失敗させられてしまう(false positive)。ここでは奪う側が存在しない状態で
+    ループの中で毎回呼び、最後まで例外が出ないこと・ジョブが `SUCCEEDED` で
+    終わることを確認する。
+    """
+    repo = JobRepository(conn)
+    repo.submit("sync")
+    resource_for_kind = {"sync": (ResourceKind.DOCS_WRITE, None)}
+    claimed = repo.claim("A", ttl_seconds=0.3, resource_for_kind=resource_for_kind)
+    assert claimed is not None
+
+    check_count = 0
+
+    def handler(run: JobRunContext) -> None:
+        nonlocal check_count
+        for _ in range(20):
+            run.check_lease()  # 誰も奪っていないので何も起きないはず
+            check_count += 1
+            time.sleep(0.05)  # 合計1秒、TTL(0.3秒)の更新を複数回跨ぐ
+
+    finished = run_job(
+        conn,
+        repo,
+        events_mod.EventBus(),
+        claimed,
+        handler,
+        owner_id="A",
+        ttl_seconds=0.3,
+        resource=(ResourceKind.DOCS_WRITE, None),
+    )
+    assert check_count == 20, "ハンドラのループが誤って途中で打ち切られた"
+    assert finished.state is JobState.SUCCEEDED
+
+
+def test_check_lease_call_overhead_is_negligible(conn) -> None:
+    """fix2: `check_lease()` はタイトなループの中で毎回呼んでも支配的にならない
+    ほど軽量であること(属性1回の読み取り程度)。
+
+    実測のばらつきに対して十分な余裕を持った上限(10万回呼んで1秒未満)で
+    検証する。CIの遅い環境でもフレーキーにならないよう、極端に厳しい閾値は
+    避ける。
+    """
+    repo = JobRepository(conn)
+    repo.submit("sync")
+    claimed = repo.claim("A", ttl_seconds=30.0)
+    assert claimed is not None
+
+    elapsed_holder: dict[str, float] = {}
+
+    def handler(run: JobRunContext) -> None:
+        start = time.perf_counter()
+        for _ in range(100_000):
+            run.check_lease()
+        elapsed_holder["elapsed"] = time.perf_counter() - start
+
+    finished = run_job(
+        conn,
+        repo,
+        events_mod.EventBus(),
+        claimed,
+        handler,
+        owner_id="A",
+        ttl_seconds=30.0,
+        resource=None,
+    )
+    assert finished.state is JobState.SUCCEEDED
+    assert elapsed_holder["elapsed"] < 1.0, (
+        f"check_lease() 10万回呼び出しに {elapsed_holder['elapsed']:.3f}秒かかった"
+        "(軽量であるべき確認処理が重くなっている)"
+    )
 
 
 def test_run_job_does_not_reraise_when_reraise_is_false(conn) -> None:
