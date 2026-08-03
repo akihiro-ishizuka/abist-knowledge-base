@@ -58,8 +58,24 @@ fixture には含めていない(3回の独立採取でランキング・スコ�
 
 旧システムには `test/*.test.js` が28ファイルある。**fixture ディレクトリは存在せず、
 すべてインライン定数**だったため、Task 1 がその一部を新リポジトリへ転記した。
-以下は28ファイル全件の状態。「未確認」は、いずれのタスク報告にも記載が無く、
-本ファイル作成時点で判断材料が無いことを意味する(採取しなかったと断定しているのではない)。
+
+**M1 の範囲は最初から28ファイル全部ではない。** M1 が fixture として採るのは
+(a) 純粋関数のビット互換ゴールデン(kernel)、(b) MCP wire契約、(c) 検索評価ベースライン、
+(d) 埋め込みゲート入力、(e) HTML変換のadvisory資料、の5種だけである
+(`design/plans/M1-fixture-capture.md` Task 1〜5 のスコープ)。旧テストの残りは、
+**プロセス起動・実HTTPサーバー・一時Gitリポジトリ・実ファイル書き込みを伴う統合的な
+振る舞い**を検証しており、これらは該当する後続マイルストーン(主にM3の収集・同期、
+M7の監査・可視化)が**シナリオそのものを新実装に対して再実装したpytestとして
+検証する対象であり、M1のfixture化(=旧コード実行結果をゴールデン値として保存する
+手法)にはそもそも馴染まない**。以下はこの前提のもとでの28ファイル全件の状態。
+「未確認」は、旧テスト本文を読んでもなお当該テストをどのマイルストーンが引き取るべきか
+断定できないことを意味する(採取漏れがあると断定しているのではない)。
+
+判断根拠: `design/plans/M0-foundation.md` の「Node→Pythonモジュール対応表」(各 `tools/*.js`
+がどの `src/abist_kb/` モジュール・どのマイルストーンに対応するか)と、旧リポジトリの
+該当テストファイル本文(`C:\Temp\multi-source-knowledge-base\test\*.test.js`、read-onlyで直接確認)。
+
+### M1範囲・fixture化済み(12ファイル)
 
 | 旧テストファイル | 状態 | 転記/採取先 | 理由 |
 |---|---|---|---|
@@ -70,31 +86,55 @@ fixture には含めていない(3回の独立採取でランキング・スコ�
 | `metadata-schema.test.js` | 転記済み | `kernel/metadata-schema.json`(68ケースの一部) | `classifyDocument`全シナリオ・列挙値9個等を転記・実行 |
 | `downloaders.test.js` | 部分転記 | `kernel/metadata-schema.json`(sanitize系) | `sanitizeFileName`/`sanitizeCategoryPath`は転記・実行(Windows予約名・255バイト切詰・日本語ケースを追加)。ただし「受入条件6: 月別フォルダが再生成されない」テストと「直接実行でなければmainが走らない」テスト(108-161行)は**意図的にスキップ**——これらは旧JSソースの正規表現スキャンであり、Node実行結果のゴールデン値ではないため |
 | `batch-config-store.test.js` | 部分転記 | `kernel/batch-config.json` | `formatConfig`/`loadBatchConfigsFresh`のロジックは転記・実行。旧テストの一時ディレクトリ利用テスト(save→load、一時ファイル残留無し、上書き保存)自体は**スキップ**(ファイルI/O挙動のテストでロジック自体の価値が薄いと判断)。ただしレビュー指摘を受け、serialize出力だけでなく save→load ラウンドトリップの合成ケース(空配列・ゼロ値・クォート付きキー)を別途追加している |
-| `b32doc-filter.test.js` | 対象外(意図的) | なし | Task 1 のブリーフ(Step 2/3)のリストに無いため転記対象外と判断された。ただし `b32doc-filter.js` のスコープ(`knowledge/B32doc`のみ)自体は Task 2 が `reference-index.sqlite` の実データ調査で独立に確認している(§4参照) |
 | `kb-download-mcp.test.js` | 転記せず・別方式で捕捉 | `mcp/kb-download/**` | インライン定数の転記ではなく、Task 3 が実サーバーへ `tools/call` を送信し生 JSON-RPC 応答を直接記録した(旧テストの assertion を読むより実行結果そのものを記録する方が正確という判断) |
 | `kb-search-mcp.test.js` | 転記せず・別方式で捕捉 | `mcp/kb-search/**` | 同上 |
 | `kb-visualize-mcp.test.js` | 転記せず・別方式で捕捉 | `mcp/kb-visualize/**` | 同上 |
 | `search-engine.test.js` | 転記せず・別方式で捕捉 | `eval/baseline.json` | インライン定数は転記していないが、Task 4 が `search-engine.js` の `search`/`keywordSearch` を実クエリ(`eval/queries.jsonl`)で直接実行し、ランキング・指標を記録した |
-| `find-duplicates.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `backfill-metadata.test.js` | 未確認 | — | いずれの報告にも記載なし(ただし `backfill-metadata.js` 自体の `defaultExclude` 挙動は Task 2 がデータ調査で独立に確認。§4参照) |
-| `check-contradictions.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `deprecation-notice.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `orphan-detection.test.js` | 未確認 | — | いずれの報告にも記載なし(ただし `embeddings` の孤立20行は Task 5 が独立に発見。§3参照) |
-| `scene-spec.test.js` | 未確認 | — | いずれの報告にも記載なし(`render_scene`のINVALID_SCENE_SPEC/SOURCE_HASH_MISMATCHはTask3が実行時エラーとして捕捉したが、このテストファイルからの転記ではない) |
-| `source-verifier.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `sync-esa.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `sync-git.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `sync-state.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `sync-web.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `verify-integrity.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `visualization-store.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `visualize-render.integration.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `visualize-runner.test.js` | 未確認 | — | いずれの報告にも記載なし |
-| `visualize-templates-guard.test.js` | 未確認 | — | いずれの報告にも記載なし |
 
-集計: 転記済み5 + 部分転記2 + 意図的対象外1 + 別方式で捕捉4 = **12ファイルの状態を報告から判定できた**。
-残り**16ファイルは未確認**(28ファイル中)。M2以降でこれらのテストが参照する関数を移植する際は、
-未確認のファイルを個別に読み、必要なら追加の capture スクリプトで採取すること。
+### M2範囲だが未fixture化(1ファイル) — 既知のギャップ
+
+| 旧テストファイル | 対応モジュール(M0-foundation.md 対応表) | 状態 | 引き継ぎメモ |
+|---|---|---|---|
+| `b32doc-filter.test.js` | `tools/lib/b32doc-filter.js` → `domain/b32doc_filter.py`(**M2**、他のkernelモジュールと同じビット互換階層) | fixture化されていない | Task 1 は「ブリーフのStep 2/3のリストに無い」ことを理由に転記対象外としたが、対応表を見る限り b32doc-filter.js は他のkernelモジュール(frontmatter/chunker等)と**同じM2のビット互換対象**であり、これは意図した後回しではなくM1の**取りこぼし**である可能性が高い。M2着手時に `capture-kernel.mjs` と同じ手法で `b32doc-filter.test.js` の転記+実行結果採取を行い、`kernel/b32doc-filter.json` を追加してからPython実装に着手すること。 |
+
+### M2範囲・DBスキーマ/CRUD統合テストのためfixture化不要(1ファイル)
+
+| 旧テストファイル | 対応モジュール | 状態 | 理由 |
+|---|---|---|---|
+| `sync-state.test.js` | `tools/lib/sync-state.js` → `infrastructure/db/sync_state_repo.py` + migration(**M2**) | fixture化していない(意図した設計) | 内容を確認すると、`MACHINE_FIELDS`列挙とテーブル列の対応・upsert/取得といった**実SQLiteに対するスキーマ・CRUD統合テスト**であり、決定的な入出力値をNode側で固定してPython側と比較する性質のものではない。M2は同じ検証を新スキーマに対するpytest(`tests/kernel/` or 専用DBテスト)として再実装すればよく、Node実行結果のゴールデン値は不要。 |
+
+### 後続マイルストーンの統合的振る舞い・fixture化ではなくシナリオ再実装で検証(14ファイル)
+
+いずれも実プロセス起動・実HTTPサーバー・一時Gitリポジトリ・実ファイルI/Oを使う統合テストであることを
+本文で確認済み。Python移植はこれらを**同じシナリオをpytestとして再実装**して検証する
+(旧コードの実行結果をゴールデンとして固定する必要はない)。
+
+| 旧テストファイル | 対応モジュール(M0-foundation.md 対応表) | 引き継ぐマイルストーン | 引き継ぎメモ(1行) |
+|---|---|---|---|
+| `sync-esa.test.js` | `download-article.js` → `infrastructure/sources/esa.py` | **M3** | `savePost`/`resolvePostPath`を実docsディレクトリ+一時sync-state.sqliteに対して実行する統合テスト。M3のesaアダプターは同じシナリオ(front matter生成・sync_policy判定・書込)をpytestで再実装して検証すること。 |
+| `sync-web.test.js` | `download-web.js` → `infrastructure/sources/web.py` | **M3** | 実HTTPサーバーを起動してETag/If-None-Matchの条件付きGET・304時のリンク再抽出を検証する統合テスト。M3のWebアダプターは同じ条件付きGET契約をhttpxベースでpytest化すること。 |
+| `sync-git.test.js` | `download-git.js` → `infrastructure/sources/git.py` | **M3** | 一時ディレクトリに実Gitリポジトリ(`git init`+commit)を作りshallow clone/fetch/差分コピーを検証する統合テスト。M3のGitアダプターは同じ「上流repoを都度作ってcloneさせる」統合テストをpytestで再実装すること。 |
+| `orphan-detection.test.js` | `tools/verify-integrity.js`(`findOrphanCandidates`/`resolveOrphansWithSource`) → M7監査 | **M7** | 実際には純粋関数(reader/fetcherを注入する形)で、I/Oは無い。M7実装時はkernel同様パラメトリックテスト化できる可能性があるので、統合テストとして再実装する前にfixture化(旧コード実行結果をゴールデンにする)を検討する価値がある。 |
+| `verify-integrity.test.js` | `tools/verify-integrity.js` → M7監査 `application/audit/integrity.py` | **M7** | 実一時ディレクトリにMarkdownを書き込み`runVerify`/`compareSourceUpdates`を実行する統合テスト。M7は同じ6状態判定シナリオをpytestで再実装すること。 |
+| `find-duplicates.test.js` | `tools/find-duplicates.js` → M7監査 `application/audit/duplicates.py` | **M7** | `findSameArticle`/`findIdentical`/`findNearDuplicates`は純粋関数(Float32Arrayベクトルを直接渡す)。統合というよりkernel寄りだが、対応表上はM7監査モジュールの一部として扱われている。 |
+| `check-contradictions.test.js` | `tools/check-contradictions.js` → M7監査 `application/audit/contradictions.py` | **M7** | `extractNumbers`/`detectConflict`等は純粋関数。M7が数値・否定・状態語の矛盾検出ロジックを移植する際の参照点。 |
+| `backfill-metadata.test.js` | `tools/backfill-metadata.js` → M7監査 `application/audit/backfill.py` | **M7** | 実Markdownファイルを一時docsディレクトリへ書き込み`runBackfill`/`collectMarkdownFiles`を実行する統合テスト。**この`defaultExclude`の挙動自体はTask 2が実データ調査で独立に確認済み(§4参照)**であり、M7の再実装時にその除外リストとテストのフィクスチャ(esa/Archived/web/参照コーパス/git由来の各パターン)を突き合わせること。 |
+| `scene-spec.test.js` | `tools/lib/scene-spec.js` → `domain/scene_spec.py` | **M7** | `validateSceneSpec`は純粋関数(SceneSpec 1.0のcross-field検証)。M7のSceneSpec検証実装時にkernel同様パラメトリックテスト化できる可能性がある。 |
+| `source-verifier.test.js` | `tools/lib/source-verifier.js` → `application/visualization/source_verifier.py` | **M7** | 実一時ファイルに対し`rangeHash`と組み合わせて`verifySources`を検証する統合テスト。M7は出典ハッシュ照合・metric即中断・statement系beat除去のシナリオをpytestで再実装すること。 |
+| `visualization-store.test.js` | `tools/lib/visualization-store.js` → `infrastructure/visualization/artifact_store.py` | **M7** | slug正規化・manifest構築・sha256計算を実一時ディレクトリに対して検証する統合テスト。M7のartifact_store実装時に同じシナリオを再実装すること。 |
+| `visualize-render.integration.test.js` | `tools/lib/visualize-runner.js`+`visualize-python.js` → M7可視化 | **M7** | `KB_VISUALIZE_IT=1`かつ`checkVisualizeDeps().ready`の二重ゲート付きの**実Manimレンダリング**統合テスト。M7のT7.3が明示する「Manim実行テストは明示フラグ時のみ」の対象そのもの。 |
+| `visualize-runner.test.js` | `tools/lib/visualize-runner.js` → `application/visualization/service.py` | **M7** | 偽Python(モック子プロセス)で`renderScene`のオーケストレーションを検証する統合テスト。M7は同じモック方式でジョブ制御・manifest生成をpytest化すること。 |
+| `visualize-templates-guard.test.js` | `tools/visualize/templates/*.py`(既存Python、**同梱移設**) | **M7** | Manimテンプレート(Python、変更せず移設)のソースを正規表現でスキャンするlintテスト(LaTeX/Tex不使用・Static系がself.play/self.waitを使わない等)。旧コード実行結果のゴールデンではなく、移設後のテンプレートに対して**同じ静的スキャンをそのまま再実行**すればよい。 |
+
+### 未確認(1ファイル)
+
+| 旧テストファイル | 状態 | 不明点 |
+|---|---|---|
+| `deprecation-notice.test.js` | 未確認 | `tools/deprecation-notice.js`(`chat`/`ui`コマンドへ非推奨警告をstderrに出しMCPへの移行を案内するCLIシム)を検証するが、この`deprecation-notice.js`自体が `design/plans/M0-foundation.md` のNode→Pythonモジュール対応表に**存在しない**(移植する91行の表にも「移植しない」リストの4ファイルにも無い)。案内先の`chat`/`ui`コマンド自体は新設計でネイティブに実装される(M6/M7)ため、この非推奨シムを新システムが再現すべきかどうか対応表からは判断できない。M9のカットオーバー計画者が旧CLIの`chat`/`ui`をどう扱うか(単純に廃止/移行案内を残す)を決める際にこの点を確認する必要がある。 |
+
+集計(28ファイル): M1でfixture化済み12 + M2範囲だが未fixture化(既知のギャップ)1 +
+M2範囲でDB統合テストのためfixture化不要1 + 後続マイルストーンの統合シナリオとして
+引き継ぐもの14(M3が3、M7が11) + 真に未確認1 = 28。
 
 ## 3. 既知のギャップ・逸脱・除外
 

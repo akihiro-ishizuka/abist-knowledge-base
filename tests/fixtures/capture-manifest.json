@@ -1,14 +1,14 @@
 {
   "capture_dates": {
     "capture": {
-      "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
-      "date": "2026-08-03T22:09:37+09:00",
-      "subject": "feat(m1): 埋め込みゲート素材・HTML変換ゴールデン・capture-manifestを採取"
+      "commit": "55f04b359eb0d768c5050d3edb5e7ee47302e007",
+      "date": "2026-08-03T22:20:53+09:00",
+      "subject": "docs(m1): fixture 由来記録を tests/fixtures/PROVENANCE.md へ恒久化"
     },
     "capture-manifest.json (this file)": {
-      "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
-      "date": "2026-08-03T22:09:37+09:00",
-      "subject": "feat(m1): 埋め込みゲート素材・HTML変換ゴールデン・capture-manifestを採取"
+      "commit": "55f04b359eb0d768c5050d3edb5e7ee47302e007",
+      "date": "2026-08-03T22:20:53+09:00",
+      "subject": "docs(m1): fixture 由来記録を tests/fixtures/PROVENANCE.md へ恒久化"
     },
     "embedding": {
       "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
@@ -41,9 +41,9 @@
       "subject": "feat(m1): 実データ層化サンプルを旧sync-state.sqliteから採取"
     },
     "root": {
-      "commit": "6277eab94a185d998c6c1a730f66eece84a5224a",
-      "date": "2026-08-03T17:20:26+09:00",
-      "subject": "feat(m1): カーネルゴールデン fixture を Node 版から採取"
+      "commit": "55f04b359eb0d768c5050d3edb5e7ee47302e007",
+      "date": "2026-08-03T22:20:53+09:00",
+      "subject": "docs(m1): fixture 由来記録を tests/fixtures/PROVENANCE.md へ恒久化"
     }
   },
   "categories": {
@@ -353,12 +353,12 @@
           "sha256": "11dce4ae76a450fa325a88133d4282cff549f31fe82312927b1e16b74be90ef0"
         },
         {
-          "bytes": 20802,
+          "bytes": 28346,
           "path": "PROVENANCE.md",
-          "sha256": "03f2a64f1ceec63d19a741b1f2f3c66e5454cf9904618be4c2ba6cd8ac96b9e6"
+          "sha256": "974d7180f11cafed1d0933a9004123df07ca75906389ce51762a2b49a7b524d3"
         }
       ],
-      "total_bytes": 20823
+      "total_bytes": 28367
     }
   },
   "exclusions_registry": [
