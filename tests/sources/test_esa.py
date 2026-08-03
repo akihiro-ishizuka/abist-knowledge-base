@@ -539,6 +539,53 @@ def test_category_rename_is_detected_as_orphan_and_pruned(
     assert documents.get(rel_path_of(post, sync_dirs)) is None
 
 
+def test_orphan_deletion_loop_stops_after_lease_is_lost(
+    documents: DocumentRepository, sync_dirs
+) -> None:
+    """取り残し(orphan)削除ループはリース確認を反復ごとに行う(carried-over fix)。
+
+    fix2 で `save_post` の書き込みループには `check_lease()` が入ったが、同じ
+    形の1件ずつの副作用ループである orphan 削除ループは対応漏れだった。削除は
+    書き込みより取り返しがつかないため、リースを奪われた後も削除を続けるのは
+    書き込みループの不具合より深刻。ここでは3件の取り残しのうち2件目の反復で
+    リースが奪われたと模して、3件目が削除されずに残ることを確認する。
+    """
+    runner = make_runner(documents, sync_dirs)
+    posts = [make_post(category="旧カテゴリ") for _ in range(3)]
+    for post in posts:
+        runner.save_post(post)
+    old_paths = [file_path_of(post, sync_dirs) for post in posts]
+    assert all(p.is_file() for p in old_paths)
+
+    moved = [{**post, "category": "新カテゴリ"} for post in posts]
+    for post in moved:
+        runner.save_post(post)
+
+    from abist_kb.domain.errors import AppError, ErrorCode
+
+    calls = 0
+
+    def lease_lost_on_second_item() -> None:
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            raise AppError(code=ErrorCode.CONFLICT, message="リースが奪われました")
+
+    with pytest.raises(AppError):
+        asyncio.run(
+            runner.detect_missing_posts(
+                all_posts=moved,
+                category_path=None,
+                full_sync_succeeded=True,
+                prune_orphans=True,
+                check_lease=lease_lost_on_second_item,
+            )
+        )
+
+    assert calls == 2, "2件目の反復でリース確認が行われなかった"
+    assert sum(p.is_file() for p in old_paths) >= 1, "リース喪失後も削除を続けた"
+
+
 def test_missing_below_threshold_does_not_mark_source_missing(
     documents: DocumentRepository, sync_dirs
 ) -> None:

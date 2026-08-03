@@ -524,11 +524,20 @@ class EsaSyncRunner:
         full_sync_succeeded: bool,
         prune_orphans: bool = False,
         fetch_post: Callable[[int], Awaitable[Any]] | None = None,
+        check_lease: Callable[[], None] | None = None,
     ) -> list[SyncItem]:
         """取得元一覧に無くなった文書/カテゴリ移動で取り残された文書を扱う。
 
         旧実装 `detectMissingPosts` の移植。一覧不在だけでは削除と判定しない
         (設計原則5)。`decide_missing_candidate` が3条件すべてを要求する。
+
+        `check_lease` は `save_post` の書き込みループ(`sync_service._sync_categories`)
+        と同じ契約: このループは取り残し(orphan)ファイルの実削除・欠落カウントの
+        DB更新という1件ずつの副作用を繰り返すため、次の副作用の前に毎回呼ぶ
+        (`JobRunContext.check_lease` の docstring 参照)。削除は書き込みより
+        取り返しがつかないため、この対応漏れは書き込みループの対応漏れより
+        深刻(レビュー指摘、fix2 で書き込みループのみ対応され本ループは
+        取り残されていた)。
         """
         expected_paths: dict[int, str] = {}
         for post in all_posts:
@@ -558,6 +567,10 @@ class EsaSyncRunner:
 
         results: list[SyncItem] = []
         for row in tracked:
+            # 次の副作用(取り残しの実削除・欠落カウントの更新)の前に毎回確認する
+            # (`JobRunContext.check_lease` の契約、fix2 の書き込みループと同じ理由)。
+            if check_lease is not None:
+                check_lease()
             post_number = row.get("post_number")
             path = row["path"]
 

@@ -31,6 +31,7 @@ from abist_kb.infrastructure.db.batches_repo import BatchRepository
 from abist_kb.infrastructure.db.documents_repo import DocumentRepository
 from abist_kb.infrastructure.db.sources_repo import SourceRepository
 from abist_kb.infrastructure.jobs.supervisor import JobRunContext
+from abist_kb.infrastructure.sources.base import with_docs_prefix
 from abist_kb.infrastructure.sources.esa import (
     DEFAULT_MISSING_THRESHOLD,
     EsaClient,
@@ -139,13 +140,6 @@ def write_sync_report(summary: SyncSummary, *, reports_dir: Path, label: str) ->
     return file_path
 
 
-def _with_docs_prefix(directory: str) -> str:
-    normalized = directory.replace("\\", "/").rstrip("/")
-    if normalized == "docs" or normalized.startswith("docs/"):
-        return normalized
-    return f"docs/{normalized}"
-
-
 class SyncService:
     """esa ソース・バッチの同期を実行する(設計書 §10.2)。"""
 
@@ -245,6 +239,7 @@ class SyncService:
                 full_sync_succeeded=True,
                 prune_orphans=prune_orphans,
                 fetch_post=client.get_post,
+                check_lease=check_lease,
             )
             for missing_item in missing_items:
                 record_sync_result(summary, missing_item)
@@ -372,7 +367,7 @@ class SyncService:
         categories = [item["target"] for item in batch["items"] if item.get("target")]
         source_id = self._resolve_batch_source_id(batch)
         source = self._require_esa_source(source_id)
-        output_dir = batch.get("output_dir") or _with_docs_prefix(source["output_dir"])
+        output_dir = batch.get("output_dir") or with_docs_prefix(source["output_dir"])
         source_for_sync = dict(source)
         source_for_sync["output_dir"] = output_dir
 
