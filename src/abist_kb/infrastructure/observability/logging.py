@@ -18,8 +18,21 @@ from abist_kb import identity
 
 _SECRET_NAME_SUFFIX = r"(?:TOKEN|KEY|SECRET|PASSWORD)"
 
+_NAME_PREFIX_MAX_LEN = 64
+"""環境変数名・JSON キー名の接頭辞に許す最大長(ReDoS 対策)。
+
+以前は `[A-Za-z0-9_]*`(無制限の `*`)を使っていたが、この文字クラスは直後に必須の
+リテラル `_` を要求する構造と重複していた(`_` はどちらにもマッチしうる)ため、
+TOKEN/KEY/SECRET/PASSWORD を含まない長いアンダースコア連結文字列
+(長い Windows パス・ドキュメントID列・base64url・幅広い JSON キー等、
+日常的なログ行に現れうるもの)に対して二次関数的なバックトラックが発生し、
+64,000文字の入力で実測 81.6 秒も応答が止まっていた。`{0,64}` のように上限を
+設けることで、各開始位置でのバックトラック量を定数に抑え、全体の計算量を
+線形に戻す(実測で 64,000 文字が 1 秒未満になることを確認済み)。
+"""
+
 _KEY_VALUE_RE = re.compile(
-    rf"(?P<name>[A-Za-z_][A-Za-z0-9_]*_{_SECRET_NAME_SUFFIX})"
+    rf"(?P<name>[A-Za-z_][A-Za-z0-9_]{{0,{_NAME_PREFIX_MAX_LEN}}}_{_SECRET_NAME_SUFFIX})"
     r"(?P<sep>\s*[:=]\s*)"
     r"(?P<value>\S+)",
     re.IGNORECASE,
@@ -33,10 +46,15 @@ _AUTHORIZATION_RE = re.compile(
 """`Authorization: <scheme> <value>` の value 部のみ。"""
 
 _COOKIE_RE = re.compile(
-    r"(?P<prefix>Cookie\s*:\s*)(?P<value>\S+)",
+    r"(?P<prefix>Cookie\s*:\s*)(?P<value>[^\r\n]+)",
     re.IGNORECASE,
 )
-"""`Cookie: <value>` の value 部のみ。"""
+"""`Cookie: <value>` の行末までを value とする。
+
+実際の Cookie ヘッダは `a=1; b=2; ...` のように複数ペアを持つのが普通で、
+以前の `\\S+`(最初の空白区切りトークンのみ)では2つ目以降のペアがログに
+残っていた。行末(次の改行の直前)まで丸ごとマスクすることで取りこぼしを防ぐ。
+"""
 
 _URL_CREDENTIAL_RE = re.compile(
     r"(?P<prefix>[A-Za-z][A-Za-z0-9+.\-]*://[^\s:/@]+:)(?P<password>[^@\s/]+)(?P<at_host>@)"
@@ -44,10 +62,19 @@ _URL_CREDENTIAL_RE = re.compile(
 """`scheme://user:pass@host` の pass 部のみ(scheme・user・host は保持)。"""
 
 _JSON_SECRET_RE = re.compile(
-    rf'(?P<key>"[A-Za-z0-9_]*{_SECRET_NAME_SUFFIX}")(?P<sep>\s*:\s*)"(?P<value>[^"]*)"',
+    rf'(?P<key>"[A-Za-z_][A-Za-z0-9_]{{0,{_NAME_PREFIX_MAX_LEN}}}_{_SECRET_NAME_SUFFIX}")'
+    r'(?P<sep>\s*:\s*)"(?P<value>[^"]*)"',
     re.IGNORECASE,
 )
-"""JSON の `"api_key": "..."` 系(キー名が *_key 等で終わるもの)の値部分のみ。"""
+"""JSON の `"api_key": "..."` 系(キー名が `_key` 等で終わるもの)の値部分のみ。
+
+`_KEY_VALUE_RE` と同様、suffix の直前に `_` を要求する語境界の制約を課している。
+これが無いと `monkey` `donkey` `jockey` のように「たまたま key 等で終わる」だけの
+無害な JSON キーの値まで `***` に潰してしまう(このツールは任意のユーザー/API の
+JSON をログへ通すため、正当な内容の無言破壊は診断の信頼性を損なう)。
+`{0,64}` の上限は `_KEY_VALUE_RE` と同じ ReDoS 対策(こちらは `"` に守られて
+致命的ではなかったが、偶然の産物であり設計とは言えないため揃えて対策する)。
+"""
 
 SECRET_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
     (_KEY_VALUE_RE, r"\g<name>\g<sep>***"),
@@ -76,18 +103,37 @@ def mask_secrets(text: str) -> str:
     return masked
 
 
+_TRACEBACK_FORMATTER = logging.Formatter()
+"""`formatException()` 専用に使う無地の `Formatter`。フォーマット文字列(`fmt`)は
+例外整形には関与しないため、ハンドラごとに異なる `Formatter` を持っていても
+ここで生成したものだけで十分。"""
+
+
 class SecretMaskingFilter(logging.Filter):
-    """ログレコードのメッセージから秘密情報を除去する `logging.Filter`。
+    """ログレコードのメッセージ・トレースバックから秘密情報を除去する `logging.Filter`。
 
     `record.getMessage()` で `%` 書式化を先に済ませてからマスクし、
     `record.args` を空タプルにして `record.msg` を再フォーマットさせない。
     (`LogRecord.getMessage()` は `self.args` が偽値のときは `%` 演算を行わないため、
     マスク後の文字列にたまたま `%` が含まれていても安全。)
+
+    `record.exc_info` がある場合(`logger.exception(...)` 等)は、それを整形した
+    トレースバック文字列もマスクして `record.exc_text` に書き込む。
+    `logging.Formatter.format()` は `record.exc_text` が既に設定されていれば
+    (`if not record.exc_text: record.exc_text = self.formatException(...)`)
+    自分の `formatException()` を呼ばずそれをそのまま使うため、ハンドラの
+    `Formatter` が独自の `formatException()` を持っていてもこのマスク済みキャッシュが
+    優先される。ここでマスクしないと、`wrap()` が `__cause__`/`details` に保持する
+    捕捉例外の生メッセージ(`AppError.to_dict()` が機械可読出力から意図的に
+    除外しているもの)が、`logger.exception(...)` の連鎖トレースバック経由で
+    生ログへそのまま漏れてしまう。
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
         record.msg = mask_secrets(record.getMessage())
         record.args = ()
+        if record.exc_info:
+            record.exc_text = mask_secrets(_TRACEBACK_FORMATTER.formatException(record.exc_info))
         return True
 
 

@@ -12,7 +12,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from abist_kb.domain.errors import ErrorCode, wrap
+from abist_kb.domain.errors import AppError, ErrorCode, ExitCode, wrap
 
 MIN_SQLITE_VERSION: tuple[int, int, int] = (3, 34, 0)
 
@@ -179,14 +179,61 @@ def check_sqlite_capabilities() -> CapabilityReport:
     )
 
 
+def is_lock_contention(exc: sqlite3.Error) -> bool:
+    """SQLite のロック競合(`SQLITE_BUSY` / `SQLITE_LOCKED` 系)を表す例外か判定する。
+
+    メッセージ文字列(`"database is locked"` 等、ロケールや将来の文言変更に弱い)
+    ではなく、Python 3.11 以降で全ての `sqlite3` 例外に付与される
+    `sqlite_errorname`(拡張結果コード名。例: `SQLITE_BUSY`, `SQLITE_BUSY_TIMEOUT`,
+    `SQLITE_LOCKED_SHAREDCACHE`)で判定する。本プロジェクトは Python 3.12 固定
+    (`pyproject.toml` の `requires-python`)のためこの属性は常に存在する。
+    """
+    name = getattr(exc, "sqlite_errorname", None) or ""
+    return name.startswith("SQLITE_BUSY") or name.startswith("SQLITE_LOCKED")
+
+
+def wrap_begin_immediate_failure(exc: sqlite3.Error) -> AppError:
+    """`BEGIN IMMEDIATE` の失敗を `AppError` へ正規化する。
+
+    ロック競合(他接続が同時に書込トランザクションを保持している)は日常的に
+    起こり得る運用状態であり、`sqlite3.OperationalError` を生で送出してはならない。
+    ジョブキューのワーカー・リソースリース取得のように、複数プロセスが同時に
+    `BEGIN IMMEDIATE` を試みる設計を M1 以降で前提にしているため、
+    `ErrorCode.CONFLICT` / `retryable=True` として呼び出し側が再試行を判断できる
+    形にする。ロック競合以外の失敗(稀だが起こり得る)は一般的な失敗として扱い、
+    再試行可能とは見なさない。
+    """
+    if is_lock_contention(exc):
+        return wrap(
+            exc,
+            code=ErrorCode.CONFLICT,
+            message="データベースが他の接続でロックされているため、処理を開始できません。",
+            hint="しばらく待ってから再試行してください。",
+            retryable=True,
+            exit_code=ExitCode.CONFLICT,
+        )
+    return wrap(
+        exc,
+        code=ErrorCode.FAILURE,
+        message="トランザクションを開始できませんでした。",
+    )
+
+
 @contextmanager
 def transaction(conn: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     """`BEGIN IMMEDIATE` で書込ロックを即座に取得する明示トランザクション。
 
     正常終了で `COMMIT`、例外発生で `ROLLBACK` してから再送出する。
     `AppError` を含むあらゆる例外で確実にロールバックするため `BaseException` を捕捉する。
+    `BEGIN IMMEDIATE` 自体はこの `try` の外側で発行すると、ロック競合時に生の
+    `sqlite3.OperationalError` がそのまま呼び出し側へ漏れてしまう(実測で確認済み)。
+    そのため `BEGIN IMMEDIATE` も専用の `try/except` で保護し、
+    `wrap_begin_immediate_failure` で正規化する。
     """
-    conn.execute("BEGIN IMMEDIATE")
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+    except sqlite3.Error as exc:
+        raise wrap_begin_immediate_failure(exc) from exc
     try:
         yield conn
     except BaseException:
@@ -201,6 +248,8 @@ __all__ = [
     "CapabilityReport",
     "check_sqlite_capabilities",
     "connect",
+    "is_lock_contention",
     "sqlite_version_tuple",
     "transaction",
+    "wrap_begin_immediate_failure",
 ]

@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from abist_kb.domain.errors import AppError, ErrorCode, wrap
+from abist_kb.infrastructure.db.connection import wrap_begin_immediate_failure
 
 _MIGRATION_FILENAME = re.compile(r"^(\d{4})_(.+)\.sql$")
 
@@ -75,8 +76,11 @@ def current_version(conn: sqlite3.Connection) -> int:
     return int(value) if value is not None else 0
 
 
-def _apply_one(conn: sqlite3.Connection, migration: Migration) -> None:
+def _apply_one(conn: sqlite3.Connection, migration: Migration) -> bool:
     """1つのマイグレーションを `BEGIN IMMEDIATE` 〜 `COMMIT` の1トランザクションで適用する。
+
+    実際に適用した場合は `True`、他の接続が同時にブートストラップして
+    既に適用済みだったため何もしなかった場合は `False` を返す。
 
     `sqlite3` の `executescript()` は呼び出し前に暗黙の `COMMIT` を発行してしまい、
     ここで開始した `BEGIN IMMEDIATE` を台無しにする(未定義動作の温床になる)。
@@ -85,14 +89,31 @@ def _apply_one(conn: sqlite3.Connection, migration: Migration) -> None:
     途中まで実行された文の効果は残らない。
     `sqlite3.Error` 以外の例外(バグ等)でもトランザクションを開いたままにしないよう
     `BaseException` を捕捉してロールバックしてから再送出する。
+
+    呼び出し順序に依存しないよう、このスコープでも `schema_migrations` の存在を
+    保証する(呼び出し元の `apply_migrations` は `current_version` 経由で既に
+    保証しているが、`_apply_one` を直接呼ぶ将来の再配線でも安全にする)。
     """
+    _ensure_schema_migrations_table(conn)
     statements = (
         list(migration.sql)
         if isinstance(migration.sql, tuple)
         else _split_sql_statements(migration.sql)
     )
-    conn.execute("BEGIN IMMEDIATE")
     try:
+        conn.execute("BEGIN IMMEDIATE")
+    except sqlite3.Error as exc:
+        raise wrap_begin_immediate_failure(exc) from exc
+    try:
+        # ロックを取得した直後に改めてバージョンを確認する。呼び出し元
+        # `apply_migrations` が読んだバージョンは、ロック待ちの間に他の接続が
+        # 同時にブートストラップして古くなっている可能性がある
+        # (Web/TUI/CLI/MCP を同時起動すると各エントリポイントの
+        # WorkerSupervisor が未初期化DBへ同時にマイグレーションを試みうるため、
+        # これは通常運用であり、"table already exists" のようなエラーにしてはならない)。
+        if migration.version <= current_version(conn):
+            conn.execute("ROLLBACK")
+            return False
         for statement in statements:
             conn.execute(statement)
         conn.execute(
@@ -114,6 +135,7 @@ def _apply_one(conn: sqlite3.Connection, migration: Migration) -> None:
         raise
     else:
         conn.execute("COMMIT")
+        return True
 
 
 def apply_migrations(conn: sqlite3.Connection, migrations: Sequence[Migration]) -> list[int]:
@@ -146,8 +168,11 @@ def apply_migrations(conn: sqlite3.Connection, migrations: Sequence[Migration]) 
     pending = sorted((m for m in migrations if m.version > applied), key=lambda m: m.version)
     newly_applied: list[int] = []
     for migration in pending:
-        _apply_one(conn, migration)
-        newly_applied.append(migration.version)
+        # `_apply_one` はロック取得後に改めてバージョンを再確認し、他の接続が
+        # 同時にブートストラップして既に適用済みなら `False` を返す。その場合は
+        # このプロセスが適用したわけではないので `newly_applied` に含めない。
+        if _apply_one(conn, migration):
+            newly_applied.append(migration.version)
     return newly_applied
 
 

@@ -1,5 +1,6 @@
 import io
 import logging
+import time
 
 import pytest
 
@@ -83,5 +84,90 @@ def test_configure_logging_is_idempotent_and_does_not_duplicate_handlers():
 def test_configure_logging_never_writes_to_stdout(capsys):
     configure_logging(level="DEBUG")
     get_logger("abist_kb.test").error("エラーです")
+    captured = capsys.readouterr()
+    assert captured.out == ""
+
+
+# 以下はコードレビュー(CRITICAL 1 / CRITICAL 2 / IMPORTANT 4 / IMPORTANT 6)で
+# 指摘された不具合の回帰テスト。
+
+
+def test_mask_secrets_handles_long_underscore_runs_quickly():
+    """CRITICAL 1 の回帰テスト。
+
+    `_KEY_VALUE_RE` の `[A-Za-z0-9_]*` が、直後の必須リテラル `_` と文字クラスとして
+    重複していたため、TOKEN/KEY/SECRET/PASSWORD を含まない長いアンダースコア連結文字列
+    (長いパス・ドキュメントID列・base64url 等、日常的なログ行に現れうる)に対して
+    二次関数的なバックトラックが発生し、数秒〜数十秒単位で応答が止まっていた。
+    修正後は長さに対してほぼ線形になるはずなので、寛容な上限(1.0秒)で
+    「秒〜分単位に逆戻りしていないか」を検知する(マイクロベンチマークが目的ではない)。
+    """
+    text = "a_" * 32000  # 64,000 文字、秘密情報のキーワードは一切含まない
+    start = time.perf_counter()
+    mask_secrets(text)
+    elapsed = time.perf_counter() - start
+    assert elapsed < 1.0, f"mask_secrets が遅すぎます(elapsed={elapsed:.2f}s)"
+
+
+def test_mask_secrets_cookie_masks_to_end_of_line_with_multiple_pairs():
+    """IMPORTANT 4 の回帰テスト。
+
+    `_COOKIE_RE` の value 部が `\\S+`(最初の空白区切りトークンのみ)だったため、
+    実際の Cookie ヘッダで一般的な複数ペア(`a=1; b=2; ...`)のうち最初の1つしか
+    マスクされず、2つ目以降がログに残っていた。
+    """
+    masked = mask_secrets("Cookie: sessionid=abc123; csrftoken=def456")
+    assert "abc123" not in masked
+    assert "def456" not in masked
+    assert "***" in masked
+
+
+def test_mask_secrets_json_key_word_boundary_masks_access_token():
+    """IMPORTANT 6 の回帰テスト(陽性ケース)。
+
+    `_KEY_VALUE_RE` と同じ「suffix の直前は `_` でなければならない」という
+    語境界の制約を `_JSON_SECRET_RE` にも適用してよいことを確認する
+    (`access_token` のような正当な名前は引き続きマスクされる)。
+    """
+    masked = mask_secrets('{"access_token": "abc123"}')
+    assert "abc123" not in masked
+    assert "***" in masked
+
+
+@pytest.mark.parametrize("innocent_key", ["monkey", "donkey", "jockey", "turkey_count"])
+def test_mask_secrets_json_key_word_boundary_leaves_innocent_keys_alone(innocent_key):
+    """IMPORTANT 6 の回帰テスト(陰性ケース)。
+
+    `_JSON_SECRET_RE` が語境界を無視していたため、`key`/`token`等の文字列で
+    「たまたま終わる」だけの無害な JSON キー(`monkey`, `donkey`, `jockey`,
+    `turkey_count` 等)の値まで `***` に潰されていた。このツールは任意のユーザー/API
+    の JSON をログへ通すため、正当な内容を無言で破壊すると診断が信頼できなくなる。
+    """
+    text = f'{{"{innocent_key}": "not a secret at all"}}'
+    assert mask_secrets(text) == text
+
+
+def test_configure_logging_masks_exception_traceback(capsys):
+    """CRITICAL 2 の回帰テスト。
+
+    `SecretMaskingFilter.filter()` は `record.msg`/`record.args` だけを書き換え、
+    `record.exc_info` には触れていなかった。`logging.Formatter` はフィルタ適用後に
+    トレースバックを整形して追記するため、`logger.exception(...)` で記録された
+    例外メッセージ中の秘密情報がマスクされずにそのまま出力されていた。
+    `wrap()` は捕捉した sqlite3 例外の生メッセージを `__cause__`/`details` に
+    保持する設計(`AppError.to_dict()` はそれを機械可読出力から除外する)であり、
+    `logger.exception(...)` でその連鎖トレースバックを出力する経路がこの保護を
+    台無しにしていた。
+    """
+    stream = io.StringIO()
+    configure_logging(level="DEBUG", stream=stream)
+    logger = get_logger("abist_kb.test")
+    try:
+        raise RuntimeError("failed to connect using DB_PASSWORD=supersecretvalue at somehost")
+    except RuntimeError:
+        logger.exception("unexpected failure while connecting")
+    out = stream.getvalue()
+    assert "supersecretvalue" not in out
+    assert "***" in out
     captured = capsys.readouterr()
     assert captured.out == ""
