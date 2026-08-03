@@ -1,21 +1,19 @@
 {
   "capture_dates": {
     "capture": {
-      "commit": "0d9088fbe553dde10c47c8051a64669876da7282",
-      "date": "2026-08-03T21:42:19+09:00",
-      "subject": "feat(m1): 検索評価ベースラインをbm25_raw/hybridの2方式で採取"
+      "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
+      "date": "2026-08-03T22:09:37+09:00",
+      "subject": "feat(m1): 埋め込みゲート素材・HTML変換ゴールデン・capture-manifestを採取"
     },
     "capture-manifest.json (this file)": {
-      "commit": null,
-      "date": null,
-      "note": "このパスに対するコミットがまだ無い(manifest生成時点で未コミット。本タスクの成果物である可能性が高い)",
-      "subject": null
+      "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
+      "date": "2026-08-03T22:09:37+09:00",
+      "subject": "feat(m1): 埋め込みゲート素材・HTML変換ゴールデン・capture-manifestを採取"
     },
     "embedding": {
-      "commit": null,
-      "date": null,
-      "note": "このカテゴリの全ファイルがまだ未コミット(manifest生成時点)",
-      "subject": null
+      "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
+      "date": "2026-08-03T22:09:37+09:00",
+      "subject": "feat(m1): 埋め込みゲート素材・HTML変換ゴールデン・capture-manifestを採取"
     },
     "eval": {
       "commit": "0d9088fbe553dde10c47c8051a64669876da7282",
@@ -23,10 +21,9 @@
       "subject": "feat(m1): 検索評価ベースラインをbm25_raw/hybridの2方式で採取"
     },
     "html": {
-      "commit": null,
-      "date": null,
-      "note": "このカテゴリの全ファイルがまだ未コミット(manifest生成時点)",
-      "subject": null
+      "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
+      "date": "2026-08-03T22:09:37+09:00",
+      "subject": "feat(m1): 埋め込みゲート素材・HTML変換ゴールデン・capture-manifestを採取"
     },
     "kernel": {
       "commit": "d4f0e41f463c37501a8049cf5734597b1674164e",
@@ -54,9 +51,9 @@
       "file_count": 10,
       "files": [
         {
-          "bytes": 14649,
+          "bytes": 15017,
           "path": "capture/README.md",
-          "sha256": "b16d2eccded867f1b2a872ece6b66d9bd9efd9e7f7f297efb980a804f3ba48f4"
+          "sha256": "01a81316fdee242810f0b19f6015870806fdb4ee8179363e2515ff2c37104a0a"
         },
         {
           "bytes": 9546,
@@ -104,7 +101,7 @@
           "sha256": "0e93d29880902ed6bf4853f753b8ab63c5f018dd1ac97d22ff68684fbe18eb36"
         }
       ],
-      "total_bytes": 183270
+      "total_bytes": 183638
     },
     "embedding": {
       "file_count": 1,
@@ -348,15 +345,20 @@
       "total_bytes": 1859439
     },
     "root": {
-      "file_count": 1,
+      "file_count": 2,
       "files": [
         {
           "bytes": 21,
           "path": ".gitattributes",
           "sha256": "11dce4ae76a450fa325a88133d4282cff549f31fe82312927b1e16b74be90ef0"
+        },
+        {
+          "bytes": 20802,
+          "path": "PROVENANCE.md",
+          "sha256": "03f2a64f1ceec63d19a741b1f2f3c66e5454cf9904618be4c2ba6cd8ac96b9e6"
         }
       ],
-      "total_bytes": 21
+      "total_bytes": 20823
     }
   },
   "exclusions_registry": [

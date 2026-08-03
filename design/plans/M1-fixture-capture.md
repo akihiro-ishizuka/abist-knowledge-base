@@ -378,3 +378,7 @@ Run: `uv run pytest tests/fixtures_check -v` → PASS
 ## 次のマイルストーン
 
 M1 完了後は **M2(ビット互換カーネル移植)**。M1 のゴールデンを読むパラメトリックテストを先に書き、全件一致するまで実装する。M2 のゲートを満たさないうちは M3 以降に着手しない。
+
+## fixture 由来の恒久記録
+
+各 fixture カテゴリの契約(ビット互換 / advisory)、旧テスト28ファイルへの転記カバレッジ、既知のギャップ・除外、旧システムのデータ層に関する訂正事実、read-only 規律の教訓は [`tests/fixtures/PROVENANCE.md`](../../tests/fixtures/PROVENANCE.md) に記録した(このタスクの `.superpowers/sdd/` 配下の作業ログは gitignore 対象でマイルストーン完了後に削除されるため)。
