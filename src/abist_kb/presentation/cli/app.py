@@ -34,6 +34,7 @@ from abist_kb.presentation.cli.doctor_cmd import doctor
 from abist_kb.presentation.cli.document_cmd import document_app
 from abist_kb.presentation.cli.jobs_cmd import jobs_app
 from abist_kb.presentation.cli.source_cmd import source_app
+from abist_kb.presentation.cli.sync_cmd import sync_app
 from abist_kb.presentation.cli.worker_cmd import worker_app
 from abist_kb.presentation.console.output import (
     ColorMode,
@@ -60,6 +61,7 @@ app.add_typer(jobs_app, name="jobs")
 app.add_typer(worker_app, name="worker")
 app.add_typer(source_app, name="source")
 app.add_typer(batch_app, name="batch")
+app.add_typer(sync_app, name="sync")
 app.add_typer(document_app, name="document")
 app.command("doctor")(doctor)
 
