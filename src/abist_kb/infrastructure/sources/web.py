@@ -95,8 +95,56 @@ DEFAULT_MAX_PAGES = 5_000
 DEFAULT_MAX_SIZE_BYTES = 5_000_000  # 1ページあたり5MB
 DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_CONCURRENCY = 5
+#: 旧実装 `download-web.js` の `DEFAULT_DELAY`(:24, リクエスト間の待機時間)。
+#: 旧実装はワーカーごとの取得後ポーズ(`concurrency` 個の並行ワーカーがそれぞれ
+#: 独立に待つ)だったため、全体としては1ホストへ「最短で delay/concurrency 間隔」の
+#: リクエストが飛びうる緩い節流だった。ここでは `HostRateLimiter` で
+#: 「同一ホストへのリクエスト *開始* 間隔は必ず delay 秒以上空ける」という、
+#: 並行数に依存しない厳密な下限を保証する(第三者サイトへの配慮という設計意図を
+#: 並行モデルの都合で弱めない)。既定は0(無効)で、既存呼び出し元の挙動を変えない
+#: (実際の値は `batch_items.options.delay` から `application.sync_service` が渡す)。
+DEFAULT_DELAY_SECONDS = 0.0
 
 _USER_AGENT = "Mozilla/5.0 (compatible; abist-kb-web-sync/1.0)"
+
+
+class HostRateLimiter:
+    """同一ホストへのリクエスト開始間隔を最低 `delay_seconds` 秒空ける最小間隔強制。
+
+    ホストをまたいでは直列化しない(`asyncio.gather` によるページ単位の並行取得と
+    共存させるため、ホストごとに独立した状態を持つ)。`delay_seconds <= 0` なら
+    完全に no-op(既存の無制限クロールの挙動を変えない)。
+    """
+
+    def __init__(self, delay_seconds: float = DEFAULT_DELAY_SECONDS) -> None:
+        self._delay_seconds = max(0.0, delay_seconds)
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._next_available_at: dict[str, float] = {}
+
+    def _lock_for(self, host: str) -> asyncio.Lock:
+        lock = self._locks.get(host)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._locks[host] = lock
+        return lock
+
+    async def wait(self, host: str) -> None:
+        """次のリクエストを開始してよくなるまで待つ。呼び出し元が実際にリクエストを
+        開始する直前に呼ぶこと(このメソッドの戻り値が「今すぐ開始してよい」の合図)。
+        """
+        if self._delay_seconds <= 0:
+            return
+        # ホストごとの lock で「待ち時間の計算」と「次回予約」をアトミックにする。
+        # これが無いと、同じホストへ同時に到着した複数の待機者が同じ
+        # `next_available_at` を読んで両方とも「待たなくてよい」と誤判定しうる。
+        async with self._lock_for(host):
+            loop = asyncio.get_event_loop()
+            now = loop.time()
+            next_at = self._next_available_at.get(host, 0.0)
+            if now < next_at:
+                await asyncio.sleep(next_at - now)
+                now = loop.time()
+            self._next_available_at[host] = now + self._delay_seconds
 
 
 def _default_warn(message: str) -> None:
@@ -329,6 +377,7 @@ class WebSyncRunner:
         max_pages: int = DEFAULT_MAX_PAGES,
         max_size_bytes: int = DEFAULT_MAX_SIZE_BYTES,
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+        delay_seconds: float = DEFAULT_DELAY_SECONDS,
         warn: WarnFn = _default_warn,
     ) -> None:
         self._documents = documents
@@ -344,6 +393,7 @@ class WebSyncRunner:
         self._max_size_bytes = max_size_bytes
         self._timeout_seconds = timeout_seconds
         self._warn = warn
+        self._rate_limiter = HostRateLimiter(delay_seconds)
 
     # -- DB アクセス(失敗してもダウンロードを止めない契約、esa と同じ) ----------
 
@@ -393,6 +443,12 @@ class WebSyncRunner:
         last_modified = record.get("last_modified") if record else None
         if self._force or existing is None:
             etag = last_modified = None
+
+        # 実際にリクエストを発火する直前で同一ホストへの最短間隔を強制する
+        # (`HostRateLimiter` の docstring 参照。並行取得(`crawl`の`asyncio.gather`)と
+        # 共存させるため、ここでホストごとに待つだけでクロール全体を直列化しない)。
+        host = urlparse(url).hostname or ""
+        await self._rate_limiter.wait(host)
 
         result = await client.fetch(
             url, etag=etag, last_modified=last_modified, max_size_bytes=self._max_size_bytes
@@ -661,11 +717,13 @@ class WebSyncRunner:
 
 __all__ = [
     "DEFAULT_CONCURRENCY",
+    "DEFAULT_DELAY_SECONDS",
     "DEFAULT_MAX_DEPTH",
     "DEFAULT_MAX_PAGES",
     "DEFAULT_MAX_SIZE_BYTES",
     "DEFAULT_TIMEOUT_SECONDS",
     "CrawlResult",
+    "HostRateLimiter",
     "SyncItem",
     "WebClient",
     "WebFetchResult",

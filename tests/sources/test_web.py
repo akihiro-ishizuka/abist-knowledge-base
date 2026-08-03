@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import threading
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -22,6 +23,7 @@ from abist_kb.domain.sync_policy import SyncAction, SyncStatus
 from abist_kb.infrastructure.db.documents_repo import DocumentRepository
 from abist_kb.infrastructure.sources.html_to_md import extract_links_from_markdown
 from abist_kb.infrastructure.sources.web import (
+    HostRateLimiter,
     SyncItem,
     WebClient,
     WebSyncRunner,
@@ -79,7 +81,9 @@ class _Handler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:  # noqa: N802
         state = self.server.state
-        state.requests.append({"path": self.path, "headers": dict(self.headers)})
+        state.requests.append(
+            {"path": self.path, "headers": dict(self.headers), "time": time.monotonic()}
+        )
 
         if self.path not in ("/", "/index.html", *state.links.keys()):
             self.send_response(404)
@@ -428,6 +432,87 @@ def test_crawl_enforces_max_size_bytes(
     assert len(result.items) == 1
     assert result.items[0].action == str(SyncAction.ERROR)
     assert "サイズ上限" in result.items[0].reason
+
+
+# ---------------------------------------------------------------------------
+# delay 強制(carried-over fix): 旧 `download-web.js --delay` は Python 側では
+# `batch_items.options.delay` として運ばれるだけで、どこも消費していなかった。
+# `HostRateLimiter` が同一ホストへのリクエスト *開始* 間隔を強制する。
+# ---------------------------------------------------------------------------
+
+
+def test_host_rate_limiter_spaces_out_requests_to_same_host() -> None:
+    """同一ホストへの `wait()` 呼び出しは並行に呼んでも delay 秒以上空く。"""
+    limiter = HostRateLimiter(delay_seconds=0.05)
+
+    async def _run() -> list[float]:
+        timestamps: list[float] = []
+
+        async def _one() -> None:
+            await limiter.wait("example.com")
+            timestamps.append(time.monotonic())
+
+        await asyncio.gather(*(_one() for _ in range(4)))
+        return sorted(timestamps)
+
+    times = asyncio.run(_run())
+    gaps = [b - a for a, b in zip(times, times[1:])]  # noqa: B905 - pairwise, lengths differ by design
+    assert all(gap >= 0.045 for gap in gaps), f"delay未満の間隔があった: {gaps}"
+
+
+def test_host_rate_limiter_does_not_serialize_across_hosts() -> None:
+    """異なるホスト宛の待機はお互いをブロックしない(クロール全体を直列化しない)。"""
+    limiter = HostRateLimiter(delay_seconds=1.0)
+
+    async def _run() -> float:
+        start = time.monotonic()
+        await asyncio.gather(limiter.wait("a.example.com"), limiter.wait("b.example.com"))
+        return time.monotonic() - start
+
+    elapsed = asyncio.run(_run())
+    assert elapsed < 0.5, "別ホスト宛のwaitが直列化された"
+
+
+def test_host_rate_limiter_disabled_by_default_is_noop() -> None:
+    """`delay_seconds=0`(既定)は待たない。"""
+    limiter = HostRateLimiter()
+
+    async def _run() -> float:
+        start = time.monotonic()
+        for _ in range(50):
+            await limiter.wait("example.com")
+        return time.monotonic() - start
+
+    assert asyncio.run(_run()) < 0.2
+
+
+def test_crawl_enforces_delay_between_requests_to_same_host(
+    documents: DocumentRepository, sync_dirs, web_server: WebPageServer
+) -> None:
+    """`delay_seconds` を指定したクロールは、同一ホストへの各取得開始が
+    少なくとも delay 秒空く(並行取得(concurrency)と共存させる、carried-over fix)。"""
+    base = web_server.base_url
+    web_server.state.body = f'<a href="{base}/a">a</a><a href="{base}/b">b</a>'
+    web_server.state.links = {"/a": "ページA", "/b": "ページB"}
+    root_dir, docs_dir, output_dir = sync_dirs
+    runner = WebSyncRunner(
+        documents=documents,
+        root_dir=root_dir,
+        docs_dir=docs_dir,
+        output_dir=output_dir,
+        base_domain=base,
+        max_depth=1,
+        max_pages=10,
+        delay_seconds=0.1,
+    )
+
+    asyncio.run(runner.crawl(base + "/", concurrency=3))
+
+    request_times = [r["time"] for r in web_server.state.requests]
+    assert len(request_times) >= 3
+    ordered = sorted(request_times)
+    gaps = [b - a for a, b in zip(ordered, ordered[1:])]  # noqa: B905 - pairwise, lengths differ by design
+    assert all(gap >= 0.09 for gap in gaps), f"delay未満の間隔でリクエストされた: {gaps}"
 
 
 # ---------------------------------------------------------------------------

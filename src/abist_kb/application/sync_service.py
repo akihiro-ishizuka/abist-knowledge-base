@@ -490,6 +490,10 @@ class SyncService:
                     timeout_seconds=float(
                         options.get("timeout_seconds", web_module.DEFAULT_TIMEOUT_SECONDS)
                     ),
+                    # 旧 `download-web.js` の `--delay`(ミリ秒)相当。batch-config
+                    # インポート由来の `options.delay` をここで初めて消費する
+                    # (これまでは `batch_service.py` が詰めるだけで誰も読んでいなかった)。
+                    delay_seconds=float(options.get("delay", 0)) / 1000.0,
                 )
                 result = await runner.crawl(
                     url,
