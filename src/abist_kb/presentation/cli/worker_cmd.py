@@ -12,8 +12,8 @@ from typing import Annotated
 
 import typer
 
+from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.infrastructure.jobs import leases
-from abist_kb.infrastructure.jobs.db import open_jobs_db
 from abist_kb.infrastructure.jobs.supervisor import WorkerSupervisor
 from abist_kb.presentation.cli.context import AppTyper, get_context
 from abist_kb.presentation.cli.jobs_cmd import BUILTIN_HANDLERS
@@ -32,7 +32,7 @@ def worker_run(
 ) -> None:
     """Supervisor を起動する。既定は常駐(Ctrl+C で終了)、`--once` は1周のみ。"""
     cli_ctx = get_context(ctx)
-    conn = open_jobs_db(cli_ctx.settings.app_db_path)
+    conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
         supervisor = WorkerSupervisor(conn, owner_id=str(uuid.uuid4()), handlers=BUILTIN_HANDLERS)
         if once:
@@ -56,7 +56,7 @@ def worker_run(
 def worker_status(ctx: typer.Context) -> None:
     """現在のリーダー(worker_leases)を表示する。"""
     cli_ctx = get_context(ctx)
-    conn = open_jobs_db(cli_ctx.settings.app_db_path)
+    conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
         lease = leases.current_worker_lease(conn)
         if lease is None:

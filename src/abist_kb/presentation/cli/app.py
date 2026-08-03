@@ -21,6 +21,7 @@ from abist_kb import identity
 from abist_kb.config import load_settings
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode, wrap
 from abist_kb.infrastructure.observability.logging import configure_logging
+from abist_kb.presentation.cli.batch_cmd import batch_app
 from abist_kb.presentation.cli.config_cmd import config_app
 from abist_kb.presentation.cli.context import (
     UNEXPECTED_ERROR_HINT,
@@ -30,7 +31,9 @@ from abist_kb.presentation.cli.context import (
     fail,
 )
 from abist_kb.presentation.cli.doctor_cmd import doctor
+from abist_kb.presentation.cli.document_cmd import document_app
 from abist_kb.presentation.cli.jobs_cmd import jobs_app
+from abist_kb.presentation.cli.source_cmd import source_app
 from abist_kb.presentation.cli.worker_cmd import worker_app
 from abist_kb.presentation.console.output import (
     ColorMode,
@@ -55,6 +58,9 @@ app = AppTyper(
 app.add_typer(config_app, name="config")
 app.add_typer(jobs_app, name="jobs")
 app.add_typer(worker_app, name="worker")
+app.add_typer(source_app, name="source")
+app.add_typer(batch_app, name="batch")
+app.add_typer(document_app, name="document")
 app.command("doctor")(doctor)
 
 

@@ -20,7 +20,7 @@ import typer
 
 from abist_kb.application.job_service import JobService, ResourceRequirement
 from abist_kb.domain.job import Job, JobState, ProgressEvent, Severity
-from abist_kb.infrastructure.jobs.db import open_jobs_db
+from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.infrastructure.jobs.supervisor import JobHandler, JobRunContext
 from abist_kb.presentation.cli.context import AppTyper, get_context
 from abist_kb.presentation.console.presenter import Presenter
@@ -38,7 +38,11 @@ BUILTIN_RESOURCE_FOR_KIND: dict[str, ResourceRequirement] = {}
 
 
 def _build_service(settings: Any) -> tuple[JobService, Any]:
-    conn = open_jobs_db(settings.app_db_path)
+    # `open_jobs_db` ではなく `open_app_db` を使う(`infrastructure/db/schema.py`
+    # のモジュール docstring 参照: 同じ app.sqlite を sources/batches/documents と
+    # 共有するため、単独の版一覧でブートストラップすると呼び出し順序によっては
+    # `MIGRATION_FAILED` になる)。
+    conn = open_app_db(settings.app_db_path)
     service = JobService(
         conn,
         owner_id=str(uuid.uuid4()),
