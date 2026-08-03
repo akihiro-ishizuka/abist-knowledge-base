@@ -51,6 +51,12 @@ def test_parse_frontmatter_matches_fixture(case: dict[str, Any]) -> None:
     assert result.eol == expected["eol"]
     assert result.data == expected["data"]
     assert list(result.keys) == expected["keys"]
+    # `sorted()` を使う理由: 採取スクリプト(capture-kernel.mjs)自体が
+    # `[...fm.blockKeys].sort()` で書き出しており、fixture の `blockKeys` は
+    # そもそも出現順を保持していない(決定的な diff のためにソート済み)。
+    # そのため fixture との比較ではソート済み同士を比べるしかない。
+    # Python 側の出現順保持そのものは fixture に依存しない
+    # `test_block_keys_preserve_first_occurrence_order`(下記)で別途検証する。
     assert sorted(result.block_keys) == expected["blockKeys"]
     assert result.body == b64d(expected["body_b64"])
     assert result.raw == b64d(expected["raw_b64"])
@@ -141,8 +147,14 @@ def test_serialize_scalar_matches_fixture(case: dict[str, Any]) -> None:
 # front matter有無)テキストに対して成り立つべき3つの不変条件。
 # ---------------------------------------------------------------------------
 
+# レビュー指摘(Minor): 以前は本文アルファベットから `\r`/`\n` を除外していたため、
+# 本文が常に単一行になり、モジュール docstring が明記する esa の実態
+# (front matter は LF・本文は CRLF の混在)を Hypothesis が一度も生成できな
+# かった。`\r`/`\n` を許可することで、本文自体が複数行・CRLF/LF混在になる
+# ケースも生成対象に含める(BOM と `-` 開始は依然として除外——BOMは `bom`
+# パラメータで別途制御し、`-` 開始は偶発的な `---` 区切り誤認を避けるため)。
 _body_text = st.text(
-    alphabet=st.characters(blacklist_categories=("Cs",), blacklist_characters="\r\n﻿-"),
+    alphabet=st.characters(blacklist_categories=("Cs",), blacklist_characters="﻿-"),
     max_size=30,
 )
 
@@ -181,6 +193,66 @@ def test_property_editing_frontmatter_leaves_hash_body_unchanged(text: str, extr
     before = hash_body(text)
     updated_text = set_frontmatter_values(text, {"injected_prop_key": extra}).text
     assert hash_body(updated_text) == before
+
+
+# ---------------------------------------------------------------------------
+# レビュー指摘の回帰テスト(fixture では拾えない・手書きケース)。
+# ---------------------------------------------------------------------------
+
+
+def test_block_keys_preserve_first_occurrence_order() -> None:
+    """`block_keys` は JS の `Set`(挿入順を保持し、初出位置を維持する)と同じ順序で
+    出現する。fixture の `blockKeys` はソート済みで記録されているため
+    (`capture-kernel.mjs` が `.sort()` して書き出す)、この順序保持そのものは
+    fixture では検証できない。ここで合成ケースで直接固定する。
+    """
+    result = parse_frontmatter("---\nz: |\n  block\na: |\n  block\nm: |\n  block\n---\n本文\n")
+    assert list(result.block_keys) == ["z", "a", "m"]
+
+
+def test_i2_fullwidth_digits_do_not_parse_as_numbers() -> None:
+    """I2: Python の `\\d` は全角数字にもマッチするが、JS の `\\d` は ASCII のみ。
+
+    全角数字が数値に変換されてしまうと `classify_document` の
+    `source`/`managed_by` 判定が JS 側と食い違いうる。
+    """
+    result = parse_frontmatter("---\npost_number: ２０２４\n---\n")
+    assert result.data["post_number"] == "２０２４"
+    assert not isinstance(result.data["post_number"], int)
+
+
+def test_i3_serialize_scalar_quotes_trailing_newline_value() -> None:
+    """I3: `$` は Python では末尾改行の直前にもマッチするが JS では末尾のみ。
+
+    `serialize_scalar('abc\\n')` がクォート無しで返ると、
+    `set_frontmatter_values` 経由で front matter 行に生の改行が混入し、
+    ブロックの構造が壊れる。
+    """
+    assert serialize_scalar("abc\n") == '"abc\n"'
+
+
+def test_dup_key_after_block_value_dedup_timing() -> None:
+    """レビュー指摘: ブロック値として宣言した直後に同じキーを単一行スカラーで
+    再宣言すると、JS はループ完了後にまとめてブロックキーを `data` から除くため
+    最終的に `{}` になるが、ループ中に都度 pop する実装だと再宣言が生き残って
+    `{'a': 5}` になってしまう。
+    """
+    result = parse_frontmatter("---\na: |\na: 5\n---\n本文\n")
+    assert result.data == {}
+    assert list(result.block_keys) == ["a"]
+
+
+def test_set_frontmatter_values_filters_none_like_js_undefined() -> None:
+    """レビュー指摘: `None` を含む更新はそのキーに触れない(JS の
+    `filter(([, v]) => v !== undefined)` に相当)。フィルタしないと
+    `a: null` という行を書き込んでしまう。
+    """
+    text = "---\ntitle: a\n---\n本文\n"
+    result = set_frontmatter_values(text, {"title": "a", "extra": None})
+    assert result.text == text
+    assert result.changed is False
+    assert "extra" not in result.added
+    assert "null" not in result.text
 
 
 @given(body=_body_text)

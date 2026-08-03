@@ -1,4 +1,13 @@
-"""旧 `batch-config.js` を安全に読み書きするための移植モジュール。
+"""旧 `batch-config.js` を安全に読み取るための移植モジュール。
+
+**このモジュールは旧 `batch-config.js` への書き戻しには使わない。** ロードマップ
+(design/plans/M0-foundation.md)は `batch-config.js` を一方向の import 対象と
+明示しており、新システム側から旧ファイルへ書き戻すライター経路は移植対象では
+ない。`format_batch_config`/`serialize_batch_config_file` は存在するが、これは
+M8 の移行検証(旧ファイルをパースして得た値を直列化し直し、バイト単位で
+元ファイルと一致することを確認する — パーサがロスレスであることの最強の
+証拠)のためだけに存在する。旧リポジトリの `batch-config.js` へ実際に書き込む
+用途では絶対に使わないこと(各関数の docstring にも同じ注記がある)。
 
 旧実装 `tools/lib/batch-config-store.js` の `formatConfig`/`loadBatchConfigsFresh` の
 移植。挙動の正しさは `tests/fixtures/kernel/batch-config.json`(旧実装を実行して
@@ -320,6 +329,11 @@ def format_batch_config(value: Any, indent: int = 0) -> str:
     配列の要素は(元の型に関係なく)`String(item)` 相当で単引用符の文字列として出す
     (JS の `formatConfig` がそうしているため)。オブジェクトのキーも単引用符。
     値がオブジェクト・配列でなければ `JSON.stringify` 相当(文字列は二重引用符)。
+
+    **用途は M8 の移行検証(ラウンドトリップの一致確認)のみ。** 旧リポジトリの
+    `batch-config.js` へ書き戻すために呼び出してはならない(ロードマップは
+    `batch-config.js` を一方向の import 対象とし、書き戻しライターを移植対象と
+    していない)。
     """
     spaces = "  " * indent
     if isinstance(value, list):
@@ -348,7 +362,13 @@ def _json_stringify(value: Any) -> str:
 
 
 def serialize_batch_config_file(config: dict[str, Any]) -> str:
-    """`saveBatchConfigs` が書き出す `batch-config.js` 全体をバイト互換で組み立てる。"""
+    """`saveBatchConfigs` が書き出す `batch-config.js` 全体をバイト互換で組み立てる。
+
+    **用途は M8 の移行検証(ラウンドトリップの一致確認)のみ。** 旧リポジトリの
+    `batch-config.js` へ書き戻すために呼び出してはならない(ロードマップは
+    `batch-config.js` を一方向の import 対象とし、書き戻しライターを移植対象と
+    していない)。
+    """
     return f"{_FILE_HEADER}{format_batch_config(config)};\n"
 
 

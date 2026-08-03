@@ -54,6 +54,39 @@ fixture には含めていない(3回の独立採取でランキング・スコ�
 合否判定そのものはここでは出さない(判定は M8 が実施する)。旧版は q8量子化 ONNX
 であるため、**不合格が既定想定であり、不合格自体は失敗ではない**。
 
+**モデル名の二重身分(M2 レビューで明示化)。** `EMBEDDING_MODELS` の辞書キーは
+旧実装の文字列 `Xenova/multilingual-e5-small` のまま固定する — `input_hash` は
+モデル名の文字列そのものを SHA-256 に含めるため、Python 側で改名すると
+`gate-samples.json` との照合(このゲートの前提条件そのもの)が壊れる。一方、
+M4 が実際にモデルを読み込む際は sentence-transformers 経由で
+`intfloat/multilingual-e5-small`(非量子化)をロードする想定であり、
+**ハッシュ上の識別子(Xenova)とロード先の識別子(intfloat)は別物として共存する**。
+M4/M8 実装者は「モデル名を統一しよう」と `EMBEDDING_MODELS` のキーを
+`intfloat/...` に変更してはならない(`src/abist_kb/infrastructure/search/e5_input.py`
+のモジュール docstring にも同じ注記がある)。
+
+**M2 の埋め込みゲート前提条件は honest reconstruction 方式(64/100)で証明済み。**
+`gate-samples.json` は `embeddingInput_b64`/`input_hash` 等の**出力**のみを記録し、
+`title`/`heading_path`/`text` といった入力材料そのものは記録していない
+(容量削減のため)。そのため `tests/kernel/test_e5_input.py` の
+`test_gate_samples_reproduce_e5_input` は、`path`/`chunk_index` を手がかりに
+`tests/fixtures/real-docs/samples.json`(40件の実文書)側で同じ path を探し、
+見つかれば生テキストを `chunk_markdown()` に通して `chunk_index` 番目のチャンクを
+取り出し、`embedding_input()` を実際に呼び出して `embeddingInput_b64`/`input_hash`
+と突き合わせる。`title` は旧実装 `tools/lib/indexer.js` の `indexDocument` と同じ
+3段フォールバック(呼び出し側指定 → front matter の `title` → ファイル名から
+`.md` を除いたもの)で再現する。
+
+100件中、path が real-docs フィクスチャに存在し `chunk_index` も範囲内だったのは
+**64件**で、この64件は全件 `embedding_input()` の出力・`input_hash` とも完全一致した
+(手直し無し)。残り**36件**は real-docs フィクスチャが40件の層化サンプルであり
+gate-samples 側の全文書をカバーしていないため再構成できず、`pytest.skip` で理由付きに
+明示している(黙って通過させていない)。この 64/100 という達成カバレッジ自体を
+`test_gate_samples_reconstruction_coverage_is_64_of_100` で固定しており、フィクスチャや
+再構成ロジックが変わってこの数が動いたら気付けるようにしてある。M8 はこの
+「64件で入力再現・ハッシュ一致を確認済み、残り36件は文書自体が未採取のため未証明」
+という前提の上でコサイン類似度判定に進むこと。
+
 ### sync_status_for マッピング(`kernel/sync-status-for.json`、M2後の追加採取)
 
 M2実装時、`documents` テーブルの `sync_status` 列(`synced`/`modified_local`/`conflict`/

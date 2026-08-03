@@ -169,6 +169,74 @@ def test_action_bucket_derived() -> None:
         assert ACTION_BUCKET[SyncAction(action_value)] == bucket
 
 
+# ---------------------------------------------------------------------------
+# I1 レビュー指摘の回帰テスト: naive/aware datetime混在での TypeError。
+#
+# fixture(`sync-planner.json`)には無いケース。`download-article.js` の
+# コメント通り、backfill 済み文書は `source_content_hash` を持たず
+# `updated_at` 比較にフォールバックする。front matter の `updated_at` は
+# 日付のみ(例 "2024-01-01"、naive)、取得元側はオフセット付き ISO
+# (例 "2024-05-01T10:00:00+09:00"、aware)というのが実際に起きる組み合わせ。
+# 旧実装は JS の `Date.parse` を使うため常に比較可能な数値になるが、Python の
+# `datetime.fromisoformat` は naive/aware を素朴に比較すると
+# `TypeError: can't compare offset-naive and offset-aware datetimes` になる。
+# ---------------------------------------------------------------------------
+
+
+def test_decide_sync_action_mixed_awareness_remote_aware_record_naive() -> None:
+    """remote が aware・record が naive でも例外にならない(backfill 済み文書の典型)。"""
+    decision = decide_sync_action(
+        remote=RemoteState(content_hash=None, updated_at="2024-05-01T10:00:00+09:00"),
+        record=SyncRecord(
+            local_content_hash="hash-1",
+            source_content_hash=None,
+            source_updated_at="2024-01-01",
+        ),
+        local=LocalState(exists=True, body_hash="hash-1"),
+    )
+    # 2024-05-01T10:00:00+09:00 == 2024-05-01T01:00:00Z > 2024-01-01T00:00:00Z(naive→UTC扱い)
+    assert decision.remote_changed is True
+    assert decision.action == SyncAction.UPDATE
+
+
+def test_decide_sync_action_mixed_awareness_remote_naive_record_aware() -> None:
+    """remote が naive・record が aware の組み合わせでも例外にならない。"""
+    decision = decide_sync_action(
+        remote=RemoteState(content_hash=None, updated_at="2024-01-01"),
+        record=SyncRecord(
+            local_content_hash="hash-1",
+            source_content_hash=None,
+            source_updated_at="2023-12-31T23:00:00+00:00",
+        ),
+        local=LocalState(exists=True, body_hash="hash-1"),
+    )
+    assert decision.remote_changed is True
+    assert decision.action == SyncAction.UPDATE
+
+
+def test_decide_sync_action_both_naive_treated_as_utc_and_equal() -> None:
+    """両方 naive で同じ瞬間を指す場合は「変化なし」と判定される。"""
+    decision = decide_sync_action(
+        remote=RemoteState(content_hash=None, updated_at="2024-01-01T00:00:00"),
+        record=SyncRecord(
+            local_content_hash="hash-1",
+            source_content_hash=None,
+            source_updated_at="2024-01-01T00:00:00+00:00",
+        ),
+        local=LocalState(exists=True, body_hash="hash-1"),
+    )
+    assert decision.remote_changed is False
+    assert decision.action == SyncAction.UNCHANGED
+
+
+def test_sync_record_defaults_to_none_for_all_fields() -> None:
+    """`SyncRecord` は兄弟データクラス(`RemoteState`/`LocalState`)と同様に既定値を持つ。"""
+    record = SyncRecord()
+    assert record.local_content_hash is None
+    assert record.source_content_hash is None
+    assert record.source_updated_at is None
+
+
 def test_all_fixture_cases_covered() -> None:
     """fixture の全19ケースがこのテストファイルで参照されていることの網羅性チェック。"""
     covered = {

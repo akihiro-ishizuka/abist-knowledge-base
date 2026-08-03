@@ -373,12 +373,12 @@
           "sha256": "11dce4ae76a450fa325a88133d4282cff549f31fe82312927b1e16b74be90ef0"
         },
         {
-          "bytes": 34914,
+          "bytes": 37761,
           "path": "PROVENANCE.md",
-          "sha256": "5b226a9c100f98abe15a707d17c6563acd60341ac32172f3a87af1b72faabec7"
+          "sha256": "5e1a0df683ec6a9181f021c65fa740057c7189c4a061f52dd9e536070885722d"
         }
       ],
-      "total_bytes": 34935
+      "total_bytes": 37782
     }
   },
   "exclusions_registry": [

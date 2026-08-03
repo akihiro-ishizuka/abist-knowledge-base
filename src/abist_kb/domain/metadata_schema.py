@@ -28,6 +28,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from abist_kb.domain.frontmatter import JS_WHITESPACE_CLASS
+
 # --- 列挙値 ------------------------------------------------------------------
 
 
@@ -118,9 +120,14 @@ def is_reference_corpus(relative_path: Any) -> bool:
 # --- サニタイズ ---------------------------------------------------------------
 
 _SPECIAL_CHARS_RE = re.compile(r'[<>:"/\\|?*]')
-_WHITESPACE_RE = re.compile(r"\s+")
+# JS の `\s`(RegExp)は `.trim()` と同じ WhiteSpace/LineTerminator 集合に
+# マッチする(U+FEFF を含む等、Python の既定 `\s` とは集合が異なる)。
+# `frontmatter.py` の `JS_WHITESPACE_CLASS` を再利用して揃える。
+_WHITESPACE_RE = re.compile(f"[{JS_WHITESPACE_CLASS}]+")
 _DASH_RUN_RE = re.compile(r"-+")
-_EDGE_DASH_RE = re.compile(r"^-|-$")
+# `frontmatter.py` の `_PLAIN_SAFE_RE` と同じ理由(JS の `$` は Python と違い
+# 末尾の改行の直前にはマッチしない)で `\Z` を使う。
+_EDGE_DASH_RE = re.compile(r"^-|-\Z")
 
 _WINDOWS_RESERVED_NAMES: frozenset[str] = frozenset(
     {
@@ -218,8 +225,12 @@ def sanitize_category_path(category_path: Any) -> str:
 def extract_repo_name(repository: Any) -> str:
     """git リポジトリURLからリポジトリ名を取り出す(SSH形式の user:repo も処理)。"""
     cleaned = to_posix_path(repository)
-    cleaned = re.sub(r"\.git$", "", cleaned)
-    cleaned = re.sub(r"/$", "", cleaned)
+    # `\Z` を使う理由は `_PLAIN_SAFE_RE`(frontmatter.py)と同じ:
+    # JS の `$` は文字列の絶対末尾にしかマッチしないが、Python の既定 `$` は
+    # 末尾の改行の直前にもマッチしてしまうため、末尾に改行を含む repository
+    # 値で JS と異なる結果(`.git` サフィックスが剥がれない)になりうる。
+    cleaned = re.sub(r"\.git\Z", "", cleaned)
+    cleaned = re.sub(r"/\Z", "", cleaned)
     parts = [p for p in cleaned.split("/") if p]
     last = parts[-1] if parts else "repository"
     if ":" in last:
@@ -229,7 +240,7 @@ def extract_repo_name(repository: Any) -> str:
 
 def _with_docs_prefix(directory: Any) -> str:
     normalized = to_posix_path(directory)
-    normalized = re.sub(r"/$", "", normalized)
+    normalized = re.sub(r"/\Z", "", normalized)
     if normalized == "docs" or normalized.startswith("docs/"):
         return normalized
     return f"docs/{normalized}"
@@ -360,7 +371,7 @@ def classify_document(
     git_prefixes = [
         p
         for d in (git_output_dirs or [])
-        if (p := re.sub(r"/$", "", re.sub(r"^docs/", "", to_posix_path(d))))
+        if (p := re.sub(r"/\Z", "", re.sub(r"^docs/", "", to_posix_path(d))))
     ]
     in_git_dir = any(
         posix_path == prefix or posix_path.startswith(prefix + "/") for prefix in git_prefixes

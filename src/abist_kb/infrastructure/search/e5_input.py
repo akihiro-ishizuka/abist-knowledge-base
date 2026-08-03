@@ -10,6 +10,14 @@
 `tests/fixtures/embedding/gate-samples.json` との照合(M8 の埋め込み再利用
 ゲートの前提条件)が壊れる。
 
+**二重身分の注意(M4 実装者向け)。** M4 は実際にモデルを読み込む際、
+sentence-transformers 経由で `intfloat/multilingual-e5-small`(非量子化)を
+使う想定である。つまり「ハッシュに刻む識別子」は `Xenova/...`、
+「実際にロードするモデル名」は `intfloat/...` であり、この2つは同じモデルを
+指しながら文字列としては別物のまま共存させる。`EMBEDDING_MODELS` のキーを
+ロード先の名前に合わせて統一しようとしないこと(詳細は
+`tests/fixtures/PROVENANCE.md` の「モデル名の二重身分」節を参照)。
+
 順序が命: `[title, heading_path, text]` のうち偽値でないものを改行で結合して
 から `max_input_chars` で切り詰め、その後に接頭辞を付ける。接頭辞は文字数
 制限に数えない。逆順にすると512文字境界をまたぐチャンクで異なる文字列・
@@ -95,23 +103,63 @@ def model_config(model: str) -> EmbeddingModelSpec:
     )
 
 
+def _truncate_utf16_units(text: str, max_units: int) -> str:
+    """JavaScript の `String.prototype.slice(0, n)` と同じ切り詰めを行う。
+
+    JS の文字列インデックスは UTF-16 コード単位であり、Python の文字列
+    インデックス(コードポイント単位)とは、絵文字や CJK拡張B等の
+    「サロゲートペア(astral)」文字が上限より手前にあると異なる位置を指す。
+    `str.encode("utf-16-le")` へ変換すれば1コード単位=2バイトになるため、
+    そこでバイト数として切り詰めてから戻すことで同じ切り詰め位置を再現する。
+
+    さらに JS 特有の副作用も再現する: 切り詰め位置がサロゲートペアの
+    真ん中に来ると、JS は対になっていない上位サロゲート(lone high
+    surrogate)を1コード単位として保持したままにする。この文字列を後段で
+    `Buffer.from(str, 'utf8')` のように UTF-8 バイト列へ変換すると、
+    対になっていないサロゲートは U+FFFD (REPLACEMENT CHARACTER) に化ける。
+    Python は元々コードポイント単位でしか切り詰めないためこの現象が起こらず、
+    `input_hash` (SHA-256 は UTF-8 バイト列に対して計算する) が一致しなくなる。
+    ここでは `errors="surrogatepass"` で対になっていないサロゲートをいったん
+    保持し、返す前に UTF-8 化した上で不正シーケンスを U+FFFD に正規化する
+    ことで、後段のハッシュ計算がJSと同じバイト列になるようにする。
+    """
+    truncated_units = text.encode("utf-16-le")[: 2 * max_units]
+    decoded = truncated_units.decode("utf-16-le", errors="surrogatepass")
+    # Node の Buffer.from(str, 'utf8') は対になっていないサロゲートを
+    # U+FFFD に置換して UTF-8 化する。Python の既定 "utf-8" エンコーダは
+    # 対になっていないサロゲートで UnicodeEncodeError を送出するため、
+    # ここで明示的に同じ置換を行い、以降どちらの言語でエンコードしても
+    # 同じ UTF-8 バイト列になるようにしておく。
+    return decoded.encode("utf-8", errors="replace").decode("utf-8")
+
+
 def embedding_input(chunk: EmbeddingInputChunk, model: str) -> str:
     """埋め込みに与える入力テキストを作る。
 
-    `[title, heading_path, text]` のうち偽値でないものを改行で結合してから
-    `max_input_chars` で切り詰め、その後に接頭辞を付ける(接頭辞は切り詰めに
-    数えない)。
+    `title`/`heading_path` は偽値でない場合だけ含めるが、`text` は
+    `embeddings.js:75-77` の `if (chunk.title) parts.push(...); ...;
+    parts.push(chunk.text);` と同じく**常に**含める(偽値でも除外しない)。
+    `text` だけ無条件フィルタから除外するのは、チャンカーが生成するチャンクの
+    `text` が空文字列になることは無いため通常は表面化しないが、DB行から
+    直接組み立てる場合(M4)は `{title:'T', text:''}` のようなケースがあり、
+    `text` を除外すると結合結果が末尾の改行1つ分だけ短くなり `input_hash` が
+    ズレる。`max_input_chars` で切り詰め、その後に接頭辞を付ける(接頭辞は
+    切り詰めに数えない)。切り詰めは JS の UTF-16 コード単位に合わせる
+    (`_truncate_utf16_units` 参照) — Python のコードポイント単位の切り詰めは、
+    絵文字等の astral 文字が上限手前にあると異なる文字列・異なる `input_hash`
+    を生む。
     """
     config = model_config(model)
-    parts = [part for part in (chunk.title, chunk.heading_path, chunk.text) if part]
-    body = "\n".join(parts)[: config.max_input_chars]
+    parts = [part for part in (chunk.title, chunk.heading_path) if part]
+    parts.append(chunk.text)
+    body = _truncate_utf16_units("\n".join(parts), config.max_input_chars)
     return config.passage_prefix + body
 
 
 def query_input(query: str, model: str) -> str:
     """検索クエリ側の入力を作る(e5 系は文書と接頭辞が異なる)。"""
     config = model_config(model)
-    return config.query_prefix + str(query)[: config.max_input_chars]
+    return config.query_prefix + _truncate_utf16_units(str(query), config.max_input_chars)
 
 
 def input_hash(model: str, text: str) -> str:

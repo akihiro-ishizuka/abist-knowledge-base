@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import StrEnum
 
 
@@ -104,9 +104,9 @@ class RemoteState:
 class SyncRecord:
     """sync-state DB の行(None なら未記録)。"""
 
-    local_content_hash: str | None
-    source_content_hash: str | None
-    source_updated_at: str | None
+    local_content_hash: str | None = None
+    source_content_hash: str | None = None
+    source_updated_at: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -160,10 +160,24 @@ def _is_remote_changed(remote: RemoteState | None, record: SyncRecord) -> bool:
 
 
 def _parse_date(value: str) -> datetime | None:
+    """ISO 8601 文字列を aware な UTC datetime へ変換する。
+
+    JS の `Date.parse` は素の日付文字列(`'2024-01-01'` のような時刻・オフセット
+    無し)も常に UTC 深夜として解釈し、常に比較可能な数値(エポックミリ秒)を
+    返す。Python の `datetime.fromisoformat` は naive/aware どちらも生成しうる
+    ため、そのまま比較すると `TypeError: can't compare offset-naive and
+    offset-aware datetimes` になる(front matter の `updated_at` は日付のみ=naive、
+    取得元 API のタイムスタンプはオフセット付き=aware、という組み合わせが
+    backfill 済み文書で実際に発生する)。ここで naive な結果を UTC 扱いに揃え、
+    JS と同じく常に比較可能にする。
+    """
     try:
-        return datetime.fromisoformat(value)
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=UTC)
+    return parsed
 
 
 def decide_sync_action(

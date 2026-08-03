@@ -26,6 +26,7 @@ from abist_kb.domain.metadata_schema import (
     Source,
     Status,
     classify_document,
+    extract_repo_name,
     is_reference_corpus,
     resolve_batch_output_dirs,
     safe_batch_name,
@@ -276,6 +277,21 @@ def test_resolve_batch_output_dirs() -> None:
     from abist_kb.domain.metadata_schema import resolve_git_output_dirs
 
     assert resolve_git_output_dirs(ordered_config) == expected["gitOutputDirs"]
+
+
+def test_extract_repo_name_ssh_colon_branch_without_slash() -> None:
+    """レビュー指摘(mutation blind-spot): `extract_repo_name` の
+    `if ':' in last: return last.split(':')[-1]` 分岐は、fixture の
+    `git-ssh-form`(`git@github.com:foo/ssh-repo.git`)では実は一度も実行
+    されない——コロンは `parts` の最後のセグメントより前(`foo` の前)に
+    あるため、`last` (`'ssh-repo'`) 自体にはコロンが含まれない。
+    この分岐が本当に実行されるのは、リポジトリ部分にスラッシュが無い
+    SSH形式(`git@host:repo.git` のように `/` を挟まない場合)だけであり、
+    そのケースはどの fixture にも無かった(mutation testing で分岐が
+    未検出のまま生き残った理由)。
+    """
+    assert extract_repo_name("git@github.com:bar-repo.git") == "bar-repo"
+    assert extract_repo_name("git@github.com:foo/ssh-repo.git") == "ssh-repo"
 
 
 def test_safe_batch_name_differs_from_sanitize_file_name_for_long_names() -> None:

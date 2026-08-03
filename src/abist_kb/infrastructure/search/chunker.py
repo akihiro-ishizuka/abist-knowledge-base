@@ -22,14 +22,24 @@ import math
 import re
 from dataclasses import dataclass
 
-from abist_kb.domain.frontmatter import BOM, sha256_hex
+from abist_kb.domain.frontmatter import js_is_blank, js_trim, sha256_hex
 
 _DELIMITER_RE = re.compile(r"^---[ \t]*$")
 _FENCE_RE = re.compile(r"^\s*(`{3,}|~{3,})")
-_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
+# JS の正規表現エンジンは `\r` を(`\n` 等と並ぶ)行終端文字として扱うため、
+# multiline でなくても `.` は `\r` を跨がない。Python の `.` は既定で `\r` を
+# 跨ぐ(除外するのは `\n` だけ)ため、`(.*)$` のままだと単純化された1回だけの
+# CR除去(下記 `chunk_markdown` 参照)の後に残る内部CR(二重CR等、実データに
+# 実在する)を title に取り込んでしまい、JS では見出しとして認識されない行を
+# Python だけ見出しとして扱ってしまう(構造そのものが分岐し `content_hash` も
+# 変わる)。`[^\r\n]*` で明示的に `\r` を除外して揃える。
+_HEADING_RE = re.compile(r"^(#{1,6})\s+([^\r\n]*)$")
 _LEADING_HEADING_MARKER_RE = re.compile(r"^#{1,6}\s")
 _TABLE_ROW_RE = re.compile(r"^\s*\|")
-_TRAILING_WS_RE = re.compile(r"[ \t]+$", re.MULTILINE)
+# 同じ理由(JS は `\r` も行終端として扱う)で、Python の `re.MULTILINE` の `$`
+# (`\n` の直前にしか反応しない)ではなく、`\r\n`/`\r`/`\n`/文字列末尾のいずれの
+# 直前にも反応する明示的な先読みを使う。
+_TRAILING_WS_RE = re.compile(r"[ \t]+(?=\r\n|\r|\n|\Z)")
 _MULTI_BLANK_RE = re.compile(r"\n{3,}")
 
 
@@ -153,7 +163,7 @@ def _split_into_sections(body_lines: list[str], body_start_line: int) -> list[_S
         if heading:
             push_current()
             level = len(heading.group(1))
-            title = heading.group(2).strip()
+            title = js_trim(heading.group(2))
 
             while heading_stack and heading_stack[-1].level >= level:
                 heading_stack.pop()
@@ -170,7 +180,7 @@ def _split_into_sections(body_lines: list[str], body_start_line: int) -> list[_S
 
     push_current()
 
-    return [s for s in sections if "".join(s.lines).strip() != ""]
+    return [s for s in sections if not js_is_blank("".join(s.lines))]
 
 
 def _is_table_row(line: str) -> bool:
@@ -202,7 +212,12 @@ def _split_section(section: _Section, max_tokens: int) -> list[_Part]:
         if in_fence:
             continue
 
-        if i > 0 and lines[i - 1].strip() == "" and line.strip() != "" and not _is_table_row(line):
+        if (
+            i > 0
+            and js_is_blank(lines[i - 1])
+            and not js_is_blank(line)
+            and not _is_table_row(line)
+        ):
             breakable.add(i)
 
     parts: list[_Part] = []
@@ -218,7 +233,7 @@ def _split_section(section: _Section, max_tokens: int) -> list[_Part]:
 
     parts.append(_Part(lines=lines[part_start:], start_line=start_line + part_start))
 
-    return [p for p in parts if "".join(p.lines).strip() != ""]
+    return [p for p in parts if not js_is_blank("".join(p.lines))]
 
 
 def _enforce_hard_limit(part: _Part, hard_max_tokens: int) -> list[_Part]:
@@ -251,17 +266,17 @@ def _content_hash(text: str) -> str:
     normalized = "\n".join(lines)
     normalized = _TRAILING_WS_RE.sub("", normalized)
     normalized = _MULTI_BLANK_RE.sub("\n\n", normalized)
-    # JS の String.prototype.trim() は U+FEFF(BOM)も空白として除去するが、
-    # Python の str.strip() は既定でこれを空白と見なさない。BOM が本文冒頭に
-    # 残る実データ(bom_prefixed 層)でハッシュがズレないよう明示的に合わせる。
-    normalized = normalized.strip().strip(BOM).strip()
+    # `js_trim` は JS の String.prototype.trim() と同じ集合(U+FEFF/BOM を含む)
+    # で前後の空白を除去する(BOM が本文冒頭に残る実データ(bom_prefixed 層)で
+    # ハッシュがズレないようにするため)。
+    normalized = js_trim(normalized)
     return sha256_hex(normalized)
 
 
 def _trim_trailing_blank(lines: list[str]) -> list[str]:
     """末尾の空行を落として行範囲を締める。"""
     end = len(lines)
-    while end > 0 and lines[end - 1].strip() == "":
+    while end > 0 and js_is_blank(lines[end - 1]):
         end -= 1
     return lines[:end]
 
@@ -274,13 +289,13 @@ def chunk_markdown(content: str, options: ChunkOptions | None = None) -> list[Ch
     """
     opts = options if options is not None else DEFAULT_CHUNK_OPTIONS
 
-    if not isinstance(content, str) or content.strip() == "":
+    if not isinstance(content, str) or js_is_blank(content):
         return []
 
     # 改行コードを正規化する(チャンク本文は LF 統一。行番号は元ファイルのまま)。
     lines = [line[:-1] if line.endswith("\r") else line for line in content.split("\n")]
     body_start_line, body_lines = _split_frontmatter(lines)
-    if "".join(body_lines).strip() == "":
+    if js_is_blank("".join(body_lines)):
         return []
 
     sections = _split_into_sections(body_lines, body_start_line)
@@ -295,7 +310,7 @@ def chunk_markdown(content: str, options: ChunkOptions | None = None) -> list[Ch
     pending_heading_only: list[_Section] = []
 
     for section in sections:
-        has_content = "".join(section.lines[1:]).strip() != ""
+        has_content = not js_is_blank("".join(section.lines[1:]))
 
         if not has_content:
             pending_heading_only.append(section)
@@ -334,7 +349,7 @@ def chunk_markdown(content: str, options: ChunkOptions | None = None) -> list[Ch
         for rough in _split_section(section, opts.max_tokens):
             for part in _enforce_hard_limit(rough, opts.hard_max_tokens):
                 kept = _trim_trailing_blank(part.lines)
-                if "".join(kept).strip() == "":
+                if js_is_blank("".join(kept)):
                     continue
 
                 text = "\n".join(kept)

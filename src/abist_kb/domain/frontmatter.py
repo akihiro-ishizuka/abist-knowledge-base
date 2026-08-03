@@ -23,8 +23,68 @@ from typing import Any
 
 BOM = "﻿"
 
+# JS の `String.prototype.trim()` が空白とみなす文字集合(ECMA-262 の
+# WhiteSpace + LineTerminator 生成規則)。Python の `str.strip()`(引数無し)は
+# `str.isspace()` 相当の別の集合を使うため、この2つは一致しない:
+#   - JS だけが U+FEFF(BOM/ZWNBSP)を空白として trim する
+#     (`chunk_markdown('﻿')` が Python では1チャンク・JS では0チャンクに
+#     なる、という実際の乖離の原因)。
+#   - Python の既定 `strip()`/`\s` だけが U+0085(NEL)・U+001C〜U+001F
+#     (制御文字)を空白とみなす(JS はみなさない)。
+# `chunker.py`/`frontmatter.py`/`metadata_schema.py` に散在する「JSの trim() と
+# 同じであるべき」空白判定は、素の `str.strip()` ではなくこのヘルパーへ寄せる。
+# コードポイントで明示することで、エディタ上で見分けが付かない空白文字
+# (NBSP・全角スペース等)の混入・取り違えを避ける。
+_JS_WHITESPACE_CODEPOINTS = (
+    0x09,  # TAB
+    0x0B,  # VT
+    0x0C,  # FF
+    0x20,  # SPACE
+    0xA0,  # NBSP
+    0xFEFF,  # ZWNBSP / BOM
+    0x1680,  # OGHAM SPACE MARK
+    *range(0x2000, 0x200B),  # EN QUAD .. HAIR SPACE (U+2000-200A)
+    0x202F,  # NARROW NO-BREAK SPACE
+    0x205F,  # MEDIUM MATHEMATICAL SPACE
+    0x3000,  # IDEOGRAPHIC SPACE
+    0x0A,  # LF
+    0x0D,  # CR
+    0x2028,  # LINE SEPARATOR
+    0x2029,  # PARAGRAPH SEPARATOR
+)
+_JS_WHITESPACE_CHARS = "".join(chr(c) for c in _JS_WHITESPACE_CODEPOINTS)
+
+#: 正規表現の文字クラスとして使える形(`[...]` の中身)。JS の `\s`(RegExp)は
+#: `.trim()` と同じ WhiteSpace/LineTerminator 集合にマッチするため、
+#: `\s+` を JS 互換にしたい箇所(例: `metadata_schema.py` の空白圧縮)は
+#: `re.compile(f"[{JS_WHITESPACE_CLASS}]+")` のようにこれを使う。
+JS_WHITESPACE_CLASS = re.escape(_JS_WHITESPACE_CHARS)
+
+
+def js_trim(text: str) -> str:
+    """JS の `String.prototype.trim()` と同じ集合で前後の空白を除去する。"""
+    return text.strip(_JS_WHITESPACE_CHARS)
+
+
+def js_is_blank(text: str) -> bool:
+    """JS の `trim() === ''` に相当する「空白のみ、または空」の判定。"""
+    return js_trim(text) == ""
+
+
+def js_trim_start(text: str) -> str:
+    """JS の `String.prototype.trimStart()` と同じ集合で先頭の空白を除去する。"""
+    return text.lstrip(_JS_WHITESPACE_CHARS)
+
+
 _DELIMITER_RE = re.compile(r"^---[ \t]*$")
-_PLAIN_SAFE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_./-]*$")
+# JS の `$`(非multiline)は文字列の絶対末尾にしかマッチしないが、Python の `$`
+# (非MULTILINE)は「絶対末尾」に加えて「末尾の改行の直前」にもマッチする
+# (Python 特有の挙動)。`serialize_scalar('abc\n')` のような値でこの差が
+# 表面化する: JS 側は `$` が末尾の `\n` の後ろまで届かず不一致になり
+# クォートされるが、Python 側はここでマッチしてしまいクォートされない
+# (front matter 行に生の改行が混入し、ブロックの構造が壊れる)。`\Z` は
+# 常に「絶対末尾」だけを意味するため、ここで JS の `$` と揃える。
+_PLAIN_SAFE_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_./-]*\Z")
 _YAML_RESERVED = frozenset(
     {
         "true",
@@ -48,8 +108,13 @@ _YAML_RESERVED = frozenset(
         "FALSE",
     }
 )
-_INT_RE = re.compile(r"-?\d+")
-_FLOAT_RE = re.compile(r"-?\d*\.\d+")
+#  Python の `\d` は Unicode 全角数字などにもマッチするが、JS の `\d` は
+#  ASCII の `[0-9]` のみにマッチする(`tools/lib/frontmatter.js` 側)。
+#  全角数字を Python 側だけが数値に変換してしまうと(例: '２０２４' が
+#  `2024` になる)、`classify_document` の `source`/`managed_by` 判定が
+#  JS 側と食い違いうる。ここは明示的に `[0-9]` を使う。
+_INT_RE = re.compile(r"-?[0-9]+")
+_FLOAT_RE = re.compile(r"-?[0-9]*\.[0-9]+")
 _BLOCK_SCALAR_RE = re.compile(r"^[|>]")
 _LEADING_WHITESPACE_RE = re.compile(r"^\s")
 
@@ -126,7 +191,7 @@ def _join_lines(lines: list[_Line]) -> str:
 
 def _decode_scalar(raw: str) -> Any:
     """スカラー値の文字列表現をデコードする(クォート・インライン配列・数値・真偽値)。"""
-    value = raw.strip()
+    value = js_trim(raw)
     if value == "":
         return ""
 
@@ -139,7 +204,7 @@ def _decode_scalar(raw: str) -> Any:
         return inner
 
     if value.startswith("[") and value.endswith("]"):
-        inner = value[1:-1].strip()
+        inner = js_trim(value[1:-1])
         if inner == "":
             return []
         return [_decode_scalar(item) for item in inner.split(",")]
@@ -235,29 +300,28 @@ def parse_frontmatter(text: str) -> FrontmatterResult:
     last_key: str | None = None
 
     def _mark_block_key(key: str) -> None:
-        data.pop(key, None)
         if key not in block_keys_seen:
             block_keys_seen.add(key)
             block_keys.append(key)
 
     for line in block_lines:
         content = line.content
-        if content.strip() == "":
+        if js_is_blank(content):
             continue
 
-        if _LEADING_WHITESPACE_RE.match(content) or content.lstrip().startswith("- "):
+        if _LEADING_WHITESPACE_RE.match(content) or js_trim_start(content).startswith("- "):
             # 継続行 -> 直前のキーはブロック値
             if last_key is not None:
                 _mark_block_key(last_key)
             continue
-        if content.lstrip().startswith("#"):
+        if js_trim_start(content).startswith("#"):
             continue  # コメント行
 
         colon = content.find(":")
         if colon == -1:
             continue
 
-        key = content[:colon].strip()
+        key = js_trim(content[:colon])
         if not key:
             continue
         raw_value = content[colon + 1 :]
@@ -266,7 +330,7 @@ def parse_frontmatter(text: str) -> FrontmatterResult:
             keys.append(key)
         last_key = key
 
-        stripped_value = raw_value.strip()
+        stripped_value = js_trim(raw_value)
         if stripped_value == "":
             # 値が空 -> 次行がブロックの可能性。継続行を見つけるまでは空文字として扱う。
             data[key] = ""
@@ -274,6 +338,16 @@ def parse_frontmatter(text: str) -> FrontmatterResult:
             _mark_block_key(key)  # 複数行スカラー
         else:
             data[key] = _decode_scalar(raw_value)
+
+    # ブロックキーの除去はループ完了後にまとめて行う(JS実装と同じタイミング)。
+    # 「ブロック値 -> 同名キーの単一行スカラーで再宣言」(例: `a: |` の後に
+    # `a: 5`)が起きると、ループ中に都度 pop する実装ではブロック判定より
+    # 後に来た単一行代入が生き残ってしまい、JS(ループ完了後に blockKeys を
+    # まとめて削除)と食い違う({'a': 5} vs {})。ここで一括削除することで
+    # 「同じキーがどんな順序で再宣言されても、最終的にブロックキーなら
+    # data から除く」という JS の挙動に揃える。
+    for key in block_keys:
+        data.pop(key, None)
 
     eol = _dominant_eol(block_lines, lines[0].eol)
     body_start = sum(len(line.content) + len(line.eol) for line in lines[: close_index + 1])
@@ -321,7 +395,7 @@ def _find_key_line(lines: list[_Line], from_index: int, to_index: int, key: str)
         colon = content.find(":")
         if colon == -1:
             continue
-        if content[:colon].strip() == key:
+        if js_trim(content[:colon]) == key:
             return i
     return -1
 
@@ -333,7 +407,13 @@ def set_frontmatter_values(text: str, values: dict[str, Any]) -> SetFrontmatterV
     (受入条件「apply前後で本文ハッシュが一致する」を新規作成時にも満たすため)。
     """
     source = text if isinstance(text, str) else ""
-    entries = list(values.items())
+    # JS 版は `Object.entries(updates).filter(([, v]) => v !== undefined)` で
+    # 「値を渡さない(=このキーには触れない)」を表現する。Python には
+    # `undefined` が無く、呼び出し側はその意図を `None` で表すしかないため、
+    # ここで `None` を同じ「このキーはスキップする」の意味として扱う
+    # (フィルタしないと `a: null` という行を書き込んでしまい、JS 側の
+    # 「そもそも触れない」という意図と食い違う)。
+    entries = [(key, value) for key, value in values.items() if value is not None]
 
     added: list[str] = []
     updated: list[str] = []
@@ -421,6 +501,10 @@ __all__ = [
     "SkippedKey",
     "body_of",
     "hash_body",
+    "JS_WHITESPACE_CLASS",
+    "js_is_blank",
+    "js_trim",
+    "js_trim_start",
     "parse_frontmatter",
     "serialize_scalar",
     "set_frontmatter_values",
