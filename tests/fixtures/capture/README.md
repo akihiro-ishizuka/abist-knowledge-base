@@ -25,6 +25,7 @@ Python 実装の「正しさ」は、ここで採取した値と一致するか�
 ```bash
 node tests/fixtures/capture/capture-kernel.mjs
 node tests/fixtures/capture/capture-batch-config.mjs
+node tests/fixtures/capture/capture-real-docs.mjs
 ```
 
 既定では旧リポジトリを `C:\Temp\multi-source-knowledge-base` に想定する。
@@ -55,6 +56,13 @@ diff /tmp/run1.sha256 /tmp/run2.sha256   # 差分が無いこと
 - `capture-batch-config.mjs` — `tools/lib/batch-config-store.js` の
   `formatConfig` / `loadBatchConfigsFresh` と、実物の `batch-config.js` との
   ラウンドトリップ結果を `tests/fixtures/kernel/batch-config.json` に出力する。
+- `capture-real-docs.mjs` — `data/sync-state.sqlite`（read-only）の
+  `documents` から9層（esa/web/git/reference/日本語パス/長いパス/BOM付き/
+  CRLF本文/frontmatter無し）を決定的に層化抽出し、選ばれた各実文書について
+  Task 1 と同じカーネル出力（frontmatter/hashBody/chunker/rangeHash/e5入力）を
+  `tests/fixtures/real-docs/samples.json` に出力する。64KB超のファイルと
+  秘密情報パターンに当たったサンプルは除外し、除外件数・理由・層ごとの
+  実採取数（0件の層も含む）を manifest（`layers[]` / `exclusions[]`）に記録する。
 
 ## フィクスチャの形式
 
