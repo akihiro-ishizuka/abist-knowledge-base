@@ -1,0 +1,54 @@
+{
+  "case": "schema_only",
+  "schema": 1,
+  "server": "kb-download",
+  "skipped_reason": "batch-config.js を書き換えるため呼び出さない(brief指定)。tools/list のスキーマのみ記録する。",
+  "tool": "add_web_batch",
+  "tool_schema_from_tools_list": {
+    "description": "Web サイト収集バッチを batch-config.js に登録する（type:\"web\"）。登録後は再起動なしで list_batches に反映され、run_batch で繰り返し実行できる。同名バッチがある場合は overwrite:true が無い限りエラー（esa/git バッチは上書き不可）。outputDir が \"docs\" 始まりでない場合は docs/ が前置される（download_git と同じ規約）。",
+    "execution": {
+      "taskSupport": "forbidden"
+    },
+    "inputSchema": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "additionalProperties": false,
+      "properties": {
+        "delay": {
+          "description": "リクエスト間隔 ms（既定 1000）",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "maxDepth": {
+          "description": "クロール深度（既定 3）",
+          "maximum": 10,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "name": {
+          "description": "バッチ名（日本語・記号可。list_batches / run_batch で使う名前）",
+          "minLength": 1,
+          "type": "string"
+        },
+        "outputDir": {
+          "description": "出力先（既定 docs/<バッチ名を安全化した名前>）",
+          "type": "string"
+        },
+        "overwrite": {
+          "description": "同名の既存 web バッチを上書きする（既定 false）",
+          "type": "boolean"
+        },
+        "url": {
+          "description": "クロール開始 URL（http/https）",
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "url"
+      ],
+      "type": "object"
+    },
+    "name": "add_web_batch"
+  }
+}

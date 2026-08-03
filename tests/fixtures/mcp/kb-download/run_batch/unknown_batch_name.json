@@ -1,0 +1,67 @@
+{
+  "case": "unknown_batch_name",
+  "deviation_from_brief": null,
+  "execution_environment": "live_old_repo",
+  "is_error_present": true,
+  "is_error_value": true,
+  "nondeterministic_fields": [],
+  "notes": "batch-config.js に存在しないバッチ名。loadBatchConfigs() で読み込むだけで書き込みは無い。",
+  "request": {
+    "id": 7,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "batch": "存在しないバッチ名XYZ_capture用架空バッチ"
+      },
+      "name": "run_batch"
+    }
+  },
+  "response": {
+    "id": 7,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": false,\n  \"exitCode\": null,\n  \"command\": [],\n  \"stdoutTail\": \"\",\n  \"stderrTail\": \"\",\n  \"error\": \"バッチ \\\"存在しないバッチ名XYZ_capture用架空バッチ\\\" は存在しません。利用可能: 蛇腹形状の自動設計, 三桜工業様, チーム内定例, TS様・SUBARU様向け隙干渉チェックツール開発, TS様・TMK様案件, TS様・TMEJ様案件, catiadoc, C#ATIA, 検図チェック自動化, catia-flotherm-prep, 名古屋受託チーム×デジタル推進, 設計効率化メモ, CATIAマクロ自動生成, 休退職予測, catia-macro-generator, bellows-design-automation-tool_refactor_structure, 検図自動化フェーズ2, TS様・TMEJ様・打点配分ツール改修, catia-macro-pipeline, catia-jabara-design-automation_next\"\n}",
+          "type": "text"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"exitCode\\\": null,\\n  \\\"command\\\": [],\\n  \\\"stdoutTail\\\": \\\"\\\",\\n  \\\"stderrTail\\\": \\\"\\\",\\n  \\\"error\\\": \\\"バッチ \\\\\\\"存在しないバッチ名XYZ_capture用架空バッチ\\\\\\\" は存在しません。利用可能: 蛇腹形状の自動設計, 三桜工業様, チーム内定例, TS様・SUBARU様向け隙干渉チェックツール開発, TS様・TMK様案件, TS様・TMEJ様案件, catiadoc, C#ATIA, 検図チェック自動化, catia-flotherm-prep, 名古屋受託チーム×デジタル推進, 設計効率化メモ, CATIAマクロ自動生成, 休退職予測, catia-macro-generator, bellows-design-automation-tool_refactor_structure, 検図自動化フェーズ2, TS様・TMEJ様・打点配分ツール改修, catia-macro-pipeline, catia-jabara-design-automation_next\\\"\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":7}",
+  "run2": {
+    "request": {
+      "id": 8,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "batch": "存在しないバッチ名XYZ_capture用架空バッチ"
+        },
+        "name": "run_batch"
+      }
+    },
+    "response": {
+      "id": 8,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": false,\n  \"exitCode\": null,\n  \"command\": [],\n  \"stdoutTail\": \"\",\n  \"stderrTail\": \"\",\n  \"error\": \"バッチ \\\"存在しないバッチ名XYZ_capture用架空バッチ\\\" は存在しません。利用可能: 蛇腹形状の自動設計, 三桜工業様, チーム内定例, TS様・SUBARU様向け隙干渉チェックツール開発, TS様・TMK様案件, TS様・TMEJ様案件, catiadoc, C#ATIA, 検図チェック自動化, catia-flotherm-prep, 名古屋受託チーム×デジタル推進, 設計効率化メモ, CATIAマクロ自動生成, 休退職予測, catia-macro-generator, bellows-design-automation-tool_refactor_structure, 検図自動化フェーズ2, TS様・TMEJ様・打点配分ツール改修, catia-macro-pipeline, catia-jabara-design-automation_next\"\n}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"exitCode\\\": null,\\n  \\\"command\\\": [],\\n  \\\"stdoutTail\\\": \\\"\\\",\\n  \\\"stderrTail\\\": \\\"\\\",\\n  \\\"error\\\": \\\"バッチ \\\\\\\"存在しないバッチ名XYZ_capture用架空バッチ\\\\\\\" は存在しません。利用可能: 蛇腹形状の自動設計, 三桜工業様, チーム内定例, TS様・SUBARU様向け隙干渉チェックツール開発, TS様・TMK様案件, TS様・TMEJ様案件, catiadoc, C#ATIA, 検図チェック自動化, catia-flotherm-prep, 名古屋受託チーム×デジタル推進, 設計効率化メモ, CATIAマクロ自動生成, 休退職予測, catia-macro-generator, bellows-design-automation-tool_refactor_structure, 検図自動化フェーズ2, TS様・TMEJ様・打点配分ツール改修, catia-macro-pipeline, catia-jabara-design-automation_next\\\"\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":8}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-download",
+  "stderr_tail": "",
+  "tool": "run_batch"
+}

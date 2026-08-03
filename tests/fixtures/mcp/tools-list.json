@@ -1,0 +1,470 @@
+{
+  "schema": 1,
+  "servers": {
+    "kb-download": {
+      "protocol_version": "2024-11-05",
+      "server_info": {
+        "name": "kb-download",
+        "version": "1.0.0"
+      },
+      "startup_stderr": "[kb-download] MCP server started (root: C:\\Temp\\multi-source-knowledge-base)\n",
+      "tool_count": 8,
+      "tools": [
+        {
+          "description": "batch-config.js の定義済みダウンロードバッチ一覧（名前・型 esa/web/git・出力先）を JSON で返す。run_batch の前に必ず呼び、正確なバッチ名（日本語・記号を含む）を確認すること。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "list_batches"
+        },
+        {
+          "description": "定義済みバッチを実行する（esa/web/git を自動判別し download-batch.js に委譲）。バッチ名は list_batches の name をそのまま渡す（推測で打たない）。最長60分ブロックする。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "batch": {
+                "description": "batch-config.js のバッチ名（日本語・記号そのまま）",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "batch"
+            ],
+            "type": "object"
+          },
+          "name": "run_batch"
+        },
+        {
+          "description": "Web サイト収集バッチを batch-config.js に登録する（type:\"web\"）。登録後は再起動なしで list_batches に反映され、run_batch で繰り返し実行できる。同名バッチがある場合は overwrite:true が無い限りエラー（esa/git バッチは上書き不可）。outputDir が \"docs\" 始まりでない場合は docs/ が前置される（download_git と同じ規約）。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "delay": {
+                "description": "リクエスト間隔 ms（既定 1000）",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxDepth": {
+                "description": "クロール深度（既定 3）",
+                "maximum": 10,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "name": {
+                "description": "バッチ名（日本語・記号可。list_batches / run_batch で使う名前）",
+                "minLength": 1,
+                "type": "string"
+              },
+              "outputDir": {
+                "description": "出力先（既定 docs/<バッチ名を安全化した名前>）",
+                "type": "string"
+              },
+              "overwrite": {
+                "description": "同名の既存 web バッチを上書きする（既定 false）",
+                "type": "boolean"
+              },
+              "url": {
+                "description": "クロール開始 URL（http/https）",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "url"
+            ],
+            "type": "object"
+          },
+          "name": "add_web_batch"
+        },
+        {
+          "description": "esa 記事1件を記事番号指定でローカルにダウンロードする（download-article.js --post）。.env の ESA_TEAM_NAME / ESA_ACCESS_TOKEN が必要。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "outputDir": {
+                "description": "出力先ディレクトリ（既定 docs）",
+                "type": "string"
+              },
+              "post": {
+                "description": "esa 記事番号",
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "post"
+            ],
+            "type": "object"
+          },
+          "name": "download_esa_post"
+        },
+        {
+          "description": "esa のカテゴリ配下の記事を一括ダウンロードする（download-article.js --category）。.env の ESA_TEAM_NAME / ESA_ACCESS_TOKEN が必要。差分同期: 未変更の記事は上書きしない。ローカル編集があれば conflict として上書きを見送る。件数は応答の sync.totals（added/updated/skipped/conflict/missing/error）で確認すること（ヒット0件でも ok:true / exitCode 0 になる）。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "category": {
+                "description": "esa カテゴリパス（例: 設計効率化/三桜工業様/蛇腹形状の自動設計）",
+                "minLength": 1,
+                "type": "string"
+              },
+              "outputDir": {
+                "description": "出力先ディレクトリ（既定 docs）",
+                "type": "string"
+              }
+            },
+            "required": [
+              "category"
+            ],
+            "type": "object"
+          },
+          "name": "download_esa_category"
+        },
+        {
+          "description": "esa を検索クエリでヒットした記事を一括ダウンロードする（download-article.js --search）。.env の ESA_TEAM_NAME / ESA_ACCESS_TOKEN が必要。差分同期: 未変更の記事は上書きしない。ローカル編集があれば conflict として上書きを見送る。件数は応答の sync.totals（added/updated/skipped/conflict/missing/error）で確認すること（ヒット0件でも ok:true / exitCode 0 になる）。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "outputDir": {
+                "description": "出力先ディレクトリ（既定 docs）",
+                "type": "string"
+              },
+              "query": {
+                "description": "esa 検索クエリ",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "download_esa_search"
+        },
+        {
+          "description": "Web ページを再帰クロールして Markdown 化し保存する（download-web.js）。最長30分ブロックする。差分同期: ETag / Last-Modified による条件付きGETで未変更ページは取得も上書きもしない。ローカルで編集されたファイルは上書きせず conflict として応答の sync に報告する。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "concurrency": {
+                "description": "同時リクエスト数（既定 5）",
+                "maximum": 10,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "delay": {
+                "description": "リクエスト間隔 ms（既定 1000）",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maxDepth": {
+                "description": "クロール深度（既定 3）",
+                "maximum": 10,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "outputDir": {
+                "description": "出力先ディレクトリ（既定 docs）",
+                "type": "string"
+              },
+              "url": {
+                "description": "開始 URL（http/https）",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "url"
+            ],
+            "type": "object"
+          },
+          "name": "download_web"
+        },
+        {
+          "description": "Git リポジトリを取得して docs/ 配下に反映する（download-git.js）。差分同期: data/git-cache/ にクローンを保持し、2回目以降は shallow fetch で差分だけ反映する。内容が同じファイルには触れず、上流から消えたファイルだけを削除して応答の sync に一覧を返す。outputDir が \"docs\" 始まりでない場合は docs/ が前置される。プライベートリポジトリは .env の GIT_TOKEN 等が必要。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "branch": {
+                "description": "ブランチ名（省略時はリポジトリのデフォルトブランチ）",
+                "type": "string"
+              },
+              "outputDir": {
+                "description": "出力先（既定 docs/<リポジトリ名>）",
+                "type": "string"
+              },
+              "repository": {
+                "description": "リポジトリ URL（https:// または git@ 形式）",
+                "minLength": 1,
+                "type": "string"
+              }
+            },
+            "required": [
+              "repository"
+            ],
+            "type": "object"
+          },
+          "name": "download_git"
+        }
+      ]
+    },
+    "kb-search": {
+      "protocol_version": "2024-11-05",
+      "server_info": {
+        "name": "kb-search",
+        "version": "1.0.0"
+      },
+      "startup_stderr": "[kb-search] MCP server started (corpora: work, reference)\n",
+      "tool_count": 4,
+      "tools": [
+        {
+          "description": "ナレッジベースを検索し、出典（パス・行番号）付きで返す。全文検索（FTS5/BM25）を基本とし、埋め込みがある場合はベクトル検索と RRF で統合する。結果の index_stale が true の場合、索引後にファイルが変わっているため行番号を信用せず get_document で読み直すこと。同一記事が複数パスに存在する場合は1件に畳み、other_paths に残りを示す。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "corpus": {
+                "description": "検索対象。work=実務資料（既定） / reference=CATIA原本（B32doc）",
+                "enum": [
+                  "work",
+                  "reference"
+                ],
+                "type": "string"
+              },
+              "document_type": {
+                "description": "文書種類で絞る",
+                "enum": [
+                  "meeting",
+                  "specification",
+                  "knowledge",
+                  "memo",
+                  "reference"
+                ],
+                "type": "string"
+              },
+              "limit": {
+                "description": "返す件数（既定10）",
+                "maximum": 50,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "path_prefix": {
+                "description": "docs/ からの相対パス接頭辞で絞る",
+                "type": "string"
+              },
+              "query": {
+                "description": "検索したい質問または識別子（日本語自然文可）",
+                "minLength": 1,
+                "type": "string"
+              },
+              "source": {
+                "description": "由来で絞る",
+                "enum": [
+                  "esa",
+                  "web",
+                  "git",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              "status": {
+                "description": "業務状態で絞る",
+                "enum": [
+                  "active",
+                  "deprecated",
+                  "archived"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "type": "object"
+          },
+          "name": "search_kb"
+        },
+        {
+          "description": "文書の原文を取得する。検索結果の行番号が陳腐化している場合や、前後の文脈を確認したい場合に使う。行範囲を指定すると該当部分だけを行番号付きで返し、その範囲の content_hash（range_hash）も返す（可視化の SceneSpec sources[].content_hash にはこの値を使う）。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "context": {
+                "description": "前後に含める行数（既定0）",
+                "maximum": 50,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "end_line": {
+                "description": "終了行",
+                "minimum": 1,
+                "type": "integer"
+              },
+              "path": {
+                "description": "docs/ からの相対パス",
+                "minLength": 1,
+                "type": "string"
+              },
+              "start_line": {
+                "description": "開始行（1始まり）",
+                "minimum": 1,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "type": "object"
+          },
+          "name": "get_document"
+        },
+        {
+          "description": "検索結果の chunk_id からチャンク本文とその行範囲を取得する。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "chunk_id": {
+                "description": "search_kb が返した chunk_id",
+                "exclusiveMinimum": 0,
+                "type": "integer"
+              },
+              "corpus": {
+                "description": "chunk_id が属するコーパス（既定 work）",
+                "enum": [
+                  "work",
+                  "reference"
+                ],
+                "type": "string"
+              }
+            },
+            "required": [
+              "chunk_id"
+            ],
+            "type": "object"
+          },
+          "name": "get_chunk"
+        },
+        {
+          "description": "コーパスごとの索引の状態（文書数・チャンク数・埋め込み数・tokenizer・最終索引日時）を返す。検索結果が不自然なときや、索引が最新かを確認したいときに使う。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "index_status"
+        }
+      ]
+    },
+    "kb-visualize": {
+      "protocol_version": "2024-11-05",
+      "server_info": {
+        "name": "kb-visualize",
+        "version": "1.0.0"
+      },
+      "startup_stderr": "[kb-visualize] MCP server started (root: C:\\Temp\\multi-source-knowledge-base)\n",
+      "tool_count": 3,
+      "tools": [
+        {
+          "description": "利用可能なシーン種別（テンプレート・必須フィールド・beat 種別）を JSON で返す。render_scene の前に必ず呼び、SceneSpec の組み立てに使うこと。予約済み（未実装）: timeline / comparison / domain。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "list_scene_kinds"
+        },
+        {
+          "description": "Python / Manim / ffmpeg / 日本語フォントの有無とバージョンを診断する。初回利用時や PYTHON_NOT_FOUND / MANIM_NOT_FOUND 等のエラー時に呼ぶ。依存が欠けていても ok:true（診断自体は成功）。描画可否は ready で判定する。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "properties": {},
+            "type": "object"
+          },
+          "name": "check_visualize_deps"
+        },
+        {
+          "description": "SceneSpec を検証し、テンプレート Scene のみで Manim レンダリングして reports/visualizations/<id>/ に output.mp4|png・scene-spec.json・scene.py・manifest.json を保存する。各 beat は sources[].id への source_refs を持つこと（出典のない数値は描画されない）。sources[].content_hash には kb-search get_document の range_hash を使う。レンダリングは数分かかることがある（最長10分ブロック。KB_VISUALIZE_TIMEOUT_MS で変更可）。失敗時は code（INVALID_SCENE_SPEC / SOURCE_NOT_FOUND / SOURCE_HASH_MISMATCH / PYTHON_NOT_FOUND / MANIM_NOT_FOUND / RENDER_TIMEOUT / RENDER_FAILED / OUTPUT_NOT_FOUND / OUTPUT_PATH_VIOLATION / CONCURRENT_RENDER）で分岐すること。",
+          "execution": {
+            "taskSupport": "forbidden"
+          },
+          "inputSchema": {
+            "$schema": "http://json-schema.org/draft-07/schema#",
+            "additionalProperties": false,
+            "properties": {
+              "sceneSpec": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {},
+                    "type": "object"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "description": "SceneSpec（JSON オブジェクト推奨。JSON 文字列も可）。list_scene_kinds のテンプレートに従うこと"
+              }
+            },
+            "required": [
+              "sceneSpec"
+            ],
+            "type": "object"
+          },
+          "name": "render_scene"
+        }
+      ]
+    }
+  },
+  "source": "MCP tools/list (kb-download / kb-search / kb-visualize)"
+}

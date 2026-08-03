@@ -26,6 +26,7 @@ Python 実装の「正しさ」は、ここで採取した値と一致するか�
 node tests/fixtures/capture/capture-kernel.mjs
 node tests/fixtures/capture/capture-batch-config.mjs
 node tests/fixtures/capture/capture-real-docs.mjs
+node tests/fixtures/capture/capture-mcp.mjs
 ```
 
 既定では旧リポジトリを `C:\Temp\multi-source-knowledge-base` に想定する。
@@ -63,6 +64,27 @@ diff /tmp/run1.sha256 /tmp/run2.sha256   # 差分が無いこと
   `tests/fixtures/real-docs/samples.json` に出力する。64KB超のファイルと
   秘密情報パターンに当たったサンプルは除外し、除外件数・理由・層ごとの
   実採取数（0件の層も含む）を manifest（`layers[]` / `exclusions[]`）に記録する。
+- `capture-mcp.mjs` — kb-download(8ツール)/kb-search(4ツール)/
+  kb-visualize(3ツール)の3つの MCP stdio サーバーを子プロセスで起動し、
+  JSON-RPC 2.0 の生レスポンスをそのまま `tests/fixtures/mcp/tools-list.json`
+  (`tools/list` の全スキーマ)と `tests/fixtures/mcp/<server>/<tool>/<case>.json`
+  (各ケースの生レスポンス)へ出力する。他の採取スクリプトと違い期待値は
+  カーネル関数の戻り値ではなく MCP プロトコル応答そのものであり、
+  `{schema, request, response, response_raw_line, response_kind,
+  is_error_present/value, stderr_tail, run2, nondeterministic_fields}` という
+  専用の形式を持つ（`{schema, source, cases}` 形式ではない）。
+  破壊的なツール(`run_batch`/`download_*`/`render_scene`)は正常系を実行せず、
+  spawn 前に(zod スキーマ検証またはハンドラ内の早期リターンで)弾かれる
+  エラー系のみを採る。`add_web_batch` は呼び出さず `tools/list` のスキーマのみ
+  `skipped_reason` 付きで記録する。**kb-search だけは実 SQLite 索引
+  (`data/kb-index.sqlite`・`data/reference-index.sqlite`)を開くと
+  ファイルの mtime が変化することが実測で判明した(サイズは不変)ため、
+  旧リポジトリ外の使い捨てサンドボックスへ `tools/kb-search-mcp.js` と
+  依存を丸ごとコピーし(`docs/`・`node_modules/` はジャンクションで読み取り
+  専用参照、`data/*.sqlite` はコピー)、そこで動かしてから破棄する。**
+  各ケースは2回実行し、応答の構造的 diff を `nondeterministic_fields` として
+  記録する(採取そのものは決定的でなくてよいが、どのフィールドが揺れるかは
+  記録する。詳細は `.superpowers/sdd/M1-fixture-capture/task-3-report.md`)。
 
 ## フィクスチャの形式
 

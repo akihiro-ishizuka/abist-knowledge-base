@@ -1,0 +1,67 @@
+{
+  "case": "nonexistent_path",
+  "deviation_from_brief": null,
+  "execution_environment": "sandbox_copy (data/*.sqlite はコピー、docs/・node_modules/ はジャンクション経由の読み取り専用参照。理由はこのファイル冒頭のインシデント注記を参照)",
+  "is_error_present": true,
+  "is_error_value": true,
+  "nondeterministic_fields": [],
+  "notes": "存在しないパス。fs.readFileSync の ENOENT を fail() で返す。",
+  "request": {
+    "id": 17,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "path": "存在しない/パス/nope.md"
+      },
+      "name": "get_document"
+    }
+  },
+  "response": {
+    "id": 17,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": false,\n  \"error\": \"ENOENT: no such file or directory, open 'C:\\\\Users\\\\a1199118\\\\AppData\\\\Local\\\\Temp\\\\kb-search-sandbox-d3xcUp\\\\docs\\\\存在しない\\\\パス\\\\nope.md'\"\n}",
+          "type": "text"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"error\\\": \\\"ENOENT: no such file or directory, open 'C:\\\\\\\\Users\\\\\\\\a1199118\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\kb-search-sandbox-d3xcUp\\\\\\\\docs\\\\\\\\存在しない\\\\\\\\パス\\\\\\\\nope.md'\\\"\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":17}",
+  "run2": {
+    "request": {
+      "id": 18,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "path": "存在しない/パス/nope.md"
+        },
+        "name": "get_document"
+      }
+    },
+    "response": {
+      "id": 18,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": false,\n  \"error\": \"ENOENT: no such file or directory, open 'C:\\\\Users\\\\a1199118\\\\AppData\\\\Local\\\\Temp\\\\kb-search-sandbox-d3xcUp\\\\docs\\\\存在しない\\\\パス\\\\nope.md'\"\n}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"error\\\": \\\"ENOENT: no such file or directory, open 'C:\\\\\\\\Users\\\\\\\\a1199118\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Temp\\\\\\\\kb-search-sandbox-d3xcUp\\\\\\\\docs\\\\\\\\存在しない\\\\\\\\パス\\\\\\\\nope.md'\\\"\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":18}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-search",
+  "stderr_tail": "",
+  "tool": "get_document"
+}

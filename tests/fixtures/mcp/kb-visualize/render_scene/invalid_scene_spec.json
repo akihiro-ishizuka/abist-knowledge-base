@@ -1,0 +1,71 @@
+{
+  "case": "invalid_scene_spec",
+  "deviation_from_brief": null,
+  "execution_environment": "live_old_repo",
+  "is_error_present": true,
+  "is_error_value": true,
+  "nondeterministic_fields": [],
+  "notes": "validateSceneSpec() は純粋関数で fs に一切触れない(renderScene の Step 1、実装で確認済み)。スキーマ検証エラーのみで INVALID_SCENE_SPEC を返す。",
+  "request": {
+    "id": 11,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "sceneSpec": {
+          "foo": "bar"
+        }
+      },
+      "name": "render_scene"
+    }
+  },
+  "response": {
+    "id": 11,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": false,\n  \"code\": \"INVALID_SCENE_SPEC\",\n  \"errors\": [\n    {\n      \"path\": \"schema_version\",\n      \"code\": \"invalid\",\n      \"message\": \"schema_version は \\\"1.0\\\" を指定してください\"\n    },\n    {\n      \"path\": \"scene_kind\",\n      \"code\": \"unknown_kind\",\n      \"message\": \"scene_kind は explain / flow のいずれかを指定してください\"\n    },\n    {\n      \"path\": \"output_format\",\n      \"code\": \"invalid\",\n      \"message\": \"output_format は mp4 / png のいずれかを指定してください\"\n    },\n    {\n      \"path\": \"title\",\n      \"code\": \"invalid\",\n      \"message\": \"title は 1〜80 文字で指定してください\"\n    },\n    {\n      \"path\": \"sources\",\n      \"code\": \"invalid\",\n      \"message\": \"sources は配列で指定してください\"\n    }\n  ],\n  \"warnings\": []\n}",
+          "type": "text"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"code\\\": \\\"INVALID_SCENE_SPEC\\\",\\n  \\\"errors\\\": [\\n    {\\n      \\\"path\\\": \\\"schema_version\\\",\\n      \\\"code\\\": \\\"invalid\\\",\\n      \\\"message\\\": \\\"schema_version は \\\\\\\"1.0\\\\\\\" を指定してください\\\"\\n    },\\n    {\\n      \\\"path\\\": \\\"scene_kind\\\",\\n      \\\"code\\\": \\\"unknown_kind\\\",\\n      \\\"message\\\": \\\"scene_kind は explain / flow のいずれかを指定してください\\\"\\n    },\\n    {\\n      \\\"path\\\": \\\"output_format\\\",\\n      \\\"code\\\": \\\"invalid\\\",\\n      \\\"message\\\": \\\"output_format は mp4 / png のいずれかを指定してください\\\"\\n    },\\n    {\\n      \\\"path\\\": \\\"title\\\",\\n      \\\"code\\\": \\\"invalid\\\",\\n      \\\"message\\\": \\\"title は 1〜80 文字で指定してください\\\"\\n    },\\n    {\\n      \\\"path\\\": \\\"sources\\\",\\n      \\\"code\\\": \\\"invalid\\\",\\n      \\\"message\\\": \\\"sources は配列で指定してください\\\"\\n    }\\n  ],\\n  \\\"warnings\\\": []\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":11}",
+  "run2": {
+    "request": {
+      "id": 12,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "sceneSpec": {
+            "foo": "bar"
+          }
+        },
+        "name": "render_scene"
+      }
+    },
+    "response": {
+      "id": 12,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": false,\n  \"code\": \"INVALID_SCENE_SPEC\",\n  \"errors\": [\n    {\n      \"path\": \"schema_version\",\n      \"code\": \"invalid\",\n      \"message\": \"schema_version は \\\"1.0\\\" を指定してください\"\n    },\n    {\n      \"path\": \"scene_kind\",\n      \"code\": \"unknown_kind\",\n      \"message\": \"scene_kind は explain / flow のいずれかを指定してください\"\n    },\n    {\n      \"path\": \"output_format\",\n      \"code\": \"invalid\",\n      \"message\": \"output_format は mp4 / png のいずれかを指定してください\"\n    },\n    {\n      \"path\": \"title\",\n      \"code\": \"invalid\",\n      \"message\": \"title は 1〜80 文字で指定してください\"\n    },\n    {\n      \"path\": \"sources\",\n      \"code\": \"invalid\",\n      \"message\": \"sources は配列で指定してください\"\n    }\n  ],\n  \"warnings\": []\n}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"code\\\": \\\"INVALID_SCENE_SPEC\\\",\\n  \\\"errors\\\": [\\n    {\\n      \\\"path\\\": \\\"schema_version\\\",\\n      \\\"code\\\": \\\"invalid\\\",\\n      \\\"message\\\": \\\"schema_version は \\\\\\\"1.0\\\\\\\" を指定してください\\\"\\n    },\\n    {\\n      \\\"path\\\": \\\"scene_kind\\\",\\n      \\\"code\\\": \\\"unknown_kind\\\",\\n      \\\"message\\\": \\\"scene_kind は explain / flow のいずれかを指定してください\\\"\\n    },\\n    {\\n      \\\"path\\\": \\\"output_format\\\",\\n      \\\"code\\\": \\\"invalid\\\",\\n      \\\"message\\\": \\\"output_format は mp4 / png のいずれかを指定してください\\\"\\n    },\\n    {\\n      \\\"path\\\": \\\"title\\\",\\n      \\\"code\\\": \\\"invalid\\\",\\n      \\\"message\\\": \\\"title は 1〜80 文字で指定してください\\\"\\n    },\\n    {\\n      \\\"path\\\": \\\"sources\\\",\\n      \\\"code\\\": \\\"invalid\\\",\\n      \\\"message\\\": \\\"sources は配列で指定してください\\\"\\n    }\\n  ],\\n  \\\"warnings\\\": []\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":12}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-visualize",
+  "stderr_tail": "",
+  "tool": "render_scene"
+}

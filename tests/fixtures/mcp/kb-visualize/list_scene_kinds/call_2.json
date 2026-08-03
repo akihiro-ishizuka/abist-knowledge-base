@@ -1,0 +1,63 @@
+{
+  "case": "call_2",
+  "deviation_from_brief": null,
+  "execution_environment": "live_old_repo",
+  "is_error_present": true,
+  "is_error_value": false,
+  "nondeterministic_fields": [],
+  "notes": "引数を取らないため、呼び出し間の冪等性確認を兼ねた2件目。",
+  "request": {
+    "id": 5,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {},
+      "name": "list_scene_kinds"
+    }
+  },
+  "response": {
+    "id": 5,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": true,\n  \"count\": 2,\n  \"scene_kinds\": [\n    {\n      \"kind\": \"explain\",\n      \"description\": \"複数ステップの解説アニメーション。statement / metric を順に提示する\",\n      \"template\": \"step_explanation\",\n      \"required\": [\n        \"schema_version\",\n        \"scene_kind\",\n        \"output_format\",\n        \"template\",\n        \"title\",\n        \"sources\",\n        \"beats\"\n      ],\n      \"beat_types\": [\n        \"statement\",\n        \"metric\",\n        \"transition\"\n      ]\n    },\n    {\n      \"kind\": \"flow\",\n      \"description\": \"処理・判断・データフロー図。flow_step と transition で流れを示す\",\n      \"template\": \"data_flow_v1\",\n      \"required\": [\n        \"schema_version\",\n        \"scene_kind\",\n        \"output_format\",\n        \"template\",\n        \"title\",\n        \"sources\",\n        \"beats\"\n      ],\n      \"beat_types\": [\n        \"flow_step\",\n        \"transition\",\n        \"statement\",\n        \"metric\"\n      ]\n    }\n  ]\n}",
+          "type": "text"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"count\\\": 2,\\n  \\\"scene_kinds\\\": [\\n    {\\n      \\\"kind\\\": \\\"explain\\\",\\n      \\\"description\\\": \\\"複数ステップの解説アニメーション。statement / metric を順に提示する\\\",\\n      \\\"template\\\": \\\"step_explanation\\\",\\n      \\\"required\\\": [\\n        \\\"schema_version\\\",\\n        \\\"scene_kind\\\",\\n        \\\"output_format\\\",\\n        \\\"template\\\",\\n        \\\"title\\\",\\n        \\\"sources\\\",\\n        \\\"beats\\\"\\n      ],\\n      \\\"beat_types\\\": [\\n        \\\"statement\\\",\\n        \\\"metric\\\",\\n        \\\"transition\\\"\\n      ]\\n    },\\n    {\\n      \\\"kind\\\": \\\"flow\\\",\\n      \\\"description\\\": \\\"処理・判断・データフロー図。flow_step と transition で流れを示す\\\",\\n      \\\"template\\\": \\\"data_flow_v1\\\",\\n      \\\"required\\\": [\\n        \\\"schema_version\\\",\\n        \\\"scene_kind\\\",\\n        \\\"output_format\\\",\\n        \\\"template\\\",\\n        \\\"title\\\",\\n        \\\"sources\\\",\\n        \\\"beats\\\"\\n      ],\\n      \\\"beat_types\\\": [\\n        \\\"flow_step\\\",\\n        \\\"transition\\\",\\n        \\\"statement\\\",\\n        \\\"metric\\\"\\n      ]\\n    }\\n  ]\\n}\"}],\"isError\":false},\"jsonrpc\":\"2.0\",\"id\":5}",
+  "run2": {
+    "request": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {},
+        "name": "list_scene_kinds"
+      }
+    },
+    "response": {
+      "id": 6,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": true,\n  \"count\": 2,\n  \"scene_kinds\": [\n    {\n      \"kind\": \"explain\",\n      \"description\": \"複数ステップの解説アニメーション。statement / metric を順に提示する\",\n      \"template\": \"step_explanation\",\n      \"required\": [\n        \"schema_version\",\n        \"scene_kind\",\n        \"output_format\",\n        \"template\",\n        \"title\",\n        \"sources\",\n        \"beats\"\n      ],\n      \"beat_types\": [\n        \"statement\",\n        \"metric\",\n        \"transition\"\n      ]\n    },\n    {\n      \"kind\": \"flow\",\n      \"description\": \"処理・判断・データフロー図。flow_step と transition で流れを示す\",\n      \"template\": \"data_flow_v1\",\n      \"required\": [\n        \"schema_version\",\n        \"scene_kind\",\n        \"output_format\",\n        \"template\",\n        \"title\",\n        \"sources\",\n        \"beats\"\n      ],\n      \"beat_types\": [\n        \"flow_step\",\n        \"transition\",\n        \"statement\",\n        \"metric\"\n      ]\n    }\n  ]\n}",
+            "type": "text"
+          }
+        ],
+        "isError": false
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"count\\\": 2,\\n  \\\"scene_kinds\\\": [\\n    {\\n      \\\"kind\\\": \\\"explain\\\",\\n      \\\"description\\\": \\\"複数ステップの解説アニメーション。statement / metric を順に提示する\\\",\\n      \\\"template\\\": \\\"step_explanation\\\",\\n      \\\"required\\\": [\\n        \\\"schema_version\\\",\\n        \\\"scene_kind\\\",\\n        \\\"output_format\\\",\\n        \\\"template\\\",\\n        \\\"title\\\",\\n        \\\"sources\\\",\\n        \\\"beats\\\"\\n      ],\\n      \\\"beat_types\\\": [\\n        \\\"statement\\\",\\n        \\\"metric\\\",\\n        \\\"transition\\\"\\n      ]\\n    },\\n    {\\n      \\\"kind\\\": \\\"flow\\\",\\n      \\\"description\\\": \\\"処理・判断・データフロー図。flow_step と transition で流れを示す\\\",\\n      \\\"template\\\": \\\"data_flow_v1\\\",\\n      \\\"required\\\": [\\n        \\\"schema_version\\\",\\n        \\\"scene_kind\\\",\\n        \\\"output_format\\\",\\n        \\\"template\\\",\\n        \\\"title\\\",\\n        \\\"sources\\\",\\n        \\\"beats\\\"\\n      ],\\n      \\\"beat_types\\\": [\\n        \\\"flow_step\\\",\\n        \\\"transition\\\",\\n        \\\"statement\\\",\\n        \\\"metric\\\"\\n      ]\\n    }\\n  ]\\n}\"}],\"isError\":false},\"jsonrpc\":\"2.0\",\"id\":6}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-visualize",
+  "stderr_tail": "",
+  "tool": "list_scene_kinds"
+}
