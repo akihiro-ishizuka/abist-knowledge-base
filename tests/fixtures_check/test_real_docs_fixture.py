@@ -167,6 +167,60 @@ def test_excluded_paths_are_not_also_selected() -> None:
     assert not overlap, f"除外されたはずの path がサンプルにも含まれている: {overlap}"
 
 
+def test_bom_cases_have_actual_bom_bytes() -> None:
+    """bom_prefixed 層の各サンプルが実際に `EF BB BF` から始まる生バイト列を保持していること。
+
+    レビュー指摘対応: 層件数・mask-invariance のテストだけでは、生バイトの
+    正確性（BOM除去・改行正規化などの破壊）は検証できない。将来
+    capture-real-docs.mjs がリファクタリングされて BOM を剥がしてしまっても、
+    既存のテストは全て通ったままになりうる（層件数は変わらず、mask_secrets も
+    BOMの有無に反応しないため）。ここで `raw_b64` を実際にデコードし、生バイト
+    そのものを直接検証する。`layers[]` の `selected_paths` を起点にするため、
+    この層が将来空になれば（層化クエリの破損）このテスト自体が明示的に失敗する。
+    """
+    data = _load()
+    layers_by_name = {layer["name"]: layer for layer in data["layers"]}
+    bom_paths = layers_by_name["bom_prefixed"]["selected_paths"]
+    assert bom_paths, "bom_prefixed 層が空 — BOMバイト検証が空振りになる（層化クエリ破損の疑い）"
+
+    cases_by_path = {
+        case["path"]: case for case in data["cases"] if case["layer"] == "bom_prefixed"
+    }
+    assert set(cases_by_path) == set(bom_paths), (
+        "bom_prefixed 層の selected_paths と cases が一致しない"
+    )
+
+    for path in bom_paths:
+        raw_bytes = base64.b64decode(cases_by_path[path]["expected"]["frontmatter"]["raw_b64"])
+        assert raw_bytes.startswith(b"\xef\xbb\xbf"), (
+            f"{path}: raw_b64 が EF BB BF (BOM) から始まっていない（採取時にBOMが失われた可能性）"
+        )
+
+
+def test_crlf_cases_retain_crlf_bytes() -> None:
+    """crlf_body 層の各サンプルが実際に `\\r\\n` を含む生バイト列を保持していること。
+
+    レビュー指摘対応: BOM検証と同じ理由で、改行コードの正規化破壊は既存の
+    件数・mask-invariance テストでは検出できない。`raw_b64` を実際にデコード
+    して `\\r\\n` の残存を直接確認する。
+    """
+    data = _load()
+    layers_by_name = {layer["name"]: layer for layer in data["layers"]}
+    crlf_paths = layers_by_name["crlf_body"]["selected_paths"]
+    assert crlf_paths, "crlf_body 層が空 — CRLFバイト検証が空振りになる（層化クエリ破損の疑い）"
+
+    cases_by_path = {case["path"]: case for case in data["cases"] if case["layer"] == "crlf_body"}
+    assert set(cases_by_path) == set(crlf_paths), (
+        "crlf_body 層の selected_paths と cases が一致しない"
+    )
+
+    for path in crlf_paths:
+        raw_bytes = base64.b64decode(cases_by_path[path]["expected"]["frontmatter"]["raw_b64"])
+        assert b"\r\n" in raw_bytes, (
+            f"{path}: raw_b64 に \\r\\n が含まれていない（採取時に改行が正規化された可能性）"
+        )
+
+
 def test_no_secrets_leak_into_included_samples() -> None:
     """採取済みサンプルの本文コンテンツに、本物の mask_secrets を適用しても
     変化が無いこと。
