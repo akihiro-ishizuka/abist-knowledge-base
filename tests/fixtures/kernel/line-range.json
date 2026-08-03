@@ -1,0 +1,328 @@
+{
+  "cases": [
+    {
+      "expected": {
+        "lines": [
+          "a",
+          "b",
+          "c",
+          ""
+        ],
+        "rangeHash1_3": {
+          "hash": "ea7fb08b7a2dc4619ffb7c7bb38d95a2047935fa165d71b12efd3852a2e6d0cc",
+          "ok": true,
+          "totalLines": 4
+        }
+      },
+      "id": "crlf_lf_equivalence_lf",
+      "input_b64": "YQpiCmMK"
+    },
+    {
+      "expected": {
+        "lines": [
+          "a",
+          "b",
+          "c",
+          ""
+        ],
+        "rangeHash1_3": {
+          "hash": "ea7fb08b7a2dc4619ffb7c7bb38d95a2047935fa165d71b12efd3852a2e6d0cc",
+          "ok": true,
+          "totalLines": 4
+        }
+      },
+      "id": "crlf_lf_equivalence_crlf",
+      "input_b64": "YQ0KYg0KYw0K"
+    },
+    {
+      "expected": {
+        "lines": [
+          "title",
+          "body"
+        ],
+        "rangeHash1_1": {
+          "hash": "aaf2320646108059a87ab5017a86aee454f5378ed95003dbb2e12f4ca5266e0e",
+          "ok": true,
+          "totalLines": 2
+        }
+      },
+      "id": "bom_stripped_once",
+      "input_b64": "77u/dGl0bGUKYm9keQ=="
+    },
+    {
+      "expected": {
+        "slice2_3": {
+          "ok": true,
+          "text": "l2\nl3",
+          "totalLines": 4
+        }
+      },
+      "id": "slice_range_inclusive",
+      "input_b64": "bDEKbDIKbDMKbDQ="
+    },
+    {
+      "expected": {
+        "rangeHash1_2": {
+          "hash": "bba51dc1a47b243e683f140d647ccf2d6369882c44915312341a625cfa86109e",
+          "ok": true,
+          "totalLines": 2
+        }
+      },
+      "id": "hash_no_trim",
+      "input_b64": "ICBzcGFjZWQgIApuZXh0"
+    },
+    {
+      "expected": {
+        "rangeHash1_1": {
+          "hash": "f905b19542ed08c9a9c26543cca32e5711d207dcffb81b4cdb44ce0b989431c9",
+          "ok": true,
+          "totalLines": 1
+        }
+      },
+      "id": "single_line_range",
+      "input_b64": "b25seQ=="
+    },
+    {
+      "expected": {
+        "results": [
+          {
+            "end": 1,
+            "result": {
+              "ok": false,
+              "reason": "RANGE_OUT_OF_BOUNDS",
+              "totalLines": 3
+            },
+            "start": 0
+          },
+          {
+            "end": 4,
+            "result": {
+              "ok": false,
+              "reason": "RANGE_OUT_OF_BOUNDS",
+              "totalLines": 3
+            },
+            "start": 1
+          },
+          {
+            "end": 2,
+            "result": {
+              "ok": false,
+              "reason": "RANGE_OUT_OF_BOUNDS",
+              "totalLines": 3
+            },
+            "start": 3
+          },
+          {
+            "end": 2,
+            "result": {
+              "ok": false,
+              "reason": "RANGE_OUT_OF_BOUNDS",
+              "totalLines": 3
+            },
+            "start": -1
+          },
+          {
+            "end": 2,
+            "result": {
+              "ok": false,
+              "reason": "RANGE_OUT_OF_BOUNDS",
+              "totalLines": 3
+            },
+            "start": 1.5
+          }
+        ]
+      },
+      "id": "out_of_bounds",
+      "input_b64": "YQpiCmM="
+    },
+    {
+      "expected": {
+        "lines": [
+          "a",
+          "",
+          "c"
+        ]
+      },
+      "id": "kb_search_line_split",
+      "input_b64": "YQ0KDQpj"
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "cbd745e66ec6e35ef10dde6223d875ce611a99303c56f3b289c5cf193c591cbe",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom0_lf_first_line",
+      "input_b64": "5LiA6KGM55uuIGxpbmUxCuS6jOihjOebriBsaW5lMgrkuInooYznm64gbGluZTMK5Zub6KGM55uuIGxpbmU0Cg=="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom0_lf_last_line",
+      "input_b64": "5LiA6KGM55uuIGxpbmUxCuS6jOihjOebriBsaW5lMgrkuInooYznm64gbGluZTMK5Zub6KGM55uuIGxpbmU0Cg=="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "b7ed20e136faf6d2f53b4ed74445413c70754c6101de7faab24eca5468005743",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom0_lf_single_middle_line",
+      "input_b64": "5LiA6KGM55uuIGxpbmUxCuS6jOihjOebriBsaW5lMgrkuInooYznm64gbGluZTMK5Zub6KGM55uuIGxpbmU0Cg=="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "6eecf966cf1a997a42ec5fa9cf4514796eba3c8a946267ee7cf4c678262c0c1e",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom0_lf_full_range",
+      "input_b64": "5LiA6KGM55uuIGxpbmUxCuS6jOihjOebriBsaW5lMgrkuInooYznm64gbGluZTMK5Zub6KGM55uuIGxpbmU0Cg=="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "cbd745e66ec6e35ef10dde6223d875ce611a99303c56f3b289c5cf193c591cbe",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom0_crlf_first_line",
+      "input_b64": "5LiA6KGM55uuIGxpbmUxDQrkuozooYznm64gbGluZTINCuS4ieihjOebriBsaW5lMw0K5Zub6KGM55uuIGxpbmU0DQo="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom0_crlf_last_line",
+      "input_b64": "5LiA6KGM55uuIGxpbmUxDQrkuozooYznm64gbGluZTINCuS4ieihjOebriBsaW5lMw0K5Zub6KGM55uuIGxpbmU0DQo="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "b7ed20e136faf6d2f53b4ed74445413c70754c6101de7faab24eca5468005743",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom0_crlf_single_middle_line",
+      "input_b64": "5LiA6KGM55uuIGxpbmUxDQrkuozooYznm64gbGluZTINCuS4ieihjOebriBsaW5lMw0K5Zub6KGM55uuIGxpbmU0DQo="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "6eecf966cf1a997a42ec5fa9cf4514796eba3c8a946267ee7cf4c678262c0c1e",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom0_crlf_full_range",
+      "input_b64": "5LiA6KGM55uuIGxpbmUxDQrkuozooYznm64gbGluZTINCuS4ieihjOebriBsaW5lMw0K5Zub6KGM55uuIGxpbmU0DQo="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "cbd745e66ec6e35ef10dde6223d875ce611a99303c56f3b289c5cf193c591cbe",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom1_lf_first_line",
+      "input_b64": "77u/5LiA6KGM55uuIGxpbmUxCuS6jOihjOebriBsaW5lMgrkuInooYznm64gbGluZTMK5Zub6KGM55uuIGxpbmU0Cg=="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom1_lf_last_line",
+      "input_b64": "77u/5LiA6KGM55uuIGxpbmUxCuS6jOihjOebriBsaW5lMgrkuInooYznm64gbGluZTMK5Zub6KGM55uuIGxpbmU0Cg=="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "b7ed20e136faf6d2f53b4ed74445413c70754c6101de7faab24eca5468005743",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom1_lf_single_middle_line",
+      "input_b64": "77u/5LiA6KGM55uuIGxpbmUxCuS6jOihjOebriBsaW5lMgrkuInooYznm64gbGluZTMK5Zub6KGM55uuIGxpbmU0Cg=="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "6eecf966cf1a997a42ec5fa9cf4514796eba3c8a946267ee7cf4c678262c0c1e",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom1_lf_full_range",
+      "input_b64": "77u/5LiA6KGM55uuIGxpbmUxCuS6jOihjOebriBsaW5lMgrkuInooYznm64gbGluZTMK5Zub6KGM55uuIGxpbmU0Cg=="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "cbd745e66ec6e35ef10dde6223d875ce611a99303c56f3b289c5cf193c591cbe",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom1_crlf_first_line",
+      "input_b64": "77u/5LiA6KGM55uuIGxpbmUxDQrkuozooYznm64gbGluZTINCuS4ieihjOebriBsaW5lMw0K5Zub6KGM55uuIGxpbmU0DQo="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom1_crlf_last_line",
+      "input_b64": "77u/5LiA6KGM55uuIGxpbmUxDQrkuozooYznm64gbGluZTINCuS4ieihjOebriBsaW5lMw0K5Zub6KGM55uuIGxpbmU0DQo="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "b7ed20e136faf6d2f53b4ed74445413c70754c6101de7faab24eca5468005743",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom1_crlf_single_middle_line",
+      "input_b64": "77u/5LiA6KGM55uuIGxpbmUxDQrkuozooYznm64gbGluZTINCuS4ieihjOebriBsaW5lMw0K5Zub6KGM55uuIGxpbmU0DQo="
+    },
+    {
+      "expected": {
+        "rangeHash": {
+          "hash": "6eecf966cf1a997a42ec5fa9cf4514796eba3c8a946267ee7cf4c678262c0c1e",
+          "ok": true,
+          "totalLines": 5
+        }
+      },
+      "id": "matrix_bom1_crlf_full_range",
+      "input_b64": "77u/5LiA6KGM55uuIGxpbmUxDQrkuozooYznm64gbGluZTINCuS4ieihjOebriBsaW5lMw0K5Zub6KGM55uuIGxpbmU0DQo="
+    }
+  ],
+  "schema": 1,
+  "source": "tools/lib/line-range.js"
+}

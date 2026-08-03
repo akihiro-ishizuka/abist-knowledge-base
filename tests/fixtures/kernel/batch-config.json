@@ -1,0 +1,198 @@
+{
+  "cases": [
+    {
+      "expected": {
+        "formatted_b64": "ewogICfom4fohbnlvaLnirbjga7oh6rli5XoqK3oqIgnOiBbCiAgICAn6Kit6KiI5Yq5546H5YyWL+S4ieahnOW3pealreanmC/om4fohbnlvaLnirbjga7oh6rli5XoqK3oqIgnLAogICAgJ+itsOS6i+mMsi/oqK3oqIjlirnnjofljJYv5LiJ5qGc5bel5qWt5qeY5a6a5L6LJwogIF0sCiAgJ29cJ3JlaWxseS1ub3Rlcyc6IFsKICAgICfjg6Hjg6IvT1wnUmVpbGx5JwogIF0sCiAgJ2NhdGlhZG9jJzogewogICAgJ3R5cGUnOiAid2ViIiwKICAgICd1cmwnOiAiaHR0cDovL2NhdGlhZG9jLmZyZWUuZnIvb25saW5lL2ludGVyZmFjZXMvQ0FBSG9tZUlkeC5odG0iLAogICAgJ291dHB1dERpcic6ICJkb2NzL2NhdGlhZG9jIiwKICAgICdtYXhEZXB0aCc6IDEwLAogICAgJ2RlbGF5JzogMTAwMAogIH0sCiAgJ2NhdGlhLWZsb3RoZXJtLXByZXAnOiB7CiAgICAndHlwZSc6ICJnaXQiLAogICAgJ3JlcG9zaXRvcnknOiAiaHR0cHM6Ly9naXRodWIuY29tL2FiaXN0LWNvLWx0ZC9jYXRpYS1mbG90aGVybS1wcmVwIiwKICAgICdicmFuY2gnOiAibWFpbiIsCiAgICAnb3V0cHV0RGlyJzogImRvY3MvY2F0aWEtZmxvdGhlcm0tcHJlcCIKICB9Cn0="
+      },
+      "id": "format_config_sample",
+      "input": {
+        "_citation": "test/batch-config-store.test.js:23-39",
+        "config": {
+          "catia-flotherm-prep": {
+            "branch": "main",
+            "outputDir": "docs/catia-flotherm-prep",
+            "repository": "https://github.com/abist-co-ltd/catia-flotherm-prep",
+            "type": "git"
+          },
+          "catiadoc": {
+            "delay": 1000,
+            "maxDepth": 10,
+            "outputDir": "docs/catiadoc",
+            "type": "web",
+            "url": "http://catiadoc.free.fr/online/interfaces/CAAHomeIdx.htm"
+          },
+          "o'reilly-notes": [
+            "メモ/O'Reilly"
+          ],
+          "蛇腹形状の自動設計": [
+            "設計効率化/三桜工業様/蛇腹形状の自動設計",
+            "議事録/設計効率化/三桜工業様定例"
+          ]
+        }
+      }
+    },
+    {
+      "expected": {
+        "content_b64": "IyEvdXNyL2Jpbi9lbnYgbm9kZQoKLy8g44OQ44OD44OB44OA44Km44Oz44Ot44O844OJ55So44Gu6Kit5a6a44OV44Kh44Kk44OrCi8vIOikh+aVsOOBruOCq+ODhuOCtOODquODkeOCueOCkumFjeWIl+OBp+Wumue+qeOBl+OBpuOBj+OBoOOBleOBhAoKZXhwb3J0IGNvbnN0IGJhdGNoQ29uZmlncyA9IHsKICAn6JuH6IW55b2i54q244Gu6Ieq5YuV6Kit6KiIJzogWwogICAgJ+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5gv6JuH6IW55b2i54q244Gu6Ieq5YuV6Kit6KiIJywKICAgICforbDkuovpjLIv6Kit6KiI5Yq5546H5YyWL+S4ieahnOW3pealreanmOWumuS+iycKICBdLAogICdvXCdyZWlsbHktbm90ZXMnOiBbCiAgICAn44Oh44OiL09cJ1JlaWxseScKICBdLAogICdjYXRpYWRvYyc6IHsKICAgICd0eXBlJzogIndlYiIsCiAgICAndXJsJzogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL29ubGluZS9pbnRlcmZhY2VzL0NBQUhvbWVJZHguaHRtIiwKICAgICdvdXRwdXREaXInOiAiZG9jcy9jYXRpYWRvYyIsCiAgICAnbWF4RGVwdGgnOiAxMCwKICAgICdkZWxheSc6IDEwMDAKICB9LAogICdjYXRpYS1mbG90aGVybS1wcmVwJzogewogICAgJ3R5cGUnOiAiZ2l0IiwKICAgICdyZXBvc2l0b3J5JzogImh0dHBzOi8vZ2l0aHViLmNvbS9hYmlzdC1jby1sdGQvY2F0aWEtZmxvdGhlcm0tcHJlcCIsCiAgICAnYnJhbmNoJzogIm1haW4iLAogICAgJ291dHB1dERpcic6ICJkb2NzL2NhdGlhLWZsb3RoZXJtLXByZXAiCiAgfQp9Owo=",
+        "parsedBackEqualsOriginal": true,
+        "regexMatched": true
+      },
+      "id": "format_config_regex_fallback_parseable",
+      "input": {
+        "_citation": "test/batch-config-store.test.js:63-76"
+      }
+    },
+    {
+      "expected": {
+        "formatted_b64": "ewogICfnqbrphY3liJfjg5Djg4Pjg4EnOiBbXSwKICAn5Y2Y57SUZXNh44OQ44OD44OBJzogWwogICAgJ+OCq+ODhuOCtOODqkEnLAogICAgJ+OCq+ODhuOCtOODqkIv44K144OWJwogIF0sCiAgJ3F1b3RlXCdpblwnbmFtZSc6IFsKICAgICdwYXRoL3dpdGhcJ3F1b3RlJwogIF0sCiAgJ3dlYkJhdGNoJzogewogICAgJ3R5cGUnOiAid2ViIiwKICAgICd1cmwnOiAiaHR0cHM6Ly9leGFtcGxlLmNvbS9kb2NzLyIsCiAgICAnb3V0cHV0RGlyJzogImRvY3MvZXhhbXBsZSIsCiAgICAnbWF4RGVwdGgnOiA1LAogICAgJ2RlbGF5JzogNTAwCiAgfSwKICAnd2ViTm9PdXRwdXREaXInOiB7CiAgICAndHlwZSc6ICJ3ZWIiLAogICAgJ3VybCc6ICJodHRwczovL2V4YW1wbGUuY29tLyIsCiAgICAnbWF4RGVwdGgnOiAxLAogICAgJ2RlbGF5JzogMTAwCiAgfSwKICAnZ2l0QmF0Y2gnOiB7CiAgICAndHlwZSc6ICJnaXQiLAogICAgJ3JlcG9zaXRvcnknOiAiaHR0cHM6Ly9naXRodWIuY29tL2V4YW1wbGUvcmVwby5naXQiLAogICAgJ2JyYW5jaCc6ICJmZWF0dXJlL3giLAogICAgJ291dHB1dERpcic6ICJkb2NzL3JlcG8iCiAgfSwKICAnbnVtZXJpY0FuZEJvb2xMaWtlU3RyaW5ncyc6IHsKICAgICd0eXBlJzogIndlYiIsCiAgICAndXJsJzogImh0dHBzOi8vZXhhbXBsZS5jb20vIiwKICAgICdvdXRwdXREaXInOiAiZG9jcy94IiwKICAgICdtYXhEZXB0aCc6IDAsCiAgICAnZGVsYXknOiAwCiAgfQp9"
+      },
+      "id": "format_config_synthetic",
+      "input": {
+        "config": {
+          "gitBatch": {
+            "branch": "feature/x",
+            "outputDir": "docs/repo",
+            "repository": "https://github.com/example/repo.git",
+            "type": "git"
+          },
+          "numericAndBoolLikeStrings": {
+            "delay": 0,
+            "maxDepth": 0,
+            "outputDir": "docs/x",
+            "type": "web",
+            "url": "https://example.com/"
+          },
+          "quote'in'name": [
+            "path/with'quote"
+          ],
+          "webBatch": {
+            "delay": 500,
+            "maxDepth": 5,
+            "outputDir": "docs/example",
+            "type": "web",
+            "url": "https://example.com/docs/"
+          },
+          "webNoOutputDir": {
+            "delay": 100,
+            "maxDepth": 1,
+            "type": "web",
+            "url": "https://example.com/"
+          },
+          "単純esaバッチ": [
+            "カテゴリA",
+            "カテゴリB/サブ"
+          ],
+          "空配列バッチ": []
+        }
+      }
+    },
+    {
+      "expected": {
+        "firstDiffIndex": null,
+        "loadedConfig": {
+          "C#ATIA": {
+            "delay": 1000,
+            "maxDepth": 3,
+            "outputDir": "C#ATIA",
+            "type": "web",
+            "url": "https://kantoku.hatenablog.com/"
+          },
+          "CATIAマクロ自動生成": [
+            "設計効率化/トヨタ自動車様/CATIAマクロ自動生成"
+          ],
+          "TS様・SUBARU様向け隙干渉チェックツール開発": [
+            "議事録/設計効率化/TS様・SUBARU様向け隙干渉チェックツール開発機能拡張",
+            "設計効率化/トヨタシステムズ様/SUBARU様/干渉チェックツール改修"
+          ],
+          "TS様・TMEJ様・打点配分ツール改修": [
+            "設計効率化/トヨタシステムズ様/TMEJ様/打点配分ツール改修",
+            "議事録/設計効率化/TS様・TMEJ様案件定例/打点配分ツール改修"
+          ],
+          "TS様・TMEJ様案件": [
+            "議事録/設計効率化/TS様・TMEJ様案件定例",
+            "設計効率化/トヨタシステムズ様/TMEJ様"
+          ],
+          "TS様・TMK様案件": [
+            "議事録/設計効率化/TS様・TMK様案件定例",
+            "設計効率化/トヨタシステムズ様/TMK様対応"
+          ],
+          "bellows-design-automation-tool_refactor_structure": {
+            "branch": "refactor/structure",
+            "outputDir": "docs/bellows-design-automation-tool_refactor_structure",
+            "repository": "https://github.com/abist-co-ltd/bellows-design-automation-tool",
+            "type": "git"
+          },
+          "catia-flotherm-prep": {
+            "branch": "main",
+            "outputDir": "docs/catia-flotherm-prep",
+            "repository": "https://github.com/abist-co-ltd/catia-flotherm-prep",
+            "type": "git"
+          },
+          "catia-jabara-design-automation_next": {
+            "branch": "next-2026-05",
+            "outputDir": "catia-jabara-design-automation",
+            "repository": "https://github.com/abist-co-ltd/catia-jabara-design-automation",
+            "type": "git"
+          },
+          "catia-macro-generator": {
+            "branch": "main",
+            "outputDir": "docs/catia-macro-generator",
+            "repository": "https://github.com/abist-co-ltd/catia-macro-generator",
+            "type": "git"
+          },
+          "catia-macro-pipeline": {
+            "branch": "feature/governance-package",
+            "outputDir": "docs/catia-macro-pipeline",
+            "repository": "https://github.com/abist-co-ltd/catia-macro-pipeline",
+            "type": "git"
+          },
+          "catiadoc": {
+            "delay": 1000,
+            "maxDepth": 10,
+            "outputDir": "docs/catiadoc",
+            "type": "web",
+            "url": "http://catiadoc.free.fr/online/interfaces/CAAHomeIdx.htm"
+          },
+          "チーム内定例": [
+            "議事録/設計効率化",
+            "設計効率化"
+          ],
+          "三桜工業様": [
+            "設計効率化/三桜工業様",
+            "議事録/設計効率化/三桜工業様定例"
+          ],
+          "休退職予測": [
+            "設計効率化/アビスト/休退職予測"
+          ],
+          "名古屋受託チーム×デジタル推進": [
+            "名古屋受託フロー",
+            "議事録/設計効率化/名古屋受託チーム×デジタル推進"
+          ],
+          "検図チェック自動化": [
+            "設計効率化/三桜工業様/検図自動化",
+            "議事録/設計効率化/三桜工業様定例"
+          ],
+          "検図自動化フェーズ2": [
+            "設計効率化/三桜工業様/検図自動化/フェーズ2"
+          ],
+          "蛇腹形状の自動設計": [
+            "設計効率化/三桜工業様/蛇腹形状の自動設計",
+            "議事録/設計効率化/三桜工業様定例"
+          ],
+          "設計効率化メモ": [
+            "設計効率化/メモ"
+          ]
+        },
+        "original_b64": "IyEvdXNyL2Jpbi9lbnYgbm9kZQoKLy8g44OQ44OD44OB44OA44Km44Oz44Ot44O844OJ55So44Gu6Kit5a6a44OV44Kh44Kk44OrCi8vIOikh+aVsOOBruOCq+ODhuOCtOODquODkeOCueOCkumFjeWIl+OBp+Wumue+qeOBl+OBpuOBj+OBoOOBleOBhAoKZXhwb3J0IGNvbnN0IGJhdGNoQ29uZmlncyA9IHsKICAn6JuH6IW55b2i54q244Gu6Ieq5YuV6Kit6KiIJzogWwogICAgJ+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5gv6JuH6IW55b2i54q244Gu6Ieq5YuV6Kit6KiIJywKICAgICforbDkuovpjLIv6Kit6KiI5Yq5546H5YyWL+S4ieahnOW3pealreanmOWumuS+iycKICBdLAogICfkuInmoZzlt6Xmpa3mp5gnOiBbCiAgICAn6Kit6KiI5Yq5546H5YyWL+S4ieahnOW3pealreanmCcsCiAgICAn6K2w5LqL6YyyL+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5jlrprkvosnCiAgXSwKICAn44OB44O844Og5YaF5a6a5L6LJzogWwogICAgJ+itsOS6i+mMsi/oqK3oqIjlirnnjofljJYnLAogICAgJ+ioreioiOWKueeOh+WMlicKICBdLAogICdUU+anmOODu1NVQkFSVeanmOWQkeOBkemameW5sua4ieODgeOCp+ODg+OCr+ODhOODvOODq+mWi+eZuic6IFsKICAgICforbDkuovpjLIv6Kit6KiI5Yq5546H5YyWL1RT5qeY44O7U1VCQVJV5qeY5ZCR44GR6ZqZ5bmy5riJ44OB44Kn44OD44Kv44OE44O844Or6ZaL55m65qmf6IO95ouh5by1JywKICAgICfoqK3oqIjlirnnjofljJYv44OI44Oo44K/44K344K544OG44Og44K65qeYL1NVQkFSVeanmC/lubLmuInjg4Hjgqfjg4Pjgq/jg4Tjg7zjg6vmlLnkv64nCiAgXSwKICAnVFPmp5jjg7tUTUvmp5jmoYjku7YnOiBbCiAgICAn6K2w5LqL6YyyL+ioreioiOWKueeOh+WMli9UU+anmOODu1RNS+anmOahiOS7tuWumuS+iycsCiAgICAn6Kit6KiI5Yq5546H5YyWL+ODiOODqOOCv+OCt+OCueODhuODoOOCuuanmC9UTUvmp5jlr77lv5wnCiAgXSwKICAnVFPmp5jjg7tUTUVK5qeY5qGI5Lu2JzogWwogICAgJ+itsOS6i+mMsi/oqK3oqIjlirnnjofljJYvVFPmp5jjg7tUTUVK5qeY5qGI5Lu25a6a5L6LJywKICAgICfoqK3oqIjlirnnjofljJYv44OI44Oo44K/44K344K544OG44Og44K65qeYL1RNRUrmp5gnCiAgXSwKICAnY2F0aWFkb2MnOiB7CiAgICAndHlwZSc6ICJ3ZWIiLAogICAgJ3VybCc6ICJodHRwOi8vY2F0aWFkb2MuZnJlZS5mci9vbmxpbmUvaW50ZXJmYWNlcy9DQUFIb21lSWR4Lmh0bSIsCiAgICAnb3V0cHV0RGlyJzogImRvY3MvY2F0aWFkb2MiLAogICAgJ21heERlcHRoJzogMTAsCiAgICAnZGVsYXknOiAxMDAwCiAgfSwKICAnQyNBVElBJzogewogICAgJ3R5cGUnOiAid2ViIiwKICAgICd1cmwnOiAiaHR0cHM6Ly9rYW50b2t1LmhhdGVuYWJsb2cuY29tLyIsCiAgICAnb3V0cHV0RGlyJzogIkMjQVRJQSIsCiAgICAnbWF4RGVwdGgnOiAzLAogICAgJ2RlbGF5JzogMTAwMAogIH0sCiAgJ+aknOWbs+ODgeOCp+ODg+OCr+iHquWLleWMlic6IFsKICAgICfoqK3oqIjlirnnjofljJYv5LiJ5qGc5bel5qWt5qeYL+aknOWbs+iHquWLleWMlicsCiAgICAn6K2w5LqL6YyyL+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5jlrprkvosnCiAgXSwKICAnY2F0aWEtZmxvdGhlcm0tcHJlcCc6IHsKICAgICd0eXBlJzogImdpdCIsCiAgICAncmVwb3NpdG9yeSc6ICJodHRwczovL2dpdGh1Yi5jb20vYWJpc3QtY28tbHRkL2NhdGlhLWZsb3RoZXJtLXByZXAiLAogICAgJ2JyYW5jaCc6ICJtYWluIiwKICAgICdvdXRwdXREaXInOiAiZG9jcy9jYXRpYS1mbG90aGVybS1wcmVwIgogIH0sCiAgJ+WQjeWPpOWxi+WPl+iol+ODgeODvOODoMOX44OH44K444K/44Or5o6o6YCyJzogWwogICAgJ+WQjeWPpOWxi+WPl+iol+ODleODreODvCcsCiAgICAn6K2w5LqL6YyyL+ioreioiOWKueeOh+WMli/lkI3lj6TlsYvlj5foqJfjg4Hjg7zjg6DDl+ODh+OCuOOCv+ODq+aOqOmAsicKICBdLAogICfoqK3oqIjlirnnjofljJbjg6Hjg6InOiBbCiAgICAn6Kit6KiI5Yq5546H5YyWL+ODoeODoicKICBdLAogICdDQVRJQeODnuOCr+ODreiHquWLleeUn+aIkCc6IFsKICAgICfoqK3oqIjlirnnjofljJYv44OI44Oo44K/6Ieq5YuV6LuK5qeYL0NBVElB44Oe44Kv44Ot6Ieq5YuV55Sf5oiQJwogIF0sCiAgJ+S8kemAgOiBt+S6iOa4rCc6IFsKICAgICfoqK3oqIjlirnnjofljJYv44Ki44OT44K544OIL+S8kemAgOiBt+S6iOa4rCcKICBdLAogICdjYXRpYS1tYWNyby1nZW5lcmF0b3InOiB7CiAgICAndHlwZSc6ICJnaXQiLAogICAgJ3JlcG9zaXRvcnknOiAiaHR0cHM6Ly9naXRodWIuY29tL2FiaXN0LWNvLWx0ZC9jYXRpYS1tYWNyby1nZW5lcmF0b3IiLAogICAgJ2JyYW5jaCc6ICJtYWluIiwKICAgICdvdXRwdXREaXInOiAiZG9jcy9jYXRpYS1tYWNyby1nZW5lcmF0b3IiCiAgfSwKICAnYmVsbG93cy1kZXNpZ24tYXV0b21hdGlvbi10b29sX3JlZmFjdG9yX3N0cnVjdHVyZSc6IHsKICAgICd0eXBlJzogImdpdCIsCiAgICAncmVwb3NpdG9yeSc6ICJodHRwczovL2dpdGh1Yi5jb20vYWJpc3QtY28tbHRkL2JlbGxvd3MtZGVzaWduLWF1dG9tYXRpb24tdG9vbCIsCiAgICAnYnJhbmNoJzogInJlZmFjdG9yL3N0cnVjdHVyZSIsCiAgICAnb3V0cHV0RGlyJzogImRvY3MvYmVsbG93cy1kZXNpZ24tYXV0b21hdGlvbi10b29sX3JlZmFjdG9yX3N0cnVjdHVyZSIKICB9LAogICfmpJzlm7Poh6rli5XljJbjg5Xjgqfjg7zjgroyJzogWwogICAgJ+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5gv5qSc5Zuz6Ieq5YuV5YyWL+ODleOCp+ODvOOCujInCiAgXSwKICAnVFPmp5jjg7tUTUVK5qeY44O75omT54K56YWN5YiG44OE44O844Or5pS55L+uJzogWwogICAgJ+ioreioiOWKueeOh+WMli/jg4jjg6jjgr/jgrfjgrnjg4bjg6Djgrrmp5gvVE1FSuanmC/miZPngrnphY3liIbjg4Tjg7zjg6vmlLnkv64nLAogICAgJ+itsOS6i+mMsi/oqK3oqIjlirnnjofljJYvVFPmp5jjg7tUTUVK5qeY5qGI5Lu25a6a5L6LL+aJk+eCuemFjeWIhuODhOODvOODq+aUueS/ricKICBdLAogICdjYXRpYS1tYWNyby1waXBlbGluZSc6IHsKICAgICd0eXBlJzogImdpdCIsCiAgICAncmVwb3NpdG9yeSc6ICJodHRwczovL2dpdGh1Yi5jb20vYWJpc3QtY28tbHRkL2NhdGlhLW1hY3JvLXBpcGVsaW5lIiwKICAgICdicmFuY2gnOiAiZmVhdHVyZS9nb3Zlcm5hbmNlLXBhY2thZ2UiLAogICAgJ291dHB1dERpcic6ICJkb2NzL2NhdGlhLW1hY3JvLXBpcGVsaW5lIgogIH0sCiAgJ2NhdGlhLWphYmFyYS1kZXNpZ24tYXV0b21hdGlvbl9uZXh0JzogewogICAgJ3R5cGUnOiAiZ2l0IiwKICAgICdyZXBvc2l0b3J5JzogImh0dHBzOi8vZ2l0aHViLmNvbS9hYmlzdC1jby1sdGQvY2F0aWEtamFiYXJhLWRlc2lnbi1hdXRvbWF0aW9uIiwKICAgICdicmFuY2gnOiAibmV4dC0yMDI2LTA1IiwKICAgICdvdXRwdXREaXInOiAiY2F0aWEtamFiYXJhLWRlc2lnbi1hdXRvbWF0aW9uIgogIH0KfTsK",
+        "regeneratedMatchesOriginalByteForByte": true,
+        "regenerated_b64": "IyEvdXNyL2Jpbi9lbnYgbm9kZQoKLy8g44OQ44OD44OB44OA44Km44Oz44Ot44O844OJ55So44Gu6Kit5a6a44OV44Kh44Kk44OrCi8vIOikh+aVsOOBruOCq+ODhuOCtOODquODkeOCueOCkumFjeWIl+OBp+Wumue+qeOBl+OBpuOBj+OBoOOBleOBhAoKZXhwb3J0IGNvbnN0IGJhdGNoQ29uZmlncyA9IHsKICAn6JuH6IW55b2i54q244Gu6Ieq5YuV6Kit6KiIJzogWwogICAgJ+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5gv6JuH6IW55b2i54q244Gu6Ieq5YuV6Kit6KiIJywKICAgICforbDkuovpjLIv6Kit6KiI5Yq5546H5YyWL+S4ieahnOW3pealreanmOWumuS+iycKICBdLAogICfkuInmoZzlt6Xmpa3mp5gnOiBbCiAgICAn6Kit6KiI5Yq5546H5YyWL+S4ieahnOW3pealreanmCcsCiAgICAn6K2w5LqL6YyyL+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5jlrprkvosnCiAgXSwKICAn44OB44O844Og5YaF5a6a5L6LJzogWwogICAgJ+itsOS6i+mMsi/oqK3oqIjlirnnjofljJYnLAogICAgJ+ioreioiOWKueeOh+WMlicKICBdLAogICdUU+anmOODu1NVQkFSVeanmOWQkeOBkemameW5sua4ieODgeOCp+ODg+OCr+ODhOODvOODq+mWi+eZuic6IFsKICAgICforbDkuovpjLIv6Kit6KiI5Yq5546H5YyWL1RT5qeY44O7U1VCQVJV5qeY5ZCR44GR6ZqZ5bmy5riJ44OB44Kn44OD44Kv44OE44O844Or6ZaL55m65qmf6IO95ouh5by1JywKICAgICfoqK3oqIjlirnnjofljJYv44OI44Oo44K/44K344K544OG44Og44K65qeYL1NVQkFSVeanmC/lubLmuInjg4Hjgqfjg4Pjgq/jg4Tjg7zjg6vmlLnkv64nCiAgXSwKICAnVFPmp5jjg7tUTUvmp5jmoYjku7YnOiBbCiAgICAn6K2w5LqL6YyyL+ioreioiOWKueeOh+WMli9UU+anmOODu1RNS+anmOahiOS7tuWumuS+iycsCiAgICAn6Kit6KiI5Yq5546H5YyWL+ODiOODqOOCv+OCt+OCueODhuODoOOCuuanmC9UTUvmp5jlr77lv5wnCiAgXSwKICAnVFPmp5jjg7tUTUVK5qeY5qGI5Lu2JzogWwogICAgJ+itsOS6i+mMsi/oqK3oqIjlirnnjofljJYvVFPmp5jjg7tUTUVK5qeY5qGI5Lu25a6a5L6LJywKICAgICfoqK3oqIjlirnnjofljJYv44OI44Oo44K/44K344K544OG44Og44K65qeYL1RNRUrmp5gnCiAgXSwKICAnY2F0aWFkb2MnOiB7CiAgICAndHlwZSc6ICJ3ZWIiLAogICAgJ3VybCc6ICJodHRwOi8vY2F0aWFkb2MuZnJlZS5mci9vbmxpbmUvaW50ZXJmYWNlcy9DQUFIb21lSWR4Lmh0bSIsCiAgICAnb3V0cHV0RGlyJzogImRvY3MvY2F0aWFkb2MiLAogICAgJ21heERlcHRoJzogMTAsCiAgICAnZGVsYXknOiAxMDAwCiAgfSwKICAnQyNBVElBJzogewogICAgJ3R5cGUnOiAid2ViIiwKICAgICd1cmwnOiAiaHR0cHM6Ly9rYW50b2t1LmhhdGVuYWJsb2cuY29tLyIsCiAgICAnb3V0cHV0RGlyJzogIkMjQVRJQSIsCiAgICAnbWF4RGVwdGgnOiAzLAogICAgJ2RlbGF5JzogMTAwMAogIH0sCiAgJ+aknOWbs+ODgeOCp+ODg+OCr+iHquWLleWMlic6IFsKICAgICfoqK3oqIjlirnnjofljJYv5LiJ5qGc5bel5qWt5qeYL+aknOWbs+iHquWLleWMlicsCiAgICAn6K2w5LqL6YyyL+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5jlrprkvosnCiAgXSwKICAnY2F0aWEtZmxvdGhlcm0tcHJlcCc6IHsKICAgICd0eXBlJzogImdpdCIsCiAgICAncmVwb3NpdG9yeSc6ICJodHRwczovL2dpdGh1Yi5jb20vYWJpc3QtY28tbHRkL2NhdGlhLWZsb3RoZXJtLXByZXAiLAogICAgJ2JyYW5jaCc6ICJtYWluIiwKICAgICdvdXRwdXREaXInOiAiZG9jcy9jYXRpYS1mbG90aGVybS1wcmVwIgogIH0sCiAgJ+WQjeWPpOWxi+WPl+iol+ODgeODvOODoMOX44OH44K444K/44Or5o6o6YCyJzogWwogICAgJ+WQjeWPpOWxi+WPl+iol+ODleODreODvCcsCiAgICAn6K2w5LqL6YyyL+ioreioiOWKueeOh+WMli/lkI3lj6TlsYvlj5foqJfjg4Hjg7zjg6DDl+ODh+OCuOOCv+ODq+aOqOmAsicKICBdLAogICfoqK3oqIjlirnnjofljJbjg6Hjg6InOiBbCiAgICAn6Kit6KiI5Yq5546H5YyWL+ODoeODoicKICBdLAogICdDQVRJQeODnuOCr+ODreiHquWLleeUn+aIkCc6IFsKICAgICfoqK3oqIjlirnnjofljJYv44OI44Oo44K/6Ieq5YuV6LuK5qeYL0NBVElB44Oe44Kv44Ot6Ieq5YuV55Sf5oiQJwogIF0sCiAgJ+S8kemAgOiBt+S6iOa4rCc6IFsKICAgICfoqK3oqIjlirnnjofljJYv44Ki44OT44K544OIL+S8kemAgOiBt+S6iOa4rCcKICBdLAogICdjYXRpYS1tYWNyby1nZW5lcmF0b3InOiB7CiAgICAndHlwZSc6ICJnaXQiLAogICAgJ3JlcG9zaXRvcnknOiAiaHR0cHM6Ly9naXRodWIuY29tL2FiaXN0LWNvLWx0ZC9jYXRpYS1tYWNyby1nZW5lcmF0b3IiLAogICAgJ2JyYW5jaCc6ICJtYWluIiwKICAgICdvdXRwdXREaXInOiAiZG9jcy9jYXRpYS1tYWNyby1nZW5lcmF0b3IiCiAgfSwKICAnYmVsbG93cy1kZXNpZ24tYXV0b21hdGlvbi10b29sX3JlZmFjdG9yX3N0cnVjdHVyZSc6IHsKICAgICd0eXBlJzogImdpdCIsCiAgICAncmVwb3NpdG9yeSc6ICJodHRwczovL2dpdGh1Yi5jb20vYWJpc3QtY28tbHRkL2JlbGxvd3MtZGVzaWduLWF1dG9tYXRpb24tdG9vbCIsCiAgICAnYnJhbmNoJzogInJlZmFjdG9yL3N0cnVjdHVyZSIsCiAgICAnb3V0cHV0RGlyJzogImRvY3MvYmVsbG93cy1kZXNpZ24tYXV0b21hdGlvbi10b29sX3JlZmFjdG9yX3N0cnVjdHVyZSIKICB9LAogICfmpJzlm7Poh6rli5XljJbjg5Xjgqfjg7zjgroyJzogWwogICAgJ+ioreioiOWKueeOh+WMli/kuInmoZzlt6Xmpa3mp5gv5qSc5Zuz6Ieq5YuV5YyWL+ODleOCp+ODvOOCujInCiAgXSwKICAnVFPmp5jjg7tUTUVK5qeY44O75omT54K56YWN5YiG44OE44O844Or5pS55L+uJzogWwogICAgJ+ioreioiOWKueeOh+WMli/jg4jjg6jjgr/jgrfjgrnjg4bjg6Djgrrmp5gvVE1FSuanmC/miZPngrnphY3liIbjg4Tjg7zjg6vmlLnkv64nLAogICAgJ+itsOS6i+mMsi/oqK3oqIjlirnnjofljJYvVFPmp5jjg7tUTUVK5qeY5qGI5Lu25a6a5L6LL+aJk+eCuemFjeWIhuODhOODvOODq+aUueS/ricKICBdLAogICdjYXRpYS1tYWNyby1waXBlbGluZSc6IHsKICAgICd0eXBlJzogImdpdCIsCiAgICAncmVwb3NpdG9yeSc6ICJodHRwczovL2dpdGh1Yi5jb20vYWJpc3QtY28tbHRkL2NhdGlhLW1hY3JvLXBpcGVsaW5lIiwKICAgICdicmFuY2gnOiAiZmVhdHVyZS9nb3Zlcm5hbmNlLXBhY2thZ2UiLAogICAgJ291dHB1dERpcic6ICJkb2NzL2NhdGlhLW1hY3JvLXBpcGVsaW5lIgogIH0sCiAgJ2NhdGlhLWphYmFyYS1kZXNpZ24tYXV0b21hdGlvbl9uZXh0JzogewogICAgJ3R5cGUnOiAiZ2l0IiwKICAgICdyZXBvc2l0b3J5JzogImh0dHBzOi8vZ2l0aHViLmNvbS9hYmlzdC1jby1sdGQvY2F0aWEtamFiYXJhLWRlc2lnbi1hdXRvbWF0aW9uIiwKICAgICdicmFuY2gnOiAibmV4dC0yMDI2LTA1IiwKICAgICdvdXRwdXREaXInOiAiY2F0aWEtamFiYXJhLWRlc2lnbi1hdXRvbWF0aW9uIgogIH0KfTsK"
+      },
+      "id": "real_batch_config_roundtrip",
+      "input": {
+        "realConfigPath": "batch-config.js (旧リポジトリ直下)"
+      }
+    }
+  ],
+  "schema": 1,
+  "source": "tools/lib/batch-config-store.js"
+}

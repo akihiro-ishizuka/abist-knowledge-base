@@ -1,0 +1,531 @@
+{
+  "cases": [
+    {
+      "expected": {
+        "blockKeys": [],
+        "body_b64": "CiMg6KaL5Ye644GXDQoNCuacrOaWhzHooYznm64NCg==",
+        "bomPresent": false,
+        "data": {
+          "date": "2026-04-22",
+          "post_number": 4744,
+          "tags": [],
+          "title": "3 設計型再構築",
+          "url": "https://abist.esa.io/posts/4744"
+        },
+        "eol": "\n",
+        "hasFrontmatter": true,
+        "hashBody": "35b2667ed9ddf40925b293ec3e410db6fd2885044254509fcb2725d9c01f8393",
+        "keys": [
+          "title",
+          "date",
+          "tags",
+          "post_number",
+          "url"
+        ],
+        "raw_b64": "LS0tCnRpdGxlOiAiMyDoqK3oqIjlnovlho3mp4vnr4kiCmRhdGU6ICIyMDI2LTA0LTIyIgp0YWdzOiBbXQpwb3N0X251bWJlcjogNDc0NAp1cmw6ICJodHRwczovL2FiaXN0LmVzYS5pby9wb3N0cy80NzQ0IgotLS0KCiMg6KaL5Ye644GXDQoNCuacrOaWhzHooYznm64NCg=="
+      },
+      "id": "parse_ESA_MIXED",
+      "input_b64": "LS0tCnRpdGxlOiAiMyDoqK3oqIjlnovlho3mp4vnr4kiCmRhdGU6ICIyMDI2LTA0LTIyIgp0YWdzOiBbXQpwb3N0X251bWJlcjogNDc0NAp1cmw6ICJodHRwczovL2FiaXN0LmVzYS5pby9wb3N0cy80NzQ0IgotLS0KCiMg6KaL5Ye644GXDQoNCuacrOaWhzHooYznm64NCg=="
+    },
+    {
+      "expected": {
+        "blockKeys": [],
+        "body_b64": "DQrmnKzmlocNCg==",
+        "bomPresent": false,
+        "data": {
+          "date": "2026-01-06",
+          "source": "web",
+          "title": "IDL API Deprecated Index",
+          "url": "http://catiadoc.free.fr/x.htm"
+        },
+        "eol": "\r\n",
+        "hasFrontmatter": true,
+        "hashBody": "0a72ca8815ff051e2bc5196808c42a7e51dd9c0cb5f952197bda823584cb9ea5",
+        "keys": [
+          "title",
+          "url",
+          "date",
+          "source"
+        ],
+        "raw_b64": "LS0tDQp0aXRsZTogIklETCBBUEkgRGVwcmVjYXRlZCBJbmRleCINCnVybDogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL3guaHRtIg0KZGF0ZTogMjAyNi0wMS0wNg0Kc291cmNlOiB3ZWINCi0tLQ0KDQrmnKzmlocNCg=="
+      },
+      "id": "parse_WEB_CRLF",
+      "input_b64": "LS0tDQp0aXRsZTogIklETCBBUEkgRGVwcmVjYXRlZCBJbmRleCINCnVybDogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL3guaHRtIg0KZGF0ZTogMjAyNi0wMS0wNg0Kc291cmNlOiB3ZWINCi0tLQ0KDQrmnKzmlocNCg=="
+    },
+    {
+      "expected": {
+        "blockKeys": [
+          "nested",
+          "tags"
+        ],
+        "body_b64": "5pys5paHDQo=",
+        "bomPresent": false,
+        "data": {
+          "extracted_at": "2025-12-21T08:58:03.808142",
+          "hash": "sha1:95e1547bc81cb9b330f1e4fbd1606efb56a550be",
+          "source_path": "C:\\Temp\\docs\\B32doc\\Japanese\\X.logFWK"
+        },
+        "eol": "\r\n",
+        "hasFrontmatter": true,
+        "hashBody": "281c1c516dca1f8d6b6c4c5d7dd27cc40bff149ee95fc86f3977b0cb1ae93c58",
+        "keys": [
+          "source_path",
+          "extracted_at",
+          "hash",
+          "tags",
+          "nested"
+        ],
+        "raw_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxkb2NzXEIzMmRvY1xKYXBhbmVzZVxYLmxvZ0ZXSw0KZXh0cmFjdGVkX2F0OiAnMjAyNS0xMi0yMVQwODo1ODowMy44MDgxNDInDQpoYXNoOiBzaGExOjk1ZTE1NDdiYzgxY2I5YjMzMGYxZTRmYmQxNjA2ZWZiNTZhNTUwYmUNCnRhZ3M6DQogIC0gY2F0aWENCiAgLSBsb2cNCm5lc3RlZDoNCiAgYTogMQ0KLS0tDQrmnKzmlocNCg=="
+      },
+      "id": "parse_B32DOC_BLOCK",
+      "input_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxkb2NzXEIzMmRvY1xKYXBhbmVzZVxYLmxvZ0ZXSw0KZXh0cmFjdGVkX2F0OiAnMjAyNS0xMi0yMVQwODo1ODowMy44MDgxNDInDQpoYXNoOiBzaGExOjk1ZTE1NDdiYzgxY2I5YjMzMGYxZTRmYmQxNjA2ZWZiNTZhNTUwYmUNCnRhZ3M6DQogIC0gY2F0aWENCiAgLSBsb2cNCm5lc3RlZDoNCiAgYTogMQ0KLS0tDQrmnKzmlocNCg=="
+    },
+    {
+      "expected": {
+        "blockKeys": [],
+        "body_b64": "IyDmiYvmm7jjgY3jg6Hjg6IKCuacrOaWh+OBoOOBkeOBruODleOCoeOCpOODqwo=",
+        "bomPresent": false,
+        "data": {},
+        "eol": "\n",
+        "hasFrontmatter": false,
+        "hashBody": "825fcf2be7b62795c4b132912b398462f8a7bc605073d63377d2cc44b836e1f6",
+        "keys": [],
+        "raw_b64": "IyDmiYvmm7jjgY3jg6Hjg6IKCuacrOaWh+OBoOOBkeOBruODleOCoeOCpOODqwo="
+      },
+      "id": "parse_NO_FRONTMATTER",
+      "input_b64": "IyDmiYvmm7jjgY3jg6Hjg6IKCuacrOaWh+OBoOOBkeOBruODleOCoeOCpOODqwo="
+    },
+    {
+      "expected": {
+        "blockKeys": [],
+        "body_b64": "",
+        "bomPresent": false,
+        "data": {},
+        "eol": "\n",
+        "hasFrontmatter": false,
+        "hashBody": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "keys": [],
+        "raw_b64": ""
+      },
+      "id": "parse_EMPTY",
+      "input_b64": ""
+    },
+    {
+      "expected": {
+        "blockKeys": [],
+        "body_b64": "5pys5paHCg==",
+        "bomPresent": true,
+        "data": {
+          "title": "BOM付き"
+        },
+        "eol": "\n",
+        "hasFrontmatter": true,
+        "hashBody": "6b2676d80da84264c9c704f58ab4ba961651f6e4de14d639e54431c44fd5da8e",
+        "keys": [
+          "title"
+        ],
+        "raw_b64": "77u/LS0tCnRpdGxlOiAiQk9N5LuY44GNIgotLS0K5pys5paHCg=="
+      },
+      "id": "parse_BOM_DOC",
+      "input_b64": "77u/LS0tCnRpdGxlOiAiQk9N5LuY44GNIgotLS0K5pys5paHCg=="
+    },
+    {
+      "expected": {
+        "added": [
+          "source",
+          "managed_by",
+          "document_type",
+          "status"
+        ],
+        "changed": true,
+        "created": false,
+        "skipped": [],
+        "text_b64": "LS0tCnRpdGxlOiAiMyDoqK3oqIjlnovlho3mp4vnr4kiCmRhdGU6ICIyMDI2LTA0LTIyIgp0YWdzOiBbXQpwb3N0X251bWJlcjogNDc0NAp1cmw6ICJodHRwczovL2FiaXN0LmVzYS5pby9wb3N0cy80NzQ0Igpzb3VyY2U6IGVzYQptYW5hZ2VkX2J5OiBlc2Etc3luYwpkb2N1bWVudF90eXBlOiBtZWV0aW5nCnN0YXR1czogYWN0aXZlCi0tLQoKIyDopovlh7rjgZcNCg0K5pys5paHMeihjOebrg0K",
+        "updated": []
+      },
+      "id": "setvalues_backfill_ESA_MIXED",
+      "input_b64": "LS0tCnRpdGxlOiAiMyDoqK3oqIjlnovlho3mp4vnr4kiCmRhdGU6ICIyMDI2LTA0LTIyIgp0YWdzOiBbXQpwb3N0X251bWJlcjogNDc0NAp1cmw6ICJodHRwczovL2FiaXN0LmVzYS5pby9wb3N0cy80NzQ0IgotLS0KCiMg6KaL5Ye644GXDQoNCuacrOaWhzHooYznm64NCg==",
+      "input_updates": {
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "source": "esa",
+        "status": "active"
+      }
+    },
+    {
+      "expected": {
+        "added": [
+          "managed_by",
+          "document_type",
+          "status"
+        ],
+        "changed": true,
+        "created": false,
+        "skipped": [],
+        "text_b64": "LS0tDQp0aXRsZTogIklETCBBUEkgRGVwcmVjYXRlZCBJbmRleCINCnVybDogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL3guaHRtIg0KZGF0ZTogMjAyNi0wMS0wNg0Kc291cmNlOiBlc2ENCm1hbmFnZWRfYnk6IGVzYS1zeW5jDQpkb2N1bWVudF90eXBlOiBtZWV0aW5nDQpzdGF0dXM6IGFjdGl2ZQ0KLS0tDQoNCuacrOaWhw0K",
+        "updated": [
+          "source"
+        ]
+      },
+      "id": "setvalues_backfill_WEB_CRLF",
+      "input_b64": "LS0tDQp0aXRsZTogIklETCBBUEkgRGVwcmVjYXRlZCBJbmRleCINCnVybDogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL3guaHRtIg0KZGF0ZTogMjAyNi0wMS0wNg0Kc291cmNlOiB3ZWINCi0tLQ0KDQrmnKzmlocNCg==",
+      "input_updates": {
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "source": "esa",
+        "status": "active"
+      }
+    },
+    {
+      "expected": {
+        "added": [
+          "source",
+          "managed_by",
+          "document_type",
+          "status"
+        ],
+        "changed": true,
+        "created": false,
+        "skipped": [],
+        "text_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxkb2NzXEIzMmRvY1xKYXBhbmVzZVxYLmxvZ0ZXSw0KZXh0cmFjdGVkX2F0OiAnMjAyNS0xMi0yMVQwODo1ODowMy44MDgxNDInDQpoYXNoOiBzaGExOjk1ZTE1NDdiYzgxY2I5YjMzMGYxZTRmYmQxNjA2ZWZiNTZhNTUwYmUNCnRhZ3M6DQogIC0gY2F0aWENCiAgLSBsb2cNCm5lc3RlZDoNCiAgYTogMQ0Kc291cmNlOiBlc2ENCm1hbmFnZWRfYnk6IGVzYS1zeW5jDQpkb2N1bWVudF90eXBlOiBtZWV0aW5nDQpzdGF0dXM6IGFjdGl2ZQ0KLS0tDQrmnKzmlocNCg==",
+        "updated": []
+      },
+      "id": "setvalues_backfill_B32DOC_BLOCK",
+      "input_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxkb2NzXEIzMmRvY1xKYXBhbmVzZVxYLmxvZ0ZXSw0KZXh0cmFjdGVkX2F0OiAnMjAyNS0xMi0yMVQwODo1ODowMy44MDgxNDInDQpoYXNoOiBzaGExOjk1ZTE1NDdiYzgxY2I5YjMzMGYxZTRmYmQxNjA2ZWZiNTZhNTUwYmUNCnRhZ3M6DQogIC0gY2F0aWENCiAgLSBsb2cNCm5lc3RlZDoNCiAgYTogMQ0KLS0tDQrmnKzmlocNCg==",
+      "input_updates": {
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "source": "esa",
+        "status": "active"
+      }
+    },
+    {
+      "expected": {
+        "added": [
+          "source",
+          "managed_by",
+          "document_type",
+          "status"
+        ],
+        "changed": true,
+        "created": true,
+        "skipped": [],
+        "text_b64": "LS0tCnNvdXJjZTogZXNhCm1hbmFnZWRfYnk6IGVzYS1zeW5jCmRvY3VtZW50X3R5cGU6IG1lZXRpbmcKc3RhdHVzOiBhY3RpdmUKLS0tCiMg5omL5pu444GN44Oh44OiCgrmnKzmlofjgaDjgZHjga7jg5XjgqHjgqTjg6sK",
+        "updated": []
+      },
+      "id": "setvalues_backfill_NO_FRONTMATTER",
+      "input_b64": "IyDmiYvmm7jjgY3jg6Hjg6IKCuacrOaWh+OBoOOBkeOBruODleOCoeOCpOODqwo=",
+      "input_updates": {
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "source": "esa",
+        "status": "active"
+      }
+    },
+    {
+      "expected": {
+        "added": [
+          "source",
+          "managed_by",
+          "document_type",
+          "status"
+        ],
+        "changed": true,
+        "created": true,
+        "skipped": [],
+        "text_b64": "LS0tCnNvdXJjZTogZXNhCm1hbmFnZWRfYnk6IGVzYS1zeW5jCmRvY3VtZW50X3R5cGU6IG1lZXRpbmcKc3RhdHVzOiBhY3RpdmUKLS0tCg==",
+        "updated": []
+      },
+      "id": "setvalues_backfill_EMPTY",
+      "input_b64": "",
+      "input_updates": {
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "source": "esa",
+        "status": "active"
+      }
+    },
+    {
+      "expected": {
+        "added": [
+          "source",
+          "managed_by",
+          "document_type",
+          "status"
+        ],
+        "changed": true,
+        "created": false,
+        "skipped": [],
+        "text_b64": "77u/LS0tCnRpdGxlOiAiQk9N5LuY44GNIgpzb3VyY2U6IGVzYQptYW5hZ2VkX2J5OiBlc2Etc3luYwpkb2N1bWVudF90eXBlOiBtZWV0aW5nCnN0YXR1czogYWN0aXZlCi0tLQrmnKzmlocK",
+        "updated": []
+      },
+      "id": "setvalues_backfill_BOM_DOC",
+      "input_b64": "77u/LS0tCnRpdGxlOiAiQk9N5LuY44GNIgotLS0K5pys5paHCg==",
+      "input_updates": {
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "source": "esa",
+        "status": "active"
+      }
+    },
+    {
+      "expected": {
+        "added": [],
+        "changed": false,
+        "created": false,
+        "skipped": [],
+        "text_b64": "LS0tCnRpdGxlOiAiMyDoqK3oqIjlnovlho3mp4vnr4kiCmRhdGU6ICIyMDI2LTA0LTIyIgp0YWdzOiBbXQpwb3N0X251bWJlcjogNDc0NAp1cmw6ICJodHRwczovL2FiaXN0LmVzYS5pby9wb3N0cy80NzQ0IgotLS0KCiMg6KaL5Ye644GXDQoNCuacrOaWhzHooYznm64NCg==",
+        "updated": []
+      },
+      "id": "setvalues_noop_ESA_MIXED",
+      "input_b64": "LS0tCnRpdGxlOiAiMyDoqK3oqIjlnovlho3mp4vnr4kiCmRhdGU6ICIyMDI2LTA0LTIyIgp0YWdzOiBbXQpwb3N0X251bWJlcjogNDc0NAp1cmw6ICJodHRwczovL2FiaXN0LmVzYS5pby9wb3N0cy80NzQ0IgotLS0KCiMg6KaL5Ye644GXDQoNCuacrOaWhzHooYznm64NCg==",
+      "input_updates": {}
+    },
+    {
+      "expected": {
+        "added": [],
+        "changed": false,
+        "created": false,
+        "skipped": [],
+        "text_b64": "LS0tDQp0aXRsZTogIklETCBBUEkgRGVwcmVjYXRlZCBJbmRleCINCnVybDogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL3guaHRtIg0KZGF0ZTogMjAyNi0wMS0wNg0Kc291cmNlOiB3ZWINCi0tLQ0KDQrmnKzmlocNCg==",
+        "updated": []
+      },
+      "id": "setvalues_noop_WEB_CRLF",
+      "input_b64": "LS0tDQp0aXRsZTogIklETCBBUEkgRGVwcmVjYXRlZCBJbmRleCINCnVybDogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL3guaHRtIg0KZGF0ZTogMjAyNi0wMS0wNg0Kc291cmNlOiB3ZWINCi0tLQ0KDQrmnKzmlocNCg==",
+      "input_updates": {}
+    },
+    {
+      "expected": {
+        "added": [],
+        "changed": false,
+        "created": false,
+        "skipped": [],
+        "text_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxkb2NzXEIzMmRvY1xKYXBhbmVzZVxYLmxvZ0ZXSw0KZXh0cmFjdGVkX2F0OiAnMjAyNS0xMi0yMVQwODo1ODowMy44MDgxNDInDQpoYXNoOiBzaGExOjk1ZTE1NDdiYzgxY2I5YjMzMGYxZTRmYmQxNjA2ZWZiNTZhNTUwYmUNCnRhZ3M6DQogIC0gY2F0aWENCiAgLSBsb2cNCm5lc3RlZDoNCiAgYTogMQ0KLS0tDQrmnKzmlocNCg==",
+        "updated": []
+      },
+      "id": "setvalues_noop_B32DOC_BLOCK",
+      "input_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxkb2NzXEIzMmRvY1xKYXBhbmVzZVxYLmxvZ0ZXSw0KZXh0cmFjdGVkX2F0OiAnMjAyNS0xMi0yMVQwODo1ODowMy44MDgxNDInDQpoYXNoOiBzaGExOjk1ZTE1NDdiYzgxY2I5YjMzMGYxZTRmYmQxNjA2ZWZiNTZhNTUwYmUNCnRhZ3M6DQogIC0gY2F0aWENCiAgLSBsb2cNCm5lc3RlZDoNCiAgYTogMQ0KLS0tDQrmnKzmlocNCg==",
+      "input_updates": {}
+    },
+    {
+      "expected": {
+        "added": [],
+        "changed": false,
+        "created": false,
+        "skipped": [],
+        "text_b64": "IyDmiYvmm7jjgY3jg6Hjg6IKCuacrOaWh+OBoOOBkeOBruODleOCoeOCpOODqwo=",
+        "updated": []
+      },
+      "id": "setvalues_noop_NO_FRONTMATTER",
+      "input_b64": "IyDmiYvmm7jjgY3jg6Hjg6IKCuacrOaWh+OBoOOBkeOBruODleOCoeOCpOODqwo=",
+      "input_updates": {}
+    },
+    {
+      "expected": {
+        "added": [],
+        "changed": false,
+        "created": false,
+        "skipped": [],
+        "text_b64": "",
+        "updated": []
+      },
+      "id": "setvalues_noop_EMPTY",
+      "input_b64": "",
+      "input_updates": {}
+    },
+    {
+      "expected": {
+        "added": [],
+        "changed": false,
+        "created": false,
+        "skipped": [],
+        "text_b64": "77u/LS0tCnRpdGxlOiAiQk9N5LuY44GNIgotLS0K5pys5paHCg==",
+        "updated": []
+      },
+      "id": "setvalues_noop_BOM_DOC",
+      "input_b64": "77u/LS0tCnRpdGxlOiAiQk9N5LuY44GNIgotLS0K5pys5paHCg==",
+      "input_updates": {}
+    },
+    {
+      "expected": {
+        "added": [],
+        "changed": false,
+        "skipped": [],
+        "text_b64": "LS0tCnRpdGxlOiAiMyDoqK3oqIjlnovlho3mp4vnr4kiCmRhdGU6ICIyMDI2LTA0LTIyIgp0YWdzOiBbXQpwb3N0X251bWJlcjogNDc0NAp1cmw6ICJodHRwczovL2FiaXN0LmVzYS5pby9wb3N0cy80NzQ0IgotLS0KCiMg6KaL5Ye644GXDQoNCuacrOaWhzHooYznm64NCg==",
+        "updated": []
+      },
+      "id": "setvalues_same_value_no_op",
+      "input_b64": "LS0tCnRpdGxlOiAiMyDoqK3oqIjlnovlho3mp4vnr4kiCmRhdGU6ICIyMDI2LTA0LTIyIgp0YWdzOiBbXQpwb3N0X251bWJlcjogNDc0NAp1cmw6ICJodHRwczovL2FiaXN0LmVzYS5pby9wb3N0cy80NzQ0IgotLS0KCiMg6KaL5Ye644GXDQoNCuacrOaWhzHooYznm64NCg==",
+      "input_updates": {
+        "post_number": 4744
+      }
+    },
+    {
+      "expected": {
+        "added": [],
+        "changed": true,
+        "parsedBodyAfter_b64": "DQrmnKzmlocNCg==",
+        "skipped": [],
+        "text_b64": "LS0tDQp0aXRsZTogIuWkieabtOW+jCINCnVybDogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL3guaHRtIg0KZGF0ZTogMjAyNi0wMS0wNg0Kc291cmNlOiB3ZWINCi0tLQ0KDQrmnKzmlocNCg==",
+        "updated": [
+          "title"
+        ]
+      },
+      "id": "setvalues_update_existing_key",
+      "input_b64": "LS0tDQp0aXRsZTogIklETCBBUEkgRGVwcmVjYXRlZCBJbmRleCINCnVybDogImh0dHA6Ly9jYXRpYWRvYy5mcmVlLmZyL3guaHRtIg0KZGF0ZTogMjAyNi0wMS0wNg0Kc291cmNlOiB3ZWINCi0tLQ0KDQrmnKzmlocNCg==",
+      "input_updates": {
+        "title": "変更後"
+      }
+    },
+    {
+      "expected": {
+        "added": [
+          "source",
+          "status"
+        ],
+        "created": true,
+        "hashBodyMatchesOriginal": true,
+        "text_b64": "LS0tCnNvdXJjZTogbWFudWFsCnN0YXR1czogYWN0aXZlCi0tLQojIOaJi+abuOOBjeODoeODogoK5pys5paH44Gg44GR44Gu44OV44Kh44Kk44OrCg=="
+      },
+      "id": "setvalues_create_new_frontmatter",
+      "input_b64": "IyDmiYvmm7jjgY3jg6Hjg6IKCuacrOaWh+OBoOOBkeOBruODleOCoeOCpOODqwo=",
+      "input_updates": {
+        "source": "manual",
+        "status": "active"
+      }
+    },
+    {
+      "expected": {
+        "bodyAfter_b64": "5pys5paHCg==",
+        "startsWithBomDelimiter": true,
+        "text_b64": "77u/LS0tCnRpdGxlOiAiQk9N5LuY44GNIgpzdGF0dXM6IGFjdGl2ZQotLS0K5pys5paHCg=="
+      },
+      "id": "setvalues_bom_preserved",
+      "input_b64": "77u/LS0tCnRpdGxlOiAiQk9N5LuY44GNIgotLS0K5pys5paHCg==",
+      "input_updates": {
+        "status": "active"
+      }
+    },
+    {
+      "expected": {
+        "skipped": [
+          {
+            "key": "tags",
+            "reason": "block-value"
+          }
+        ],
+        "text_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxkb2NzXEIzMmRvY1xKYXBhbmVzZVxYLmxvZ0ZXSw0KZXh0cmFjdGVkX2F0OiAnMjAyNS0xMi0yMVQwODo1ODowMy44MDgxNDInDQpoYXNoOiBzaGExOjk1ZTE1NDdiYzgxY2I5YjMzMGYxZTRmYmQxNjA2ZWZiNTZhNTUwYmUNCnRhZ3M6DQogIC0gY2F0aWENCiAgLSBsb2cNCm5lc3RlZDoNCiAgYTogMQ0KLS0tDQrmnKzmlocNCg==",
+        "unchanged": true
+      },
+      "id": "setvalues_block_key_skipped",
+      "input_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxkb2NzXEIzMmRvY1xKYXBhbmVzZVxYLmxvZ0ZXSw0KZXh0cmFjdGVkX2F0OiAnMjAyNS0xMi0yMVQwODo1ODowMy44MDgxNDInDQpoYXNoOiBzaGExOjk1ZTE1NDdiYzgxY2I5YjMzMGYxZTRmYmQxNjA2ZWZiNTZhNTUwYmUNCnRhZ3M6DQogIC0gY2F0aWENCiAgLSBsb2cNCm5lc3RlZDoNCiAgYTogMQ0KLS0tDQrmnKzmlocNCg==",
+      "input_updates": {
+        "tags": [
+          "x"
+        ]
+      }
+    },
+    {
+      "expected": {
+        "equal": true,
+        "hashOriginal": "35b2667ed9ddf40925b293ec3e410db6fd2885044254509fcb2725d9c01f8393",
+        "hashWithMeta": "35b2667ed9ddf40925b293ec3e410db6fd2885044254509fcb2725d9c01f8393"
+      },
+      "id": "hashbody_unaffected_by_frontmatter_change",
+      "input_b64": "LS0tCnRpdGxlOiAiMyDoqK3oqIjlnovlho3mp4vnr4kiCmRhdGU6ICIyMDI2LTA0LTIyIgp0YWdzOiBbXQpwb3N0X251bWJlcjogNDc0NAp1cmw6ICJodHRwczovL2FiaXN0LmVzYS5pby9wb3N0cy80NzQ0IgotLS0KCiMg6KaL5Ye644GXDQoNCuacrOaWhzHooYznm64NCg=="
+    },
+    {
+      "expected": {
+        "equal": false,
+        "hashAppended": "95de67960a5056fa3010c48c761ba4996c1a24c4149cd6578c9b7fbe6ed143ea",
+        "hashOriginal": "35b2667ed9ddf40925b293ec3e410db6fd2885044254509fcb2725d9c01f8393"
+      },
+      "id": "hashbody_detects_body_change",
+      "input_b64": "LS0tCnRpdGxlOiAiMyDoqK3oqIjlnovlho3mp4vnr4kiCmRhdGU6ICIyMDI2LTA0LTIyIgp0YWdzOiBbXQpwb3N0X251bWJlcjogNDc0NAp1cmw6ICJodHRwczovL2FiaXN0LmVzYS5pby9wb3N0cy80NzQ0IgotLS0KCiMg6KaL5Ye644GXDQoNCuacrOaWhzHooYznm64NCg=="
+    },
+    {
+      "expected": {
+        "equal": false,
+        "hashCrlf": "281c1c516dca1f8d6b6c4c5d7dd27cc40bff149ee95fc86f3977b0cb1ae93c58",
+        "hashLf": "6b2676d80da84264c9c704f58ab4ba961651f6e4de14d639e54431c44fd5da8e"
+      },
+      "id": "hashbody_detects_eol_change",
+      "input_b64": "LS0tCnRpdGxlOiBhCi0tLQrmnKzmlocK"
+    },
+    {
+      "expected": {
+        "value": "esa"
+      },
+      "id": "serialize_scalar_\"esa\"",
+      "input": "esa"
+    },
+    {
+      "expected": {
+        "value": "esa-sync"
+      },
+      "id": "serialize_scalar_\"esa-sync\"",
+      "input": "esa-sync"
+    },
+    {
+      "expected": {
+        "value": "\"2026-04-22\""
+      },
+      "id": "serialize_scalar_\"2026-04-22\"",
+      "input": "2026-04-22"
+    },
+    {
+      "expected": {
+        "value": "\"true\""
+      },
+      "id": "serialize_scalar_\"true\"",
+      "input": "true"
+    },
+    {
+      "expected": {
+        "value": "\"a: b\""
+      },
+      "id": "serialize_scalar_\"a: b\"",
+      "input": "a: b"
+    },
+    {
+      "expected": {
+        "value": "\"say \\\"hi\\\"\""
+      },
+      "id": "serialize_scalar_\"say \\\"hi\\\"\"",
+      "input": "say \"hi\""
+    },
+    {
+      "expected": {
+        "value": "true"
+      },
+      "id": "serialize_scalar_true",
+      "input": true
+    },
+    {
+      "expected": {
+        "value": "42"
+      },
+      "id": "serialize_scalar_42",
+      "input": 42
+    },
+    {
+      "expected": {
+        "value": "[\"a\", \"b\"]"
+      },
+      "id": "serialize_scalar_[\"a\",\"b\"]",
+      "input": [
+        "a",
+        "b"
+      ]
+    },
+    {
+      "expected": {
+        "value": "[]"
+      },
+      "id": "serialize_scalar_[]",
+      "input": []
+    }
+  ],
+  "schema": 1,
+  "source": "tools/lib/frontmatter.js"
+}
