@@ -28,6 +28,7 @@ from abist_kb.infrastructure.search.chunker import DEFAULT_CHUNK_OPTIONS, chunk_
 from abist_kb.infrastructure.search.e5_input import (
     EMBEDDING_MODELS,
     EmbeddingInputChunk,
+    _truncate_utf16_units,
     embedding_input,
     input_hash,
     model_config,
@@ -161,6 +162,123 @@ def test_empty_text_is_still_included_unlike_falsy_title_and_heading_path() -> N
     result = embedding_input(chunk, model)
 
     assert result == "passage: T\n"
+
+
+# ---------------------------------------------------------------------------
+# サロゲート境界のバイト一致回帰テスト。
+#
+# 過去の修正波で `_truncate_utf16_units` は UTF-16 コード単位での切り詰めまで
+# 正しく実装したが、最終エンコードに `str.encode("utf-8", errors="replace")`
+# を使っていた。これは Node の挙動を再現していると誤解されていたが誤りで
+# あり、Python の decode 側 "replace" と encode 側 "replace" は意味が異なる:
+# **encode** 側の "replace" は不正な入力を `?` (`0x3F`, 1バイト) に置換する
+# だけで、Node の `Buffer.from(str, 'utf8')` が対になっていないサロゲートを
+# 変換する U+FFFD (`EF BF BD`, 3バイト) にはならない。
+#
+# `input_hash` は UTF-8 バイト列に対する SHA-256 なので、この1バイト対3バイト
+# の違いは「サロゲートペアの真ん中で切り詰められたチャンク」だけで
+# `input_hash` を Node と食い違わせる——見出しに絵文字を使う本コーパスの
+# 慣行では珍しくない条件である。以下は Node (`Buffer.from(slice, 'utf8')`)
+# から実測した16進バイト列と一致することを固定する。
+# ---------------------------------------------------------------------------
+
+
+def test_truncate_cut_mid_pair_leaves_high_surrogate_as_u_fffd() -> None:
+    """カットがサロゲートペアの真ん中(上位サロゲートが末尾に孤立)に来るケース。
+
+    Node: `("abcd" + "\\u{1F600}" + "ef").slice(0, 5)` → "abcd" + 孤立上位
+    サロゲート `\\ud83d`。`Buffer.from(result, 'utf8').hex()` の実測値は
+    `61626364efbfbd` (末尾3バイトが U+FFFD)。
+    """
+    text = "abcd" + "\U0001f600" + "ef"
+    result = _truncate_utf16_units(text, 5)
+    assert result.encode("utf-8") == bytes.fromhex("61626364efbfbd")
+
+
+def test_truncate_cut_after_complete_pair_keeps_pair_intact() -> None:
+    """カットが完全なサロゲートペアの直後に来るケース(何も孤立しない)。
+
+    Node: `("ab" + "\\u{1F600}" + "cdef").slice(0, 4)` → "ab" + 完全なペア。
+    実測値は `6162f09f9880` (絵文字が4バイトのまま残る)。
+    """
+    text = "ab" + "\U0001f600" + "cdef"
+    result = _truncate_utf16_units(text, 4)
+    assert result.encode("utf-8") == bytes.fromhex("6162f09f9880")
+
+
+def test_truncate_astral_char_exactly_at_boundary_keeps_pair_intact() -> None:
+    """astral 文字がちょうど境界(切り詰め上限=文字列長)に位置するケース。
+
+    Node: `("abc" + "\\u{1F600}").slice(0, 5)` → 全体(5 UTF-16 単位)がそのまま
+    残り、ペアは割れない。実測値は `616263f09f9880`。
+    """
+    text = "abc" + "\U0001f600"
+    result = _truncate_utf16_units(text, 5)
+    assert result.encode("utf-8") == bytes.fromhex("616263f09f9880")
+
+
+def test_truncate_low_surrogate_orphaned_at_start_becomes_u_fffd() -> None:
+    """孤立した下位サロゲートが保持領域の先頭にあるケース(不正な入力データ)。
+
+    JS 文字列は元々 UTF-16 コード単位の任意列を許容するため、対になって
+    いない下位サロゲートが(切り詰めとは無関係に)最初から入力に含まれて
+    いることもありうる。Node: `Buffer.from("\\udE00abcdef", 'utf8').hex()`
+    の実測値は `efbfbd616263646566` (先頭3バイトが U+FFFD)。
+    """
+    text = "\ude00" + "abcdef"
+    result = _truncate_utf16_units(text, 100)
+    assert result.encode("utf-8") == bytes.fromhex("efbfbd616263646566")
+
+
+def test_embedding_input_mid_surrogate_pair_truncation_matches_node_u_fffd() -> None:
+    """`embedding_input()` を通しても U+FFFD (3バイト) が Node と一致する。
+
+    `max_input_chars` (Xenova/multilingual-e5-small は512) をちょうど跨ぐ
+    位置に絵文字を置き、切り詰めが上位サロゲートを孤立させることを確認する。
+    """
+    model = "Xenova/multilingual-e5-small"
+    config = model_config(model)
+    # "passage: " プレフィックスは切り詰めに数えないため、本文だけで
+    # ちょうど512 UTF-16単位になるよう組み立てる: 511文字 + 絵文字の上位
+    # サロゲートが512番目の単位として孤立する。
+    body_text = "a" * (config.max_input_chars - 1) + "\U0001f600"
+    chunk = EmbeddingInputChunk(text=body_text, title=None, heading_path=None)
+
+    result = embedding_input(chunk, model)
+
+    assert result == "passage: " + "a" * (config.max_input_chars - 1) + "�"
+    result_bytes = result.encode("utf-8")
+    assert result_bytes.endswith(bytes.fromhex("efbfbd"))
+    assert b"\x3f" not in result_bytes[-3:]  # 旧不具合の `?` (0x3F) ではない
+
+
+def test_query_input_mid_surrogate_pair_truncation_matches_node_u_fffd() -> None:
+    """`query_input()` でも同じ U+FFFD 置換が働くことを確認する。"""
+    model = "Xenova/multilingual-e5-small"
+    config = model_config(model)
+    query = "a" * (config.max_input_chars - 1) + "\U0001f600"
+
+    result = query_input(query, model)
+
+    assert result == "query: " + "a" * (config.max_input_chars - 1) + "�"
+    assert result.encode("utf-8").endswith(bytes.fromhex("efbfbd"))
+
+
+def test_input_hash_of_mid_surrogate_truncation_uses_three_byte_u_fffd() -> None:
+    """`input_hash` が(1バイトの `?` ではなく)3バイトの U+FFFD を刻んだ
+    UTF-8 バイト列に対するハッシュであることを固定する。
+    """
+    model = "Xenova/multilingual-e5-small"
+    text = "abcd" + "\U0001f600" + "ef"
+    truncated = _truncate_utf16_units(text, 5)  # "abcd�"
+
+    expected_bytes = f"{model}\n".encode() + bytes.fromhex("61626364efbfbd")
+    assert input_hash(model, truncated) == hashlib.sha256(expected_bytes).hexdigest()
+
+    # 回帰防止: もし `errors="replace"` (encode 側) が再導入されたら
+    # ここが `?` (0x3F) 1バイトになり、上記アサーションが失敗する。
+    wrong_bytes = f"{model}\n".encode() + b"abcd?ef"
+    assert input_hash(model, truncated) != hashlib.sha256(wrong_bytes).hexdigest()
 
 
 def test_all_fixture_cases_covered() -> None:

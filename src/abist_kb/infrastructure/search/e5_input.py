@@ -116,21 +116,47 @@ def _truncate_utf16_units(text: str, max_units: int) -> str:
     真ん中に来ると、JS は対になっていない上位サロゲート(lone high
     surrogate)を1コード単位として保持したままにする。この文字列を後段で
     `Buffer.from(str, 'utf8')` のように UTF-8 バイト列へ変換すると、
-    対になっていないサロゲートは U+FFFD (REPLACEMENT CHARACTER) に化ける。
-    Python は元々コードポイント単位でしか切り詰めないためこの現象が起こらず、
-    `input_hash` (SHA-256 は UTF-8 バイト列に対して計算する) が一致しなくなる。
+    対になっていないサロゲートは U+FFFD (REPLACEMENT CHARACTER, 3バイト
+    `EF BF BD`) に化ける。Python は元々コードポイント単位でしか切り詰めない
+    ためこの現象が起こらず、`input_hash` (SHA-256 は UTF-8 バイト列に対して
+    計算する) が一致しなくなる。
+
     ここでは `errors="surrogatepass"` で対になっていないサロゲートをいったん
-    保持し、返す前に UTF-8 化した上で不正シーケンスを U+FFFD に正規化する
-    ことで、後段のハッシュ計算がJSと同じバイト列になるようにする。
+    保持し(有効なペアは通常どおり1つの astral コードポイントに結合される)、
+    残った孤立サロゲート(コードポイントが U+D800-U+DFFF の1文字)だけを
+    `_replace_lone_surrogates` で明示的に U+FFFD へ置換してから返す。
+
+    **注意:** 最終エンコードに `str.encode("utf-8", errors="replace")` を
+    使ってはならない。Python の decode 側 "replace" と encode 側 "replace" は
+    意味が異なり、**encode** 側の "replace" は不正入力を `?` (`0x3F`,
+    1バイト) に置換するだけで、Node が生成する U+FFFD (`EF BF BD`,
+    3バイト) にはならない。過去に一度この勘違いで
+    `errors="replace"` を使った実装が入り、絵文字を含む見出しを切り詰める
+    チャンクだけ `input_hash` が Node と食い違う不具合になった
+    (`tests/kernel/test_e5_input.py` にこの区別を固定する回帰テストがある)。
     """
-    truncated_units = text.encode("utf-16-le")[: 2 * max_units]
+    # errors="surrogatepass" on the way in too: `text` itself may already
+    # contain a lone surrogate (e.g. malformed source data that mirrors a JS
+    # string, which allows unpaired code units natively). Without it, a
+    # str already holding a bare surrogate raises UnicodeEncodeError here
+    # before truncation even happens.
+    truncated_units = text.encode("utf-16-le", errors="surrogatepass")[: 2 * max_units]
     decoded = truncated_units.decode("utf-16-le", errors="surrogatepass")
-    # Node の Buffer.from(str, 'utf8') は対になっていないサロゲートを
-    # U+FFFD に置換して UTF-8 化する。Python の既定 "utf-8" エンコーダは
-    # 対になっていないサロゲートで UnicodeEncodeError を送出するため、
-    # ここで明示的に同じ置換を行い、以降どちらの言語でエンコードしても
-    # 同じ UTF-8 バイト列になるようにしておく。
-    return decoded.encode("utf-8", errors="replace").decode("utf-8")
+    return _replace_lone_surrogates(decoded)
+
+
+def _replace_lone_surrogates(text: str) -> str:
+    """対になっていないサロゲート(コードポイント U+D800-U+DFFF)を
+    U+FFFD (REPLACEMENT CHARACTER) に置換する。
+
+    `text` は `"utf-16-le".decode(..., errors="surrogatepass")` の出力を
+    想定している: 有効なサロゲートペアは decode 時点で1つの astral
+    コードポイントへ結合済みのため、ここで走査して見つかる孤立サロゲートは
+    すべて「対になっていない」もの。Node の `Buffer.from(str, 'utf8')` が
+    孤立サロゲートを U+FFFD (`EF BF BD`) に変換するのと同じ結果になるよう、
+    ここで置換してから通常の `"utf-8"` (strict) でエンコードする。
+    """
+    return "".join("�" if 0xD800 <= ord(ch) <= 0xDFFF else ch for ch in text)
 
 
 def embedding_input(chunk: EmbeddingInputChunk, model: str) -> str:
