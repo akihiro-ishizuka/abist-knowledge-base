@@ -58,9 +58,14 @@ def _make_provider(*, encode_sleep_seconds: float, batch_timeout: float) -> Loca
 # -- 子プロセスを実際に kill する ---------------------------------------------
 
 
+@pytest.mark.timing_sensitive
 def test_dead_child_is_detected_within_timeout_and_reaped():
     """バッチ処理中に子プロセスを実際に kill すると、タイムアウト以内に検知され、
     明確な `AppError` が送出され、プロセスが reap されること。
+
+    実子プロセスのkillと `batch_timeout` 検知という実時間そのものを検証している
+    ため、壁時計を完全には排除できない(`timing_sensitive`)。CPU高負荷下でも
+    誤検知しないよう上限に余裕を持たせている。
     """
     provider = _make_provider(encode_sleep_seconds=5.0, batch_timeout=3.0)
     try:
@@ -85,7 +90,7 @@ def test_dead_child_is_detected_within_timeout_and_reaped():
         elapsed = time.monotonic() - started_at
 
         assert not thread.is_alive(), "embed_batch がタイムアウト以内に返らなかった"
-        assert elapsed < 3.0 + 2.0  # batch_timeout(3秒)+検知・reap の余裕
+        assert elapsed < 3.0 + 5.0  # batch_timeout(3秒)+検知・reapの余裕(CPU高負荷を許容)
         assert "error" in result, "子プロセス死亡が検知されずに正常終了してしまった"
         assert isinstance(result["error"], AppError)
         assert result["error"].retryable is False

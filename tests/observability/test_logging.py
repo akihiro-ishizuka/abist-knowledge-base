@@ -101,12 +101,27 @@ def test_mask_secrets_handles_long_underscore_runs_quickly():
     二次関数的なバックトラックが発生し、数秒〜数十秒単位で応答が止まっていた。
     修正後は長さに対してほぼ線形になるはずなので、寛容な上限(1.0秒)で
     「秒〜分単位に逆戻りしていないか」を検知する(マイクロベンチマークが目的ではない)。
+
+    絶対秒数の上限に加えて、小入力に対する所要時間を基準(baseline)にした相対比較も
+    行う。絶対上限だけだと「遅いマシン全般」と「二次関数的な劣化」を区別できないため
+    (指摘済み: 従来はbaseline測定がなかった)、線形なら数十倍で収まるはずのところ
+    寛容な倍率(200倍)を超えたら二次関数的なバックトラックの再発とみなす。
     """
+    small_text = "a_" * 500  # 1,000 文字(64,000文字の基準測定用、線形なら1/64の時間)
+    start = time.perf_counter()
+    mask_secrets(small_text)
+    baseline = time.perf_counter() - start
+
     text = "a_" * 32000  # 64,000 文字、秘密情報のキーワードは一切含まない
     start = time.perf_counter()
     mask_secrets(text)
     elapsed = time.perf_counter() - start
+
     assert elapsed < 1.0, f"mask_secrets が遅すぎます(elapsed={elapsed:.2f}s)"
+    assert elapsed < max(baseline * 200, 0.05), (
+        f"小入力基準に対して不釣り合いに遅い(二次関数的劣化の疑い): "
+        f"baseline={baseline:.4f}s, elapsed={elapsed:.4f}s"
+    )
 
 
 def test_mask_secrets_handles_long_hyphen_runs_quickly():
@@ -119,12 +134,26 @@ def test_mask_secrets_handles_long_hyphen_runs_quickly():
     (`test_mask_secrets_handles_long_underscore_runs_quickly` が使う
     アンダースコア区切りのテキストはこの文字クラスに含まれないため、
     既存のテストではこの不具合を検知できていなかった)。
+
+    `test_mask_secrets_handles_long_underscore_runs_quickly` と同様、絶対秒数の
+    上限に加えて小入力基準との相対比較も行う(baseline測定を追加、二次関数的劣化を
+    遅いマシンと区別するため)。
     """
+    small_text = "a-" * 500  # 1,000 文字(64,000文字の基準測定用)
+    start = time.perf_counter()
+    mask_secrets(small_text)
+    baseline = time.perf_counter() - start
+
     text = "a-" * 32000  # 64,000 文字、`://` を一切含まない
     start = time.perf_counter()
     mask_secrets(text)
     elapsed = time.perf_counter() - start
+
     assert elapsed < 1.0, f"mask_secrets が遅すぎます(elapsed={elapsed:.2f}s)"
+    assert elapsed < max(baseline * 200, 0.05), (
+        f"小入力基準に対して不釣り合いに遅い(二次関数的劣化の疑い): "
+        f"baseline={baseline:.4f}s, elapsed={elapsed:.4f}s"
+    )
 
 
 def test_mask_secrets_cookie_masks_to_end_of_line_with_multiple_pairs():

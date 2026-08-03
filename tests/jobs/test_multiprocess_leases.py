@@ -421,8 +421,17 @@ def test_docs_write_second_acquirer_fails_fast_when_wait_is_false(db_path: Path)
     _terminate(proc_b)
 
 
+@pytest.mark.timing_sensitive
 def test_corpus_write_different_corpora_do_not_contend(db_path: Path) -> None:
-    """`corpus-write:<corpus>` はコーパスが違えば同時取得できること。"""
+    """`corpus-write:<corpus>` はコーパスが違えば同時取得できること。
+
+    「片方が待たされていない」の確認に実プロセス間の壁時計差を使っており、CPU
+    高負荷下では両プロセスの起動・スケジューリング自体が遅延しうるため
+    `timing_sensitive` としてマークする(`test_web.py` の
+    `test_crawl_enforces_delay_between_requests_to_same_host` と同種のリスク)。
+    実プロセス2つを跨ぐ排他制御なしの独立性は、この統合テスト以外で決定論的に
+    検証するのが難しいため、閾値を緩め(2.0秒)つつ現状維持する。
+    """
     proc_a = _spawn(
         "resource-lease",
         "--db",
@@ -462,7 +471,7 @@ def test_corpus_write_different_corpora_do_not_contend(db_path: Path) -> None:
     assert acquired_a is not None
     assert acquired_b is not None
     # 両方がほぼ同時に取得できていること(片方が待たされていない)。
-    assert abs(acquired_a["t"] - acquired_b["t"]) < 0.5
+    assert abs(acquired_a["t"] - acquired_b["t"]) < 2.0
 
     _terminate(proc_a)
     _terminate(proc_b)

@@ -43,6 +43,7 @@ addopts = "-ra --strict-markers"
 markers = [
     "slow: 実行時間の長いテスト",
     "requires_node: 旧Nodeシステムを必要とするテスト",
+    "timing_sensitive: 実時間計測に依存する(CPU高負荷下でフレークしうる)テスト",
 ]
 
 [tool.ruff]
