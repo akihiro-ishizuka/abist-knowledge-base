@@ -1,0 +1,409 @@
+{
+  "additional_sources": [
+    "tools/lib/sync-planner.js (decideSyncAction / SYNC_ACTIONS)",
+    "tools/lib/metadata-schema.js (SYNC_STATUSES)"
+  ],
+  "cases": [
+    {
+      "action": "create",
+      "citation": "download-article.js:328-336",
+      "derivation": "executed_sandbox",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "esa_create",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "update",
+      "citation": "download-article.js:328-336",
+      "derivation": "executed_sandbox",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "esa_update",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "unchanged",
+      "citation": "download-article.js:250-263,290-303",
+      "derivation": "executed_sandbox",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "esa_unchanged",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "local_modified",
+      "citation": "download-article.js:257,364",
+      "derivation": "executed_sandbox",
+      "expected": {
+        "sync_status": "modified_local"
+      },
+      "id": "esa_local_modified",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "conflict",
+      "citation": "download-article.js:257,363",
+      "derivation": "executed_sandbox",
+      "expected": {
+        "sync_status": "conflict"
+      },
+      "id": "esa_conflict",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "conflict_overwritten",
+      "citation": "download-article.js:328-336",
+      "derivation": "executed_sandbox",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "esa_conflict_overwritten",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "adopt",
+      "citation": "download-article.js:257,362-365",
+      "derivation": "executed_sandbox",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "esa_adopt",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "unknown_local",
+      "citation": "download-article.js:257,362-365",
+      "derivation": "executed_sandbox",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "esa_unknown_local",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "missing",
+      "citation": "download-article.js:445-521 (detectMissingPosts, 非export)",
+      "derivation": "read_only_no_safe_execution_path",
+      "expected": {
+        "meaning": "変更されない(直前の値を保持)",
+        "sync_status": null
+      },
+      "id": "esa_missing_below_threshold_or_individual_fetch_succeeded",
+      "note": "detectMissingPosts は非exportで、main() 経由(実 esa API 呼び出し必須)以外の到達経路が無い。missingCount が閾値未満、または個別取得(getPost)成功時は db.upsertDocument が呼ばれず sync_status は変化しない。",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "missing",
+      "citation": "download-article.js:505-511",
+      "derivation": "read_only_no_safe_execution_path",
+      "expected": {
+        "sync_status": "source_missing"
+      },
+      "id": "esa_missing_source_confirmed",
+      "note": "全件同期成功+連続不在が閾値到達+個別取得も失敗の3条件が揃った場合のみ db.upsertDocument({sync_status:'source_missing'})。3条件判定自体(decideMissingCandidate)は tests/fixtures/kernel/sync-planner.json の missing_candidate_* 4ケースとして実行済み。",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "orphan",
+      "citation": "download-article.js:438-461",
+      "derivation": "read_only_no_safe_execution_path",
+      "expected": {
+        "meaning": "変更されない(削除されるか直前の値のまま)",
+        "sync_status": null
+      },
+      "id": "esa_orphan",
+      "note": "detectMissingPosts 内のカテゴリ移動分岐。recordSyncResult(summary記録)と任意のfs.rm+db.deleteDocumentのみで、sync_statusを書き換えるdb.upsertDocument呼び出しは無い。",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "error",
+      "citation": "download-article.js:747",
+      "derivation": "read_only_corroborated_by_web_execution",
+      "expected": {
+        "meaning": "変更されない(sync_statusを書く呼び出しが無い)",
+        "sync_status": null
+      },
+      "id": "esa_error",
+      "note": "main()のcatchはrecordSyncResultのみ。同型のパターン(recordSyncResultのみ、db呼び出し無し)をweb側で実行確認済み(web_error_http_status)。",
+      "source_file": "download-article.js"
+    },
+    {
+      "action": "create",
+      "citation": "download-web.js:456",
+      "derivation": "executed_sandbox_http",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "web_create",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "update",
+      "citation": "download-web.js:456",
+      "derivation": "executed_sandbox_http",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "web_update",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "unchanged",
+      "citation": "download-web.js:399-419,478",
+      "derivation": "executed_sandbox_http",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "web_unchanged_via_decide_sync_action",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "unchanged",
+      "citation": "download-web.js:307-310",
+      "derivation": "executed_sandbox_http",
+      "expected": {
+        "meaning": "変更されない(直前の値を保持。実行時はたまたま 'synced')",
+        "sync_status": null
+      },
+      "id": "web_unchanged_via_http_304",
+      "note": "esa/gitには無いweb固有の経路。304応答時はdecideSyncActionを呼ばずrecordDocument({path,last_checked_at})のみ実行し、sync_statusキー自体を渡さない。実行時に観測された値は直前値の保持であり、304経路がその値を書いたわけではない。",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "local_modified",
+      "citation": "download-web.js:409-411",
+      "derivation": "executed_sandbox_http",
+      "expected": {
+        "sync_status": "modified_local"
+      },
+      "id": "web_local_modified",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "conflict",
+      "citation": "download-web.js:409",
+      "derivation": "executed_sandbox_http",
+      "expected": {
+        "sync_status": "conflict"
+      },
+      "id": "web_conflict",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "conflict_overwritten",
+      "citation": "download-web.js:456",
+      "derivation": "executed_sandbox_http",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "web_conflict_overwritten",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "adopt",
+      "citation": "download-web.js:399-419",
+      "derivation": "executed_sandbox_http",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "web_adopt",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "unknown_local",
+      "citation": "download-web.js:399-419",
+      "derivation": "executed_sandbox_http",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "web_unknown_local",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "error",
+      "citation": "download-web.js:325-341",
+      "derivation": "executed_sandbox_http",
+      "expected": {
+        "meaning": "変更されない(recordDocumentはsync_errorのみ更新しsync_statusキーを渡さない)",
+        "sync_status": null
+      },
+      "id": "web_error_http_status",
+      "note": "初回アクセス(それまでsync-stateに行が無い状態)でHTTP 500を受けた実行結果、観測されたsync_statusは 'synced'(スキーマ既定値であり、この経路が書いたのではない)。",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "error",
+      "citation": "download-web.js:280-299",
+      "derivation": "read_only_no_safe_execution_path",
+      "expected": {
+        "meaning": "変更されない(recordDocument自体が呼ばれない)",
+        "sync_status": null
+      },
+      "id": "web_error_network",
+      "note": "fetch自体が失敗する経路(DNS失敗・接続拒否等)は再現に到達不能ホストへの接続試行とタイムアウト待ちを要する。recordDocumentすら呼ばれない点は同型のweb_error_http_statusで実行確認済みのコード形状から読解のみに留めた。",
+      "source_file": "download-web.js"
+    },
+    {
+      "action": "create",
+      "citation": "download-git.js:552",
+      "derivation": "executed_sandbox_local_repo",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "git_create",
+      "source_file": "download-git.js"
+    },
+    {
+      "action": "update",
+      "citation": "download-git.js:552",
+      "derivation": "executed_sandbox_local_repo",
+      "expected": {
+        "sync_status": "synced"
+      },
+      "id": "git_update",
+      "source_file": "download-git.js"
+    },
+    {
+      "action": "missing",
+      "citation": "download-git.js:483-487,521-538",
+      "derivation": "executed_sandbox_local_repo",
+      "expected": {
+        "meaning": "変更されない(削除されたファイルの行は放置される)",
+        "sync_status": null
+      },
+      "id": "git_missing_deleted_upstream",
+      "note": "上流から削除されたファイルの sync-state 行は recordMarkdownFiles の走査対象外(実在するファイルしか見ない)になり残存する。実行確認: row_untouched=true(updated_atが1回目の同期時刻のまま変化していない)。",
+      "source_file": "download-git.js"
+    },
+    {
+      "action": "error",
+      "citation": "download-git.js:440",
+      "derivation": "executed_sandbox_local_repo",
+      "expected": {
+        "meaning": "行自体が作られない",
+        "sync_status": null
+      },
+      "id": "git_error",
+      "note": "存在しないローカルパスを指定してclone失敗を再現。row_created=false(recordMarkdownFilesが呼ばれず行自体が作られない)。",
+      "source_file": "download-git.js"
+    },
+    {
+      "action": null,
+      "citation": "download-git.js 全体(decideSyncAction を一切呼ばない)",
+      "derivation": "read_only",
+      "expected": {
+        "meaning": "該当なし",
+        "sync_status": null
+      },
+      "id": "git_actions_not_applicable",
+      "note": "git-syncは取得元を丸ごとミラーしローカル編集の有無を判定しない設計のため、local_modified/conflict/conflict_overwritten/adopt/unknown_local/orphanの6アクションはgit-syncの実行結果として発生しない。",
+      "source_file": "download-git.js"
+    }
+  ],
+  "esa_executed": {
+    "adopt": {
+      "action": "adopt",
+      "sync_status_after": "synced"
+    },
+    "conflict": {
+      "action": "conflict",
+      "sync_status_after": "conflict"
+    },
+    "conflict_overwritten": {
+      "action": "conflict_overwritten",
+      "sync_status_after": "synced"
+    },
+    "create": {
+      "action": "create",
+      "sync_status_after": "synced"
+    },
+    "local_modified": {
+      "action": "local_modified",
+      "sync_status_after": "modified_local"
+    },
+    "unchanged": {
+      "action": "unchanged",
+      "sync_status_after": "synced"
+    },
+    "unknown_local": {
+      "action": "unknown_local",
+      "sync_status_after": "synced"
+    },
+    "update": {
+      "action": "update",
+      "sync_status_after": "synced"
+    }
+  },
+  "git_executed": {
+    "create_a": {
+      "sync_status_after": "synced"
+    },
+    "create_b": {
+      "sync_status_after": "synced"
+    },
+    "create_c": {
+      "sync_status_after": "synced"
+    },
+    "error_no_such_repo": {
+      "row_created": false
+    },
+    "missing_deleted_upstream_b": {
+      "row_untouched": true,
+      "sync_status_after": "synced"
+    },
+    "update_a": {
+      "sync_status_after": "synced"
+    }
+  },
+  "note": [
+    "M2 実装者が download-article.js / verify-integrity.js を読んで導出した sync_status_for マッピングの正しさを、",
+    "実行結果で裏付ける(または覆す)ための capture。3つの private 関数(syncStatusFor / downloadPage内の",
+    "インラインマッピング / recordMarkdownFiles)はいずれも export されていないため、手で転記せず、",
+    "旧リポジトリの該当ファイルを os.tmpdir() 配下のサンドボックスへコピーし(node_modules はジャンクション、",
+    "旧リポジトリ本体は一切変更しない)、savePost()を直接実行(esa)、download-web.js/download-git.jsを",
+    "子プロセスとして実行(web・git、web は127.0.0.1の使い捨てHTTPサーバーへ、gitはネットワーク不要の",
+    "ローカル使い捨てリポジトリへ向けた)して、実際に sync-state DB へ書かれた sync_status を観測した。",
+    "重大な発見: 3ソースは同じマッピング関数を共有していない。esa と web は(別ファイルに重複実装されているが)",
+    "同じ入出力を持つ。git は decideSyncAction / SYNC_ACTIONS を一切使わず、記録するすべての Markdown に",
+    "無条件で 'synced' を書く(アクションに依存しない)。missing/orphan/error の一部は sync_status を",
+    "一切書き換えない(直前の値のまま、または行自体が作られない)。"
+  ],
+  "schema": 1,
+  "source": "download-article.js (syncStatusFor, 非export) / download-web.js (downloadPage内の無名インラインマッピング, 非export) / download-git.js (recordMarkdownFiles, 非export)",
+  "web_executed": {
+    "adopt": {
+      "sync_status_after": "synced"
+    },
+    "conflict": {
+      "sync_status_after": "conflict"
+    },
+    "conflict_overwritten": {
+      "sync_status_after": "synced"
+    },
+    "create": {
+      "sync_status_after": "synced"
+    },
+    "http_error": {
+      "sync_status_after": "synced"
+    },
+    "local_modified": {
+      "sync_status_after": "modified_local"
+    },
+    "unchanged_304": {
+      "sync_status_after": "synced"
+    },
+    "unchanged_decide": {
+      "sync_status_after": "synced"
+    },
+    "unknown_local": {
+      "sync_status_after": "synced"
+    },
+    "update": {
+      "sync_status_after": "synced"
+    }
+  }
+}

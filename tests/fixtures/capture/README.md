@@ -42,6 +42,7 @@ Python 実装の「正しさ」は、ここで採取した値と一致するか�
 node tests/fixtures/capture/capture-kernel.mjs
 node tests/fixtures/capture/capture-batch-config.mjs
 node tests/fixtures/capture/capture-b32doc-filter.mjs
+node tests/fixtures/capture/capture-sync-status.mjs
 node tests/fixtures/capture/capture-real-docs.mjs
 node tests/fixtures/capture/capture-mcp.mjs
 node tests/fixtures/capture/capture-eval.mjs
@@ -122,6 +123,10 @@ Python移植の正しさの基準がフィクスチャ作成者の主観にす�
   empty_content/too_short)それぞれの accept/reject ケース(除外理由文字列も
   記録)・`docs/knowledge/B32doc` からの実文書サンプル(path-sorted、64KB超は
   除外し件数を記録)を `tests/fixtures/kernel/b32doc-filter.json` に出力する。
+  この path-sorted 実文書サンプル(先頭8件)はたまたま全件 reject だったため、
+  同じ母集団から今度は `decision.indexable===true` になる文書だけを
+  path-sorted で決定的に3件収集する追加パス(`real_doc_accept_00〜02`)も
+  同スクリプトに含めている(accept 経路を実データで確認するため)。
   この JS モジュールは「食い違えば `tools/knowledge-curator/filters.py` を正と
   すること」と自称するが、実際に旧リポジトリの `filters.py` を実行して確認した
   ところ、`filters.py` 自身が持つ `decide()`(優先順位を1つにまとめた関数)は
@@ -131,6 +136,21 @@ Python移植の正しさの基準がフィクスチャ作成者の主観にす�
   と一致する(`decide()` とは一致しない)。詳細は `../PROVENANCE.md` §3 と
   fixture 内の case id `js_vs_python_priority_order_divergence` /
   `js_vs_python_noise_filename_source_divergence` を参照。
+- `capture-sync-status.mjs` — M2完了後に見つかったギャップ(`sync_status_for`
+  マッピングが実行結果ではなく読解で導出されていた)を埋める追加採取。
+  `download-article.js` の `syncStatusFor` / `download-web.js` の `downloadPage`
+  内の無名インラインマッピング / `download-git.js` の `recordMarkdownFiles` は
+  いずれも export されていないため、旧リポジトリの該当ファイルを
+  `os.tmpdir()` 配下のサンドボックスへコピーし(`node_modules` はジャンクション、
+  旧リポジトリ本体は一切変更しない)、`savePost()` を直接実行(esa)、
+  `download-web.js`/`download-git.js` を子プロセスとして実行(web は127.0.0.1の
+  使い捨てHTTPサーバーへ、gitはネットワーク不要のローカル使い捨てリポジトリへ
+  向けた)して、実際に sync-state DB へ書かれた `sync_status` を観測する。
+  `missing`/`orphan`の一部と`error`の一部は、実 esa API 呼び出しや長い
+  タイムアウト待ちが絡み安全な実行経路が無いため、`derivation` フィールドで
+  `read_only_no_safe_execution_path` と明示し、読解に基づく記述であることを
+  隠さず記録する。出力: `tests/fixtures/kernel/sync-status-for.json`。
+  詳細は `../PROVENANCE.md` の「sync_status_for マッピング」節を参照。
 - `capture-real-docs.mjs` — `data/sync-state.sqlite`（read-only）の
   `documents` から9層（esa/web/git/reference/日本語パス/長いパス/BOM付き/
   CRLF本文/frontmatter無し）を決定的に層化抽出し、選ばれた各実文書について

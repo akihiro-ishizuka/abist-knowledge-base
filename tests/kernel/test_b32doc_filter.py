@@ -36,7 +36,10 @@ from conftest import load_kernel_fixture
 FIXTURE = load_kernel_fixture("b32doc-filter")
 CASES = {case["id"]: case for case in FIXTURE["cases"]}
 _case_count = len(FIXTURE["cases"])
-assert _case_count == 43, f"想定43ケースに対し {_case_count} 件しか読み込めていない"
+# 43 -> 46: M1タスク7で real_doc_accept_00〜02(accept経路の実文書サンプル)を追加。
+# 旧 real_docs_sample(先頭8件)が全件 reject だったギャップを埋めるための追加採取
+# (tests/fixtures/PROVENANCE.md 参照)。
+assert _case_count == 46, f"想定46ケースに対し {_case_count} 件しか読み込めていない"
 
 
 def _b64d(s: str) -> str:
@@ -271,6 +274,9 @@ def test_js_vs_python_noise_filename_source_divergence() -> None:
 # --- 実文書8件 ---------------------------------------------------------------------
 
 REAL_DOC_CASE_IDS = [f"real_doc_{i:02d}" for i in range(8)]
+# M1タスク7で追加: real_docs_sample(先頭8件)が全件 reject だったギャップを埋める、
+# accept経路(indexable=True)の実文書サンプル3件。
+REAL_DOC_ACCEPT_CASE_IDS = [f"real_doc_accept_{i:02d}" for i in range(3)]
 
 
 def _resolve_title(summary_title: str | None, frontmatter_title: object, path: str) -> str:
@@ -282,7 +288,7 @@ def _resolve_title(summary_title: str | None, frontmatter_title: object, path: s
     return basename[:-3] if basename.endswith(".md") else basename
 
 
-@pytest.mark.parametrize("case_id", REAL_DOC_CASE_IDS)
+@pytest.mark.parametrize("case_id", [*REAL_DOC_CASE_IDS, *REAL_DOC_ACCEPT_CASE_IDS])
 def test_real_doc(case_id: str) -> None:
     case = CASES[case_id]
     content = _b64d(case["content_b64"])
@@ -315,7 +321,7 @@ def test_real_doc(case_id: str) -> None:
 
 
 def test_all_fixture_cases_covered() -> None:
-    """fixture の全43ケースがこのテストファイルで参照されていることの網羅性チェック。"""
+    """fixture の全46ケースがこのテストファイルで参照されていることの網羅性チェック。"""
     covered = {
         "excluded_path_segments",
         "noise_filename_substr",
@@ -334,5 +340,6 @@ def test_all_fixture_cases_covered() -> None:
         "js_vs_python_priority_order_divergence",
         "js_vs_python_noise_filename_source_divergence",
         *REAL_DOC_CASE_IDS,
+        *REAL_DOC_ACCEPT_CASE_IDS,
     }
     assert covered == set(CASES)

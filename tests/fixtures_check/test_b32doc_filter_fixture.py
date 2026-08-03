@@ -155,7 +155,13 @@ def test_real_doc_samples_present_and_within_size_limit() -> None:
     assert manifest["selected_count"] <= 10, "real_docs_sample が10件を超えている"
     assert manifest["skipped_over_64kb_count"] >= 0
 
-    real_cases = [c for c in data["cases"] if c["id"].startswith("real_doc_")]
+    # real_doc_accept_* は別枠(accept 経路専用サンプル)なので、この機械的な
+    # path-sorted サンプルには含めない。
+    real_cases = [
+        c
+        for c in data["cases"]
+        if c["id"].startswith("real_doc_") and not c["id"].startswith("real_doc_accept_")
+    ]
     assert len(real_cases) == manifest["selected_count"]
     for case in real_cases:
         assert case["byte_size"] <= manifest["max_bytes"], (
@@ -163,6 +169,30 @@ def test_real_doc_samples_present_and_within_size_limit() -> None:
         )
         assert "decision" in case["expected"]
         assert "reason" in case["expected"]["decision"]
+
+
+def test_real_doc_accept_samples_present_and_actually_accepted() -> None:
+    """real_docs_sample(機械的な path-sorted 選定)が全件 reject だったギャップを
+    埋めるため、decision.indexable===true になる実文書を最低2件、決定的に
+    (path-sorted で先頭から accept のものだけ)収集していること。"""
+    data = _load()
+    manifest = data["real_docs_accept_sample"]
+    assert manifest["selected_count"] >= 2, "real_docs_accept_sample が2件未満"
+    assert manifest["skipped_over_64kb_count"] >= 0
+
+    accept_cases = [c for c in data["cases"] if c["id"].startswith("real_doc_accept_")]
+    assert len(accept_cases) == manifest["selected_count"]
+    assert len(accept_cases) >= 2
+
+    for case in accept_cases:
+        assert case["byte_size"] <= manifest["max_bytes"], (
+            f"{case['id']}: 64KB超過ファイルが real_docs_accept サンプルに紛れ込んでいる"
+        )
+        decision = case["expected"]["decision"]
+        assert decision["indexable"] is True, (
+            f"{case['id']}: real_docs_accept サンプルなのに indexable が True でない: {decision}"
+        )
+        assert decision["reason"] is None
 
 
 def test_priority_order_divergence_case_is_recorded() -> None:

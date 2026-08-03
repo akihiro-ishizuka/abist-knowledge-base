@@ -21,7 +21,7 @@ Python 移植は「この fixture と一致すること」で正しさを判定�
 
 | カテゴリ | パス | 契約の種類 | 何を保証するか | 消費するマイルストーン |
 |---|---|---|---|---|
-| kernel | `tests/fixtures/kernel/*.json` | ビット互換 | frontmatter / chunker / line-range / e5入力 / sync-planner / metadata-schema / batch-config / b32doc-filter の関数単位の入出力 | M2(カーネル移植の合否そのもの) |
+| kernel | `tests/fixtures/kernel/*.json` | ビット互換 | frontmatter / chunker / line-range / e5入力 / sync-planner / metadata-schema / batch-config / b32doc-filter / sync-status-for の関数単位の入出力 | M2(カーネル移植の合否そのもの)・M3(sync-status-for は3ソースアダプター共通の受け入れ基準) |
 | real-docs | `tests/fixtures/real-docs/samples.json` | ビット互換 | 実 `docs/` から層化抽出した40件に対する同カーネル出力(手書き境界ケースだけでは拾えない実データ分布の確認) | M2 |
 | mcp | `tests/fixtures/mcp/**` | ビット互換(ただし `sdk_validation_error` の4ケースは prose 除く。§3参照) | 15ツールの `tools/list` スキーマと `tools/call` の生 JSON-RPC 応答 | M5(MCP 互換性検証) |
 | eval | `tests/fixtures/eval/{queries.jsonl,baseline.json}` | ビット互換(ランキング・指標) | 22クエリ × `bm25_raw`/`hybrid` の2方式のランク付き結果・Recall@5/RR/nDCG@10 | M4(検索移植の受け入れゲート) |
@@ -53,6 +53,50 @@ fixture には含めていない(3回の独立採取でランキング・スコ�
 ≥0.999 なら既存ベクトル再利用可、そうでなければ全件再生成)の**測定入力**であり、
 合否判定そのものはここでは出さない(判定は M8 が実施する)。旧版は q8量子化 ONNX
 であるため、**不合格が既定想定であり、不合格自体は失敗ではない**。
+
+### sync_status_for マッピング(`kernel/sync-status-for.json`、M2後の追加採取)
+
+M2実装時、`documents` テーブルの `sync_status` 列(`synced`/`modified_local`/`conflict`/
+`source_missing`/`error` の5値)を、`sync-planner.js` の11アクション
+(`create`/`update`/`unchanged`/`local_modified`/`conflict`/`conflict_overwritten`/
+`adopt`/`unknown_local`/`missing`/`orphan`/`error`)からどうマッピングするかが、
+実行結果のゴールデンとして採取されていないまま `download-article.js` /
+`tools/verify-integrity.js` を読んで導出されていた(誰も実行して確認していない)
+というギャップが見つかり、`capture-sync-status.mjs` で追加採取した。
+
+この関数(`download-article.js` の `syncStatusFor` / `download-web.js` の
+`downloadPage` 内の無名インラインマッピング / `download-git.js` の
+`recordMarkdownFiles`)はいずれも **export されていない**。手で転記する代わりに、
+旧リポジトリの該当ファイルを `os.tmpdir()` 配下のサンドボックスへコピーし
+(`node_modules` はジャンクションで読み取り専用参照。旧リポジトリ本体は一切変更しない)、
+`savePost()` を直接実行(esa)、`download-web.js`/`download-git.js` を子プロセスとして
+実行(web は127.0.0.1の使い捨てHTTPサーバーへ、gitはネットワーク不要のローカル使い捨て
+リポジトリへ向けた)して、実際に sync-state DB へ書かれた `sync_status` を観測した。
+
+**判明した事実(3ソースは同じマッピング関数を共有していない)**:
+
+- **esa と web は(別ファイルに独立実装されているが)実質同じマッピングを持つ**:
+  `create`/`update`/`conflict_overwritten` は書き込み後に `synced` を直書き、
+  `unchanged`/`adopt`/`unknown_local` は `synced`、`local_modified` は
+  `modified_local`、`conflict` は `conflict`。
+- **git は `decideSyncAction`/`SYNC_ACTIONS` を一切使わない。** 記録するすべての
+  Markdown に、そのファイルが add/update/unchanged のどれだったかに関わらず
+  無条件で `synced` を書く(`recordMarkdownFiles` はアクション非依存)。したがって
+  `local_modified`/`conflict`/`conflict_overwritten`/`adopt`/`unknown_local`/`orphan`
+  の6アクションはgit-syncの実行結果として発生しない。
+- **`missing`/`orphan`/一部の`error`は `sync_status` を一切書き換えない**(直前の値の
+  まま、または行自体が作られない)。esa の `missing` は
+  「全件同期成功+連続不在が閾値到達+個別取得も失敗」の3条件が揃ったときだけ
+  `source_missing` を書き、それ以外(閾値未満・個別取得成功)は無変更。`orphan`
+  (カテゴリ移動)は `sync_status` を書く呼び出し自体が無い。web には web 固有の
+  経路(条件付きGETの HTTP 304)があり、これも `sync_status` に触れない。
+- **`missing`(esaの`source_missing`確定分岐)と`orphan`(esa)の一部、および
+  `error`(esaのネットワーク例外・gitの`updateGitCache`失敗)は、export されていない
+  関数がさらに実 esa API 呼び出しや長いタイムアウト待ちを要求するため、旧リポジトリを
+  変更せず安全に実行できる経路が無かった。** これらは fixture 内で
+  `derivation: "read_only_no_safe_execution_path"` として明示し、コード読解に基づく
+  記述であることを隠さず記録した(実行結果ではないことをはっきりさせるための、
+  意図的な「導出不能」の記録)。
 
 ## 2. 転記カバレッジ・チェックリスト
 
@@ -90,7 +134,7 @@ M7の監査・可視化)が**シナリオそのものを新実装に対して再
 | `kb-search-mcp.test.js` | 転記せず・別方式で捕捉 | `mcp/kb-search/**` | 同上 |
 | `kb-visualize-mcp.test.js` | 転記せず・別方式で捕捉 | `mcp/kb-visualize/**` | 同上 |
 | `search-engine.test.js` | 転記せず・別方式で捕捉 | `eval/baseline.json` | インライン定数は転記していないが、Task 4 が `search-engine.js` の `search`/`keywordSearch` を実クエリ(`eval/queries.jsonl`)で直接実行し、ランキング・指標を記録した |
-| `b32doc-filter.test.js` | `kernel/b32doc-filter.json`(43ケース: ルール別ケース23+抽出系5+優先順位食い違い2+実文書8+定数7) | 転記済み(当初のM1範囲の取りこぼしを別タスクで解消。§3参照) | `decideIndexable`/`extractedContent`/`extractSummaryKeys` を転記・実行。6ルール(path_excluded/toc_or_default/not_html_category/language_excluded/empty_content/too_short)すべてにaccept/rejectの両方を用意し、除外理由の文字列も記録した。加えて `docs/knowledge/B32doc` から path-sorted に実文書8件(64KB超過は0件)を採取。**JS/Python(filters.py)の優先順位食い違いを実測して記録**(§3参照) |
+| `b32doc-filter.test.js` | `kernel/b32doc-filter.json`(46ケース: ルール別ケース23+抽出系5+優先順位食い違い2+実文書8(reject中心)+accept実文書3+定数7) | 転記済み(当初のM1範囲の取りこぼしを別タスクで解消。§3参照) | `decideIndexable`/`extractedContent`/`extractSummaryKeys` を転記・実行。6ルール(path_excluded/toc_or_default/not_html_category/language_excluded/empty_content/too_short)すべてにaccept/rejectの両方を用意し、除外理由の文字列も記録した。加えて `docs/knowledge/B32doc` から path-sorted に実文書8件(64KB超過は0件)を採取したところ**たまたま全件 reject** だったため(制御ファイル・非html/非ja文書が辞書順で先に来たため)、accept経路(`decision.indexable===true`)を実データで確認する実文書3件(`real_doc_accept_00〜02`、path-sorted で accept のものだけを決定的に収集、64KB超は79件スキップ)を追加採取した。**JS/Python(filters.py)の優先順位食い違いを実測して記録**(§3参照) |
 
 ### M2範囲だが未fixture化(0ファイル) — 既知のギャップは解消済み
 

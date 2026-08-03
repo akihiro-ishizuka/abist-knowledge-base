@@ -1,14 +1,14 @@
 {
   "capture_dates": {
     "capture": {
-      "commit": "55f04b359eb0d768c5050d3edb5e7ee47302e007",
-      "date": "2026-08-03T22:20:53+09:00",
-      "subject": "docs(m1): fixture 由来記録を tests/fixtures/PROVENANCE.md へ恒久化"
+      "commit": "eb864ebdfe05b4d972c9df7353a634e9be745257",
+      "date": "2026-08-03T22:46:30+09:00",
+      "subject": "feat(m1): b32doc-filter の未採取ゴールデンを追加"
     },
     "capture-manifest.json (this file)": {
-      "commit": "a83d79ee29e80de8f9d846251be7e84c4e445e1d",
-      "date": "2026-08-03T22:25:45+09:00",
-      "subject": "docs(m1): 未確認16件をマイルストーン別に再分類し引き継ぎメモを追記"
+      "commit": "eb864ebdfe05b4d972c9df7353a634e9be745257",
+      "date": "2026-08-03T22:46:30+09:00",
+      "subject": "feat(m1): b32doc-filter の未採取ゴールデンを追加"
     },
     "embedding": {
       "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
@@ -26,9 +26,9 @@
       "subject": "feat(m1): 埋め込みゲート素材・HTML変換ゴールデン・capture-manifestを採取"
     },
     "kernel": {
-      "commit": "d4f0e41f463c37501a8049cf5734597b1674164e",
-      "date": "2026-08-03T20:35:07+09:00",
-      "subject": "fix(m1): fixture レビュー指摘2件を修正(往復ケース追加・読み取り専用チェック強化)"
+      "commit": "eb864ebdfe05b4d972c9df7353a634e9be745257",
+      "date": "2026-08-03T22:46:30+09:00",
+      "subject": "feat(m1): b32doc-filter の未採取ゴールデンを追加"
     },
     "mcp": {
       "commit": "c49036566aba4243f96e6775a5b63c887bffe001",
@@ -41,19 +41,19 @@
       "subject": "feat(m1): 実データ層化サンプルを旧sync-state.sqliteから採取"
     },
     "root": {
-      "commit": "a83d79ee29e80de8f9d846251be7e84c4e445e1d",
-      "date": "2026-08-03T22:25:45+09:00",
-      "subject": "docs(m1): 未確認16件をマイルストーン別に再分類し引き継ぎメモを追記"
+      "commit": "eb864ebdfe05b4d972c9df7353a634e9be745257",
+      "date": "2026-08-03T22:46:30+09:00",
+      "subject": "feat(m1): b32doc-filter の未採取ゴールデンを追加"
     }
   },
   "categories": {
     "capture": {
-      "file_count": 11,
+      "file_count": 12,
       "files": [
         {
-          "bytes": 16405,
+          "bytes": 18243,
           "path": "capture/README.md",
-          "sha256": "2b51844f1bda53dcdb9f65eb7e31bea278837f37d8140dc4d65b4a741c64b3ce"
+          "sha256": "b2b5450e76196db874c58d439b564420055bf0155edbe4f743f5f4b9490b419e"
         },
         {
           "bytes": 9546,
@@ -66,9 +66,9 @@
           "sha256": "b28623cfd4457f42dfa12a33c65d54771712e35ed65cbfdc55a1aa16811cdea9"
         },
         {
-          "bytes": 25329,
+          "bytes": 28859,
           "path": "capture/capture-b32doc-filter.mjs",
-          "sha256": "97fbb9e3fb3287f26e889f50193aebbfa65e85ae9bd193d48a761b05232f9f3a"
+          "sha256": "930f44488fcfb52df5c2c60c1ab8efa17c98478f5042e8aadd4e6a18b5177510"
         },
         {
           "bytes": 9217,
@@ -104,9 +104,14 @@
           "bytes": 11267,
           "path": "capture/capture-real-docs.mjs",
           "sha256": "0e93d29880902ed6bf4853f753b8ab63c5f018dd1ac97d22ff68684fbe18eb36"
+        },
+        {
+          "bytes": 28344,
+          "path": "capture/capture-sync-status.mjs",
+          "sha256": "a092b8c8ea84fec98f472cc7d901ebe2714ed35bcaae35e5812b7fbed078dc35"
         }
       ],
-      "total_bytes": 210355
+      "total_bytes": 244067
     },
     "embedding": {
       "file_count": 1,
@@ -147,12 +152,12 @@
       "total_bytes": 12057
     },
     "kernel": {
-      "file_count": 8,
+      "file_count": 9,
       "files": [
         {
-          "bytes": 201457,
+          "bytes": 212807,
           "path": "kernel/b32doc-filter.json",
-          "sha256": "678fe4755ed2cd294badbc0089cf4ae2ddbf20111a8a2d8c7ba7f0c74c14c44c"
+          "sha256": "2d87aad87f299ffeda33672e5a1d5cadd209b065405f24a07c901b8f77654302"
         },
         {
           "bytes": 25495,
@@ -188,9 +193,14 @@
           "bytes": 16412,
           "path": "kernel/sync-planner.json",
           "sha256": "07e38f8c598ebea241e9ed1563abfaf9924b7f7f7c311205f1af3b232f57a826"
+        },
+        {
+          "bytes": 14660,
+          "path": "kernel/sync-status-for.json",
+          "sha256": "77b70558e40af27dfe3ad3f7795574477195d3bdb84234c9dcca504ce260c92d"
         }
       ],
-      "total_bytes": 462909
+      "total_bytes": 488919
     },
     "mcp": {
       "file_count": 29,
@@ -363,12 +373,12 @@
           "sha256": "11dce4ae76a450fa325a88133d4282cff549f31fe82312927b1e16b74be90ef0"
         },
         {
-          "bytes": 30746,
+          "bytes": 34914,
           "path": "PROVENANCE.md",
-          "sha256": "4b16eca6e3cc77892923f0966c12cc5e7646199ea4b258fb5194619144fec1d9"
+          "sha256": "5b226a9c100f98abe15a707d17c6563acd60341ac32172f3a87af1b72faabec7"
         }
       ],
-      "total_bytes": 30767
+      "total_bytes": 34935
     }
   },
   "exclusions_registry": [

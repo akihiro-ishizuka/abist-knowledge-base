@@ -490,6 +490,63 @@ if (realDocCases.length < 5) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 4b. 実データ: accept 側(indexable: true)の実文書サンプル
+//
+// 上の realDocCases は「path-sorted で先頭から REAL_SAMPLE_TARGET 件」を機械的に
+// 拾ったところ、たまたま全件 reject(制御ファイル・非html/非ja)だった
+// (レビュー指摘: b32doc-filter capture 完了報告)。accept 経路を実データで
+// 端から端まで確認する real doc が無いままでは、decideIndexable の accept 分岐が
+// 実データに対しても機能することを保証できない。そのため、同じ母集団
+// (docs/knowledge/B32doc、path-sorted、64KB超は除外)を今度は decision.indexable
+// === true になる文書だけを対象に、決定的に(先頭から)REAL_ACCEPT_TARGET 件集める。
+// ---------------------------------------------------------------------------
+const REAL_ACCEPT_TARGET = 3;
+const realAcceptCases = [];
+let skippedOver64kbForAccept = 0;
+
+for (const full of allMdFiles) {
+  if (realAcceptCases.length >= REAL_ACCEPT_TARGET) break;
+  const size = statSync(full).size;
+  if (size > MAX_BYTES) {
+    skippedOver64kbForAccept++;
+    continue;
+  }
+  const content = readFileSync(full, "utf8");
+  const relFromDocs = "/" + relative(DOCS_DIR, full).split("\\").join("/");
+  const { data, body } = parseFrontmatter(content);
+  const decision = decideIndexable({
+    relPosix: relFromDocs,
+    sourceName: data.source_name,
+    category: data.category,
+    language: data.language,
+    body,
+  });
+  if (!decision.indexable) continue; // accept のみを集める(reject は既に realDocCases 側で網羅済み)
+
+  const { title: summaryTitle } = extractSummaryKeys(body);
+  realAcceptCases.push({
+    id: `real_doc_accept_${String(realAcceptCases.length).padStart(2, "0")}`,
+    path: relFromDocs,
+    byte_size: size,
+    frontmatter_category: data.category ?? null,
+    frontmatter_language: data.language ?? null,
+    frontmatter_source_name: data.source_name ?? null,
+    content_b64: b64(content),
+    expected: {
+      decision,
+      summaryTitle,
+      resolvedTitle: summaryTitle || (typeof data.title === "string" ? data.title : full.split(/[\\/]/).pop().replace(/\.md$/i, "")),
+    },
+  });
+}
+
+if (realAcceptCases.length < 2) {
+  throw new Error(
+    `real_doc_accept サンプルが2件に満たない(${realAcceptCases.length}件)。母集団の accept 分布を見直すこと。`
+  );
+}
+
 // ===========================================================================
 // 実行
 // ===========================================================================
@@ -515,13 +572,29 @@ writeDeterministicJson(join(OUT_DIR, "b32doc-filter.json"), {
     selected_count: realDocCases.length,
     max_bytes: MAX_BYTES,
     skipped_over_64kb_count: skippedOver64kb,
+    note:
+      "この REAL_SAMPLE_TARGET 件は「先頭から機械的に拾う」選定のため、たまたま全件 reject" +
+      "(制御ファイル・非html/非ja)だった。accept 側の実データ確認は real_docs_accept_sample" +
+      "(cases 内の real_doc_accept_* )を参照。",
   },
-  cases: [...cases, ...realDocCases],
+  real_docs_accept_sample: {
+    root: "docs/knowledge/B32doc",
+    selection: "path-sorted(辞書順)で decision.indexable===true になる文書のみを決定的に収集。乱数不使用",
+    target_count: REAL_ACCEPT_TARGET,
+    selected_count: realAcceptCases.length,
+    max_bytes: MAX_BYTES,
+    skipped_over_64kb_count: skippedOver64kbForAccept,
+    note:
+      "real_docs_sample が全件 reject だったギャップを埋めるための追加採取。" +
+      "accept 経路(decision.indexable===true)を実データで確認する。",
+  },
+  cases: [...cases, ...realDocCases, ...realAcceptCases],
 });
 
 assertReadOnly(); // 採取後も旧リポジトリが変化していないことを確認する
 
 console.log(
-  `capture-b32doc-filter.mjs: OK (tests/fixtures/kernel/b32doc-filter.json, ${cases.length + realDocCases.length} cases, ` +
-    `${realDocCases.length} real docs, ${skippedOver64kb} skipped >64KB)`
+  `capture-b32doc-filter.mjs: OK (tests/fixtures/kernel/b32doc-filter.json, ${cases.length + realDocCases.length + realAcceptCases.length} cases, ` +
+    `${realDocCases.length} real docs (reject-heavy sample) + ${realAcceptCases.length} real docs (accept sample, ${skippedOver64kbForAccept} skipped >64KB), ` +
+    `${skippedOver64kb} skipped >64KB for main sample)`
 );

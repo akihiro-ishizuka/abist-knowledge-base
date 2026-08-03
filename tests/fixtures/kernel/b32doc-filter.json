@@ -509,10 +509,71 @@
       "frontmatter_source_name": "AnlEnglishC2.viewdoc",
       "id": "real_doc_07",
       "path": "/knowledge/B32doc/md_out/control/AnlEnglishC2.viewdoc.viewdoc.772a7e4f.md"
+    },
+    {
+      "byte_size": 4098,
+      "content_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxjYXRpYS1kZXNpZ24ta25vd2xlZGdlLWJhc2VcZG9jc1xCMzJkb2NcSmFwYW5lc2Vcb25saW5lXEphcGFuZXNlXGFmY3VnX0MyXGFmY3VnYXBwYXV0b21hdGlvbmV4YW1wbGUuaHRtDQpzb3VyY2VfbmFtZTogYWZjdWdhcHBhdXRvbWF0aW9uZXhhbXBsZS5odG0NCmV4dDogLmh0bQ0KY2F0ZWdvcnk6IGh0bWwNCmV4dHJhY3Rpb246IHN1Y2Nlc3MNCmV4dHJhY3RlZF9hdDogJzIwMjUtMTItMjFUMDk6MDY6MTMuNTg0NTY2Jw0KbXRpbWU6ICcyMDIyLTA2LTI5VDE1OjIxOjAyJw0Kc2l6ZV9ieXRlczogMTE4MDQNCmhhc2g6IHNoYTE6YzI2YmRjNjBjMzBhODY5YzQ5NzE2ZTUyZGMxNGUwMThlYzAwMGQyOQ0KbGFuZ3VhZ2U6IG1peGVkDQp0YWdzOg0KLSBwYXJ0DQotIGNhdGlhDQotIGFuYWx5c2lzDQotIHNjcmlwdA0KZXJyb3JzOiBbXQ0KLS0tDQojIEFiYXF1cyBmb3IgQ0FUSUEgVjUg6Ieq5YuV44Kk44Oz44K/44OV44Kn44O844K544KS5L2/55So44GZ44KL5L6LDQoNCiMjIFN1bW1hcnkgS2V5cw0KDQotIOOCv+OCpOODiOODqzogQWJhcXVzIGZvciBDQVRJQSBWNSDoh6rli5XjgqTjg7Pjgr/jg5Xjgqfjg7zjgrnjgpLkvb/nlKjjgZnjgovkvosNCi0g5qaC6KaBOiDjgZPjga7nr4Djga7mnIDlvozjgavnpLrjgZXjgozjgabjgYTjgovjgrnjgq/jg6rjg5fjg4jjga/jgIFBYmFxdXMgZm9yIENBVElBIFY1IOiHquWLleOCpOODs+OCv+ODleOCp+ODvOOCueOCki4uLg0KDQojIyBFeHRyYWN0ZWQgQ29udGVudA0KDQojIyMgQWJhcXVzIGZvciBDQVRJQSBWNSDoh6rli5XjgqTjg7Pjgr/jg5Xjgqfjg7zjgrnjgpLkvb/nlKjjgZnjgovkvosNCg0K44GT44Gu56+A44Gu5pyA5b6M44Gr56S644GV44KM44Gm44GE44KL44K544Kv44Oq44OX44OI44Gv44CBQWJhcXVzIGZvciBDQVRJQSBWNSDoh6rli5XjgqTjg7Pjgr/jg5Xjgqfjg7zjgrnjgpLkvb/nlKjjgZnjgovkvovjgafjgZnjgILjgZPjga7jgrnjgq/jg6rjg5fjg4jjga/jgIFBYmFxdXMgZm9yIENBVElBIFY1IOODieOCreODpeODoeODs+ODhuODvOOCt+ODp+ODs+OBruODh+ODleOCqeODq+ODiOOBruWgtOaJgOOBi+OCieOAgeODkeODvOODiOOBqOino+aekOODieOCreODpeODoeODs+ODiOOCkuiqreOBv+i+vOOBv+OBvuOBmeOAguOBk+OBruS+i+OBruOCueOCr+ODquODl+ODiOOBp+OBr+OAgeODkeODvOODiOOBjOino+aekOOBq+ODquODs+OCr+OBleOCjOOAgeiNt+mHjeOAgeWig+eVjOadoeS7tuOAgeOCueODhuODg+ODl+OAgeino+aekOOCuOODp+ODluOBjOS9nOaIkOOBleOCjOOBvuOBmeOAguino+aekOOBi+OCieOBruWHuuWKm+OBr+OAgUNBVFRlbXDjg4fjgqPjg6zjgq/jg4jjg6rjgavmm7jjgY3ovrzjgb7jgozjgb7jgZnjgILjgZPjga7jg4fjgqPjg6zjgq/jg4jjg6rjga/jgIFDQVRJQSBWNSDnkrDlooPlpInmlbDjgpLoqq3jgb/lj5bjgovjgZPjgajjgafnibnlrprjgZXjgozjgb7jgZnjgILloLTlkIjjgavjgojjgaPjgabjgIHoqIjnrpfjgajjgrnjgq/jg6njg4Pjg4Hjg4fjgqPjg6zjgq/jg4jjg6rjga7jg5HjgrnjgpLjgqTjg7Pjgrnjg4jjg7zjg6vjg4fjgqPjg6zjgq/jg4jjg6rjgajkuIDoh7TjgZnjgovjgojjgYbjgavlpInmm7TjgZnjgovlv4XopoHjgYzjgYLjgorjgb7jgZnjgIINCg0K44GT44Gu44K/44K544Kv44Gn44Gv44CB44GT44Gu5L6L44Gu44K544Kv44Oq44OX44OI44KS5L2c5oiQ44GX44Gm5a6f6KGM44GZ44KL5pa55rOV44KS56S644GX44G+44GZOg0KDQrjg4Tjg7zjg6sgKFRvb2xzKT7jg57jgq/jg60gKE1hY3JvKT7jg57jgq/jg60uLi4gKE1hY3Jvcy4uLinjgpLpgbjmip7jgZfjgabjg57jgq/jg60gKE1hY3Jvcynjg4DjgqTjgqLjg63jgrDjg5zjg4Pjgq/jgrnjgpLplovjgY3jgb7jgZnjgIINCg0K44Oe44Kv44Ot44Op44Kk44OW44Op44OqIChNYWNybyBMaWJyYXJpZXMp44KS44Kv44Oq44OD44Kv44GX44CB44Op44Kk44OW44Op44Oq44K/44Kk44OX44GrVkJBIOODl+ODreOCuOOCp+OCr+ODiCAoVkJBIHByb2plY3RzKeOCkumBuOaKnuOBl+OAgeihqOekuuOBleOCjOOCi+ODgOOCpOOCouODreOCsOODnOODg+OCr+OCueOBi+OCieaWsOimj+ODqeOCpOODluODqeODquOCkuS9nOaIkCAoQ3JlYXRlIG5ldyBsaWJyYXJ5KeOCkumBuOaKnuOBl+OBvuOBmeOAgg0KDQrjg4fjg5Xjgqnjg6vjg4jjga7jg5fjg63jgrjjgqfjgq/jg4jlkI3jgpLlj5fjgZHlhaXjgozjgovjgYvjgIHmlrDjgZfjgYTlkI3liY3jgpLlhaXlipvjgZfjgaZPS+OCkuOCr+ODquODg+OCr+OBl+OBvuOBmeOAgg0KDQrjg57jgq/jg63jg6njgqTjg5bjg6njg6ogKE1hY3JvIGxpYnJhcmllcynjg4DjgqTjgqLjg63jgrDjg5zjg4Pjgq/jgrnjgafjgIHplonjgZjjgosgKENsb3NlKeOCkuOCr+ODquODg+OCr+OBl+OBvuOBmeOAgg0KDQrjg57jgq/jg63jg4DjgqTjgqLjg63jgrDjg5zjg4Pjgq/jgrnjgavmlrDjgZfjgYTjg6njgqTjg5bjg6njg6rlkI3jgYzooajnpLrjgZXjgozjgb7jgZnjgIINCg0K44Oe44Kv44OtIChNYWNyb3Mp44OA44Kk44Ki44Ot44Kw44Oc44OD44Kv44K544Gn44CB5L2c5oiQIChDcmVhdGUp44KS44Kv44Oq44OD44Kv44GX44Gm5paw6KaP44Oe44Kv44Ot44KS5L2c5oiQIChDcmVhdGUgYSBuZXcgbWFjcm8p44OA44Kk44Ki44Ot44Kw44Oc44OD44Kv44K544KS6ZaL44GN44G+44GZ44CCDQoNCk9L44KS44Kv44Oq44OD44Kv44GX44Gm44OH44OV44Kp44Or44OI44Gu44Oe44Kv44Ot6KiA6KqeIChNUyBWQkEpIOOBqOODnuOCr+ODreWQjSAoTW9kdWxlMSkg44KS5Y+X44GR5YWl44KM44G+44GZ44CCDQoNCuODnuOCr+ODrSAoTWFjcm9zKeODgOOCpOOCouODreOCsOODnOODg+OCr+OCueOBp+e3qOmbhiAoRWRpdCnjgpLjgq/jg6rjg4Pjgq/jgZfjgaYgTWljcm9zb2Z0IFZpc3VhbCBCYXNpYyDjgqjjg4fjgqPjgr/jga7jg6Ljgrjjg6Xjg7zjg6sxIOODieOCreODpeODoeODs+ODiOOCkumWi+OBjeOBvuOBmeOAgg0KDQrjgZPjga7nr4Djga7ntYLjgo/jgorjgavjgYLjgovkvovjga7jgrnjgq/jg6rjg5fjg4jjga7lrozlhajjgarjg4bjgq3jgrnjg4jjgpLjgrPjg5Tjg7zjgZfjgabjg6Ljgrjjg6Xjg7zjg6sxIOODieOCreODpeODoeODs+ODiOOBq+iyvOOCiuS7mOOBkeOBpuOAgeaXouWtmOOBrlN1YiBDQVRNYWluKCnjgahFbmQgU3Vi44KS572u44GN5o+b44GI44G+44GZ44CCDQoNClZpc3VhbCBCYXNpYyDjgaflrp/ooYwgKFJ1bik+U3ViL1VzZXJGb3Jt44KS5a6f6KGM44GZ44KLIChSdW4gU3ViL1VzZXJGb3JtKeOCkumBuOaKnuOBl+OBpuOCueOCr+ODquODl+ODiOOCkuWun+ihjOOBl+OBvuOBmeOAgg0KDQrjgrnjgq/jg6rjg5fjg4jjgYzjg5Hjg7zjg4jjgajop6PmnpDjg4njgq3jg6Xjg6Hjg7Pjg4jjga7oqq3jgb/ovrzjgb/jgavlpLHmlZfjgZfjgZ/loLTlkIjjga/jgIHntprjgZHjgovliY3jgavmrKHjga7lh6bnkIbjgpLlrp/ooYzjgZfjgb7jgZk6DQoNCuasoeOBruODquODs+OCr+OCkuOCr+ODquODg+OCr+OBl+OBpi5DQVRQYXJ044OV44Kh44Kk44Or44KS6ZaL44GN44G+44GZOnNhbXBsZTAxYS5DQVRQYXJ044CCKOODgOOCpOOCouODreOCsOODnOODg+OCr+OCueOBjOODluODqeOCpuOCtuOBq+ihqOekuuOBleOCjOOCi+WgtOWQiOOBr+OAgeOBk+OBruODleOCoeOCpOODq+OCkumWi+OBj+OCquODl+OCt+ODp+ODs+OCkuOCquODs+OBq+OBl+OBvuOBmSnjgIINCg0K6Z2e57ea5b2i5qeL6YCg44Kx44O844K544KS5L2c5oiQ44GX44CBc2FtcGxlMDFhLkNBVEFuYWx5c2lz44Go44GE44GG5ZCN5YmN44Gu44OV44Kh44Kk44Or44Gr5L+d5a2Y44GX44G+44GZ44CCDQoNCuS7peS4i+OBruOCueOCr+ODquODl+ODiOOCkuS9v+eUqOOBl+OBpuOAgeOBk+OBruS+i+OCkuWujOS6huOBl+OBvuOBmToNCg0KIyMgU3RydWN0dXJlZCBEYXRhDQoNCijmp4vpgKDljJbjg4fjg7zjgr/jgarjgZcpDQoNCiMjIExpbmtzDQoNCi0gKHNhbXBsZTAxYS5DQVRQYXJ0KSAtPiBDOlxUZW1wXGNhdGlhLWRlc2lnbi1rbm93bGVkZ2UtYmFzZVxkb2NzXEIzMmRvY1xKYXBhbmVzZVxvbmxpbmVcSmFwYW5lc2VcYWZjdWdfQzJcc2FtcGxlc1xzYW1wbGUwMWEuQ0FUUGFydA0K",
+      "expected": {
+        "decision": {
+          "indexable": true,
+          "reason": null
+        },
+        "resolvedTitle": "Abaqus for CATIA V5 自動インタフェースを使用する例",
+        "summaryTitle": "Abaqus for CATIA V5 自動インタフェースを使用する例"
+      },
+      "frontmatter_category": "html",
+      "frontmatter_language": "mixed",
+      "frontmatter_source_name": "afcugappautomationexample.htm",
+      "id": "real_doc_accept_00",
+      "path": "/knowledge/B32doc/md_out/online/Japanese/afcug_C2/afcugappautomationexample.htm.htm.c26bdc60.md"
+    },
+    {
+      "byte_size": 1267,
+      "content_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxjYXRpYS1kZXNpZ24ta25vd2xlZGdlLWJhc2VcZG9jc1xCMzJkb2NcSmFwYW5lc2Vcb25saW5lXEphcGFuZXNlXGFmY3VnX0MyXGFmY3VnYXBwYXV0b21hdGlvbnJlZi5odG0NCnNvdXJjZV9uYW1lOiBhZmN1Z2FwcGF1dG9tYXRpb25yZWYuaHRtDQpleHQ6IC5odG0NCmNhdGVnb3J5OiBodG1sDQpleHRyYWN0aW9uOiBzdWNjZXNzDQpleHRyYWN0ZWRfYXQ6ICcyMDI1LTEyLTIxVDA5OjA2OjEzLjU4NDU2NicNCm10aW1lOiAnMjAyMi0wNi0yOVQxNToyMTowMicNCnNpemVfYnl0ZXM6IDExNjQNCmhhc2g6IHNoYTE6YTYwOWI0NDIxOWNjYzU4MDExMzVkYzQ0OTc3NjQwOGE1ZDA1MWRlNw0KbGFuZ3VhZ2U6IG1peGVkDQp0YWdzOg0KLSBjYXRpYQ0KZXJyb3JzOiBbXQ0KLS0tDQojIOiHquWLleOCpOODs+OCv+ODleOCp+ODvOOCueOBruiqrOaYjg0KDQojIyBTdW1tYXJ5IEtleXMNCg0KLSDjgr/jgqTjg4jjg6s6IOiHquWLleOCpOODs+OCv+ODleOCp+ODvOOCueOBruiqrOaYjg0KLSDmpoLopoE6IEFiYXF1cyBmb3IgQ0FUSUEgVjUg6Ieq5YuV44Kk44Oz44K/44OV44Kn44O844K544Gv44CBQWJhcXVzIGZvciBDQVRJQSBWNS4uLg0KDQojIyBFeHRyYWN0ZWQgQ29udGVudA0KDQojIyMg6Ieq5YuV44Kk44Oz44K/44OV44Kn44O844K544Gu6Kqs5piODQoNCkFiYXF1cyBmb3IgQ0FUSUEgVjUg6Ieq5YuV44Kk44Oz44K/44OV44Kn44O844K544Gv44CBQWJhcXVzIGZvciBDQVRJQSBWNSDjgafkvb/nlKjjgZXjgozjgovjgqrjg5bjgrjjgqfjgq/jg4jjgIHjg6Hjgr3jg4Pjg4njgIHjgYrjgojjgbPjg5fjg63jg5Hjg4bjgqPjgafmp4vmiJDjgZXjgozjgabjgYTjgb7jgZnjgILoh6rli5XjgqTjg7Pjgr/jg5Xjgqfjg7zjgrnjga7oqJjov7Djga/jgIFWNSDjg4njgq3jg6Xjg6Hjg7Pjg4bjg7zjgrfjg6fjg7Pjga7jgI5DQUEgQXV0b21hdGlvbiBFbmN5Y2xvcGVkaWHjgI/jgrvjgq/jgrfjg6fjg7PjgavlkKvjgb7jgozjgabjgYTjgb7jgZnjgIJBYmFxdXMgZm9yIENBVElBIFY1IOOBq+mWoumAo+OBmeOCi+OCpOODs+OCv+ODleOCp+ODvOOCueOCs+ODnuODs+ODieOBq+OCouOCr+OCu+OCueOBmeOCi+OBq+OBr+OAgemdnue3muW9ouOBqOeGsSAoTm9ubGluZWFyIGFuZCBUaGVybWFsKeOCv+ODluOCkumBuOaKnuOBl+OBvuOBmeOAgg0KDQojIyBTdHJ1Y3R1cmVkIERhdGENCg0KKOani+mAoOWMluODh+ODvOOCv+OBquOBlykNCg0KIyMgTGlua3MNCg0KKOODquODs+OCr+OBquOBlykNCg==",
+      "expected": {
+        "decision": {
+          "indexable": true,
+          "reason": null
+        },
+        "resolvedTitle": "自動インタフェースの説明",
+        "summaryTitle": "自動インタフェースの説明"
+      },
+      "frontmatter_category": "html",
+      "frontmatter_language": "mixed",
+      "frontmatter_source_name": "afcugappautomationref.htm",
+      "id": "real_doc_accept_01",
+      "path": "/knowledge/B32doc/md_out/online/Japanese/afcug_C2/afcugappautomationref.htm.htm.a609b442.md"
+    },
+    {
+      "byte_size": 1212,
+      "content_b64": "LS0tDQpzb3VyY2VfcGF0aDogQzpcVGVtcFxjYXRpYS1kZXNpZ24ta25vd2xlZGdlLWJhc2VcZG9jc1xCMzJkb2NcSmFwYW5lc2Vcb25saW5lXEphcGFuZXNlXGFmY3VnX0MyXGFmY3VnYXBwY29uZmlndXJlLmh0bQ0Kc291cmNlX25hbWU6IGFmY3VnYXBwY29uZmlndXJlLmh0bQ0KZXh0OiAuaHRtDQpjYXRlZ29yeTogaHRtbA0KZXh0cmFjdGlvbjogc3VjY2Vzcw0KZXh0cmFjdGVkX2F0OiAnMjAyNS0xMi0yMVQwOTowNjoxMy42MDU5NjEnDQptdGltZTogJzIwMjItMDYtMjlUMTU6MjE6MDInDQpzaXplX2J5dGVzOiAxMTkwDQpoYXNoOiBzaGExOjc5MWZlYzM2ODMxMDQwYmI0OTdmZWVjYmNmZWY5YThlZjg0Y2ViNzANCmxhbmd1YWdlOiBtaXhlZA0KdGFnczoNCi0gY2F0aWENCmVycm9yczogW10NCi0tLQ0KIyBBYmFxdXMgZm9yIENBVElBIFY1IOOBruioreWumg0KDQojIyBTdW1tYXJ5IEtleXMNCg0KLSDjgr/jgqTjg4jjg6s6IEFiYXF1cyBmb3IgQ0FUSUEgVjUg44Gu6Kit5a6aDQotIOimi+WHuuOBlzogQWJhcXVzIGZvciBDQVRJQSBWNSDjga7oqK3lrpoNCi0g6KaL5Ye644GXOiBBYmFxdXMgZm9yIENBVElBIFY1IOOBruioreWumg0KLSDmpoLopoE6IOOBk+OBruS7mOmMsuOBp+OBr+OAgeODhOODvOODqyAoVG9vbHMpPuOCquODl+OCt+ODp+ODsyAoT3B0aW9ucynjg6Hjg4vjg6Xjg7zjgpLkvb/nlKjjgZfjgaYgQWJhcXVzLi4uDQoNCiMjIEV4dHJhY3RlZCBDb250ZW50DQoNCiMjIEFiYXF1cyBmb3IgQ0FUSUEgVjUg44Gu6Kit5a6aDQoNCiMjIEFiYXF1cyBmb3IgQ0FUSUEgVjUg44Gu6Kit5a6aDQoNCuOBk+OBruS7mOmMsuOBp+OBr+OAgeODhOODvOODqyAoVG9vbHMpPuOCquODl+OCt+ODp+ODsyAoT3B0aW9ucynjg6Hjg4vjg6Xjg7zjgpLkvb/nlKjjgZfjgaYgQWJhcXVzIGZvciBDQVRJQSBWNSDjgavkvb/nlKjjgafjgY3jgovmp4vmiJDoqK3lrprjgavjgaTjgYTjgaboqqzmmI7jgZfjgb7jgZnjgILjgZPjgozjgonjga7oqK3lrprjga/jgIFDQVRJQSBWNSDjgqvjgrnjgr/jg57jgqTjgrrjgajjgajjgoLjgavjgIHjgqrjg5fjgrfjg6fjg7MgKE9wdGlvbnMp44OA44Kk44Ki44Ot44Kw44Oc44OD44Kv44K544Gn6KGM44GG44GT44Go44GM44Gn44GN44G+44GZ44CCDQoNCiMjIFN0cnVjdHVyZWQgRGF0YQ0KDQoo5qeL6YCg5YyW44OH44O844K/44Gq44GXKQ0KDQojIyBMaW5rcw0KDQoo44Oq44Oz44Kv44Gq44GXKQ0K",
+      "expected": {
+        "decision": {
+          "indexable": true,
+          "reason": null
+        },
+        "resolvedTitle": "Abaqus for CATIA V5 の設定",
+        "summaryTitle": "Abaqus for CATIA V5 の設定"
+      },
+      "frontmatter_category": "html",
+      "frontmatter_language": "mixed",
+      "frontmatter_source_name": "afcugappconfigure.htm",
+      "id": "real_doc_accept_02",
+      "path": "/knowledge/B32doc/md_out/online/Japanese/afcug_C2/afcugappconfigure.htm.htm.791fec36.md"
     }
   ],
+  "real_docs_accept_sample": {
+    "max_bytes": 65536,
+    "note": "real_docs_sample が全件 reject だったギャップを埋めるための追加採取。accept 経路(decision.indexable===true)を実データで確認する。",
+    "root": "docs/knowledge/B32doc",
+    "selected_count": 3,
+    "selection": "path-sorted(辞書順)で decision.indexable===true になる文書のみを決定的に収集。乱数不使用",
+    "skipped_over_64kb_count": 79,
+    "target_count": 3
+  },
   "real_docs_sample": {
     "max_bytes": 65536,
+    "note": "この REAL_SAMPLE_TARGET 件は「先頭から機械的に拾う」選定のため、たまたま全件 reject(制御ファイル・非html/非ja)だった。accept 側の実データ確認は real_docs_accept_sample(cases 内の real_doc_accept_* )を参照。",
     "root": "docs/knowledge/B32doc",
     "selected_count": 8,
     "selection": "path-sorted(辞書順)決定的選定。乱数不使用",
