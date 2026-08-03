@@ -19,6 +19,9 @@ import mcp.types as types
 from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 
+from abist_kb.presentation.mcp.jobs_tools import JobTools
+from abist_kb.presentation.mcp.jobs_tools import list_tools as jobs_list_tools
+from abist_kb.presentation.mcp.jobs_tools import validate_arguments as validate_jobs_arguments
 from abist_kb.presentation.mcp.kb_download import KbDownloadTools
 from abist_kb.presentation.mcp.kb_download import list_tools as kb_download_list_tools
 from abist_kb.presentation.mcp.kb_download import (
@@ -29,6 +32,10 @@ from abist_kb.presentation.mcp.kb_search import list_tools as kb_search_list_too
 from abist_kb.presentation.mcp.payloads import error_result
 
 SERVER_NAMES: tuple[str, ...] = ("kb-download", "kb-search", "kb-visualize")
+
+#: `all` サーバーは `SERVER_NAMES` には含めない(design: 個別3サーバーは
+#: 既定の公式構成のまま残し、`all` はそれとは別のキーとして追加する)。
+ALL_SERVER_NAME = "all"
 
 _SERVER_VERSION = "1.0.0"
 
@@ -121,6 +128,105 @@ def build_kb_download_server(
     return server
 
 
+def build_all_server(
+    *,
+    docs_dir: Path,
+    work_index_path: Path,
+    reference_index_path: Path,
+    app_db_path: Path,
+    root_dir: Path | None = None,
+    reports_dir: Path | None = None,
+    missing_threshold: int | None = None,
+) -> Server[Any, Any]:
+    """`all` サーバー: 既存15ツール(kb-search 4 + kb-download 8 + task-3a/3b互換)に
+    加え、M5 task-4 の新規ジョブ指向ツール(`start_*`/`job_status`/`cancel_job`/
+    `get_batch`/`list_corpora`/`system_status`)を同一プロセスで公開する。
+
+    **`kb-visualize` の扱い(task-4 の判断事項)**: `kb-visualize` の3ツールは
+    M7 まで実装されない。ここでは「宣言だけして未実装」ではなく、単純に
+    `all` の `tools/list` から**省略する**(未実装スキーマを今から固定して
+    後で壊す方が、後から追加するより互換上のリスクが高いと判断した)。M7 で
+    kb-visualize が実装され次第、この関数に組み込む。
+
+    `kb-download`/`kb-search`/新規ジョブツールはいずれも同じ `app.sqlite`
+    接続を共有する(`docs-write` リースの single-flight 契約は接続をまたいでも
+    DB 行ベースで効くため問題ない)。
+    """
+    from abist_kb.infrastructure.db.schema import open_app_db
+    from abist_kb.infrastructure.sources.esa import DEFAULT_MISSING_THRESHOLD
+
+    server: Server[Any, Any] = Server(ALL_SERVER_NAME, version=_SERVER_VERSION)
+    conn: sqlite3.Connection = open_app_db(app_db_path)
+
+    search_tools = KbSearchTools(
+        docs_dir=docs_dir,
+        work_index_path=work_index_path,
+        reference_index_path=reference_index_path,
+    )
+    download_tools = KbDownloadTools(
+        conn,
+        root_dir=root_dir,
+        docs_dir=docs_dir,
+        reports_dir=reports_dir,
+        missing_threshold=(
+            missing_threshold if missing_threshold is not None else DEFAULT_MISSING_THRESHOLD
+        ),
+    )
+    job_tools = JobTools(
+        conn,
+        docs_dir=docs_dir,
+        app_db_path=app_db_path,
+        work_index_path=work_index_path,
+        reference_index_path=reference_index_path,
+    )
+
+    handlers: dict[str, Any] = {
+        "search_kb": search_tools.search_kb,
+        "get_document": search_tools.get_document,
+        "get_chunk": search_tools.get_chunk,
+        "index_status": search_tools.index_status,
+        "list_batches": download_tools.list_batches,
+        "run_batch": download_tools.run_batch,
+        "add_web_batch": download_tools.add_web_batch,
+        "download_esa_post": download_tools.download_esa_post,
+        "download_esa_category": download_tools.download_esa_category,
+        "download_esa_search": download_tools.download_esa_search,
+        "download_web": download_tools.download_web,
+        "download_git": download_tools.download_git,
+        "start_run_batch": job_tools.start_run_batch,
+        "start_download_esa_post": job_tools.start_download_esa_post,
+        "start_download_esa_category": job_tools.start_download_esa_category,
+        "start_download_esa_search": job_tools.start_download_esa_search,
+        "start_download_web": job_tools.start_download_web,
+        "start_download_git": job_tools.start_download_git,
+        "start_render_scene": job_tools.start_render_scene,
+        "job_status": job_tools.job_status,
+        "cancel_job": job_tools.cancel_job,
+        "get_batch": job_tools.get_batch,
+        "list_corpora": job_tools.list_corpora,
+        "system_status": job_tools.system_status,
+    }
+
+    @server.list_tools()
+    async def _list_tools() -> list[types.Tool]:
+        return [*kb_search_list_tools(), *kb_download_list_tools(), *jobs_list_tools()]
+
+    @server.call_tool(validate_input=False)
+    async def _call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
+        validation_error = validate_kb_download_arguments(name, arguments)
+        if validation_error is not None:
+            return validation_error
+        validation_error = validate_jobs_arguments(name, arguments)
+        if validation_error is not None:
+            return validation_error
+        handler = handlers.get(name)
+        if handler is None:
+            return error_result(f"未知のツールです: {name}")
+        return handler(arguments)
+
+    return server
+
+
 def build_server(
     name: str,
     *,
@@ -149,8 +255,20 @@ def build_server(
             reports_dir=reports_dir,
             missing_threshold=missing_threshold,
         )
+    if name == ALL_SERVER_NAME:
+        if app_db_path is None:
+            raise ValueError("'all' サーバーには app_db_path が必要です")
+        return build_all_server(
+            docs_dir=docs_dir,
+            work_index_path=work_index_path,
+            reference_index_path=reference_index_path,
+            app_db_path=app_db_path,
+            root_dir=root_dir,
+            reports_dir=reports_dir,
+            missing_threshold=missing_threshold,
+        )
     raise NotImplementedError(
-        f"サーバー '{name}' は M5 の範囲外です(kb-search/kb-download のみ実装済み)。"
+        f"サーバー '{name}' は M5 の範囲外です(kb-search/kb-download/all のみ実装済み)。"
     )
 
 

@@ -107,12 +107,6 @@ def serve(
             code=ErrorCode.INVALID_INPUT,
             message=f"未知のトランスポートです: {transport!r}(有効値: stdio, http)",
         )
-    if server == _ALL:
-        raise AppError(
-            code=ErrorCode.INVALID_INPUT,
-            message="'all' の一括起動は現時点で未実装です(kb-search を個別に指定してください)。",
-        )
-
     settings = cli_ctx.settings
     stderr_presenter.info(f"[{server}] MCP server starting ({transport})")
 

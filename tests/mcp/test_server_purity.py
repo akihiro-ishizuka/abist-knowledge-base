@@ -75,3 +75,51 @@ def test_stdio_server_initialize_emits_only_jsonrpc_on_stdout(tmp_path: Path) ->
             continue
         parsed = json.loads(line)  # 1バイトでも JSON-RPC 以外が混ざっていれば失敗する
         assert "jsonrpc" in parsed
+
+
+def test_stdio_all_server_initialize_emits_only_jsonrpc_on_stdout(tmp_path: Path) -> None:
+    """M5 task-4: 結合サーバー `all`(15ツール+新規12ツール)でも stdout 純度は保たれる。
+
+    kb-search/kb-download 単独サーバーと同じテスト形を `all` にも適用し、
+    新規ジョブツールを import・組み込みしても stdout が JSON-RPC 専用のまま
+    であることを確認する。
+    """
+    root = tmp_path / "root"
+    (root / "docs").mkdir(parents=True)
+    (root / "data").mkdir(parents=True)
+
+    request = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2024-11-05",
+                    "capabilities": {},
+                    "clientInfo": {"name": "replay-test", "version": "0.0.0"},
+                },
+            }
+        )
+        + "\n"
+    )
+
+    script = (
+        "import sys\n"
+        "from abist_kb.presentation.cli.app import app\n"
+        f"sys.argv = ['abist-kb', '--root', {str(root)!r}, 'mcp', 'serve', 'all']\n"
+        "app()\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        input=request,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    for line in proc.stdout.splitlines():
+        if not line.strip():
+            continue
+        parsed = json.loads(line)
+        assert "jsonrpc" in parsed
