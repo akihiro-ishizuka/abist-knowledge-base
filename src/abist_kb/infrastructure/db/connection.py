@@ -62,6 +62,7 @@ def connect(
     read_only: bool = False,
     immutable: bool = False,
     timeout_ms: int = 5000,
+    check_same_thread: bool = True,
 ) -> sqlite3.Connection:
     """SQLite 接続を開く。
 
@@ -74,6 +75,12 @@ def connect(
     クエリパラメータは読み取り専用接続の意味論を前提にしている)。DB が変更されない
     ことが呼び出し元にとって既知の場合(§11.1 の移行元DBなど)に指定すると、
     `-wal`/`-shm` ファイルを元DBの隣に新規作成せずに済む。
+
+    `check_same_thread=False` は、ASGI サーバー(FastAPI/NiceGUI)がリクエストを
+    接続作成時とは別スレッドで処理しうる場合に使う(`presentation/web/viewmodels/
+    container.py` 参照)。呼び出し側が単一スレッドからの逐次アクセスを保証する
+    責務を負う(このモジュールは排他制御をしない)。CLI/MCP など常に単一スレッドで
+    完結する既定の呼び出し元は既定値 `True` のままにする。
     """
     db_path = Path(path)
     if not read_only:
@@ -88,7 +95,9 @@ def connect(
 
     uri = _build_uri(db_path, read_only=read_only, immutable=immutable)
     try:
-        conn = sqlite3.connect(uri, uri=True, isolation_level=None)
+        conn = sqlite3.connect(
+            uri, uri=True, isolation_level=None, check_same_thread=check_same_thread
+        )
     except sqlite3.Error as exc:
         raise wrap(
             exc,

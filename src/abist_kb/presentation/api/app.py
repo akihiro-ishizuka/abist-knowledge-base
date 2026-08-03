@@ -1,0 +1,304 @@
+"""FastAPI `/api/v1` 層(設計書 §7.1, §10.3): NiceGUI 内蔵アプリへ統合する。
+
+CLI/MCP と同じ `ServiceContainer`(`presentation/web/viewmodels/container.py`)
+の上に薄い HTTP 層を被せるだけで、業務ロジックはここに一切書かない。
+ジョブ進捗は `ProgressEvent` バス(`infrastructure/jobs/events.py`)を購読する
+SSE で配信する。
+
+既定バインドは呼び出し側(`presentation/cli/ui_cmd.py`)が `127.0.0.1` を渡す。
+`0.0.0.0` 等の非ループバック公開時はアクセストークンを必須にする
+(`presentation/api/auth.py::require_token_when_exposed`)。
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections.abc import Callable
+from typing import Any, TypeVar
+
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse, StreamingResponse
+
+from abist_kb.domain.errors import AppError, ErrorCode
+from abist_kb.domain.job import TERMINAL_STATES
+from abist_kb.presentation.api.auth import AccessTokenMiddleware, require_token_when_exposed
+from abist_kb.presentation.web.viewmodels import screens
+from abist_kb.presentation.web.viewmodels.container import ServiceContainer
+from abist_kb.presentation.web.viewmodels.serialize import error_to_dict, event_to_dict
+
+_ERROR_STATUS: dict[ErrorCode, int] = {
+    ErrorCode.NOT_FOUND: 404,
+    ErrorCode.INVALID_INPUT: 400,
+    ErrorCode.CONFLICT: 409,
+    ErrorCode.WORKER_UNAVAILABLE: 409,
+    ErrorCode.CONFIG_ERROR: 500,
+    ErrorCode.EXTERNAL_SERVICE: 502,
+    ErrorCode.CANCELLED: 409,
+    ErrorCode.UNSUPPORTED_BATCH_CONFIG: 400,
+    ErrorCode.FTS5_TRIGRAM_UNAVAILABLE: 500,
+    ErrorCode.SQLITE_TOO_OLD: 500,
+    ErrorCode.MIGRATION_FAILED: 500,
+    ErrorCode.FAILURE: 500,
+}
+
+
+T = TypeVar("T")
+
+
+def _status_for(err: AppError) -> int:
+    return _ERROR_STATUS.get(err.code, 500)
+
+
+def _sse_line(payload: dict[str, Any]) -> str:
+    import json
+
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def register_api_routes(
+    app: FastAPI,
+    container: ServiceContainer,
+    *,
+    bind_host: str = "127.0.0.1",
+    access_token: str | None = None,
+    enforce_token_requirement: bool = True,
+) -> FastAPI:
+    """`/api/v1` ルートを既存の FastAPI アプリへ登録する。
+
+    Web(`presentation/web/app.py`)は NiceGUI 自身の FastAPI インスタンスへ
+    これを直接呼ぶ(サブアプリを `mount()` するとパスプレフィックスがずれるため、
+    同一アプリへルートを足す方式にしている)。単体テスト・スタンドアロン用途は
+    `create_api_app()` が新規 `FastAPI()` を作ってこれを呼ぶ。
+
+    `enforce_token_requirement=True`(既定)では、非ループバック `bind_host` で
+    `access_token` 未設定だと起動時に `ValueError` になる(フェイルセーフ)。
+    テストでインメモリ DB を使い `bind_host="0.0.0.0"` を試したい場合など、
+    意図的にトークン検証だけ迂回したいときは `False` を渡す。
+    """
+    if enforce_token_requirement:
+        require_token_when_exposed(bind_host=bind_host, access_token=access_token)
+
+    app.state.container = container
+    # `ServiceContainer.conn` は1つの sqlite3 接続をプロセス寿命ぶん共有する
+    # (§10.2 の `resource_leases` と同じ「1プロセス内は直列化」という前提を
+    # HTTP リクエスト間にも適用する)。ASGI サーバーは並行リクエストを単一の
+    # イベントループスレッド上で処理するため真の並列アクセスにはならないが、
+    # `await` をまたぐ処理(SSE のポーリングループ)が挟まると別リクエストの
+    # DB アクセスと論理的に交互実行されうる。`transaction()`(`BEGIN IMMEDIATE`)
+    # の途中に他リクエストの SELECT が割り込まないよう、DB へ触れる区間はこの
+    # ロックで直列化する(`presentation/web/viewmodels/container.py` の
+    # `check_same_thread=False` の docstring と対になる対策)。
+    app.state.db_lock = asyncio.Lock()
+    app.add_middleware(AccessTokenMiddleware, bind_host=bind_host, access_token=access_token)
+
+    @app.exception_handler(AppError)
+    async def _app_error_handler(_request: Request, exc: AppError) -> JSONResponse:
+        return JSONResponse(error_to_dict(exc), status_code=_status_for(exc))
+
+    def get_container(request: Request) -> ServiceContainer:
+        return request.app.state.container  # type: ignore[no-any-return]
+
+    async def run_locked(request: Request, fn: Callable[[], T]) -> T | JSONResponse:
+        """`fn()` を DB ロック配下で実行し、view-model の `{"error": ...}` 規約を
+        HTTP ステータスへ変換する。
+
+        `screens.py` の各関数は `AppError` を re-raise せず `{"error":
+        error_to_dict(exc)}` へ変換して返す(NiceGUI の画面側がそのまま
+        エラーメッセージを描画できるようにするため)。そのため FastAPI の
+        `AppError` 例外ハンドラだけでは NOT_FOUND 等を検知できず、ここで
+        戻り値の形を見て `_status_for` 相当のステータスへ変換する。
+        """
+        async with request.app.state.db_lock:
+            result = fn()
+        if isinstance(result, dict) and set(result.keys()) == {"error"}:
+            error_payload = result["error"]
+            try:
+                code = ErrorCode(error_payload.get("code"))
+            except ValueError:
+                code = ErrorCode.FAILURE
+            return JSONResponse(error_payload, status_code=_ERROR_STATUS.get(code, 500))
+        return result
+
+    router_prefix = "/api/v1"
+
+    @app.get(f"{router_prefix}/health")
+    async def health() -> dict[str, Any]:
+        return {"status": "ok"}
+
+    @app.get(f"{router_prefix}/dashboard")
+    async def get_dashboard(request: Request) -> dict[str, Any]:
+        return await run_locked(request, lambda: screens.dashboard(get_container(request)))
+
+    @app.get(f"{router_prefix}/sources")
+    async def list_sources(request: Request) -> dict[str, Any]:
+        return await run_locked(request, lambda: screens.sources_list(get_container(request)))
+
+    @app.post(f"{router_prefix}/sources/{{source_id}}/test")
+    async def test_source(source_id: str, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request, lambda: screens.source_test_connection(get_container(request), source_id)
+        )
+
+    @app.get(f"{router_prefix}/batches")
+    async def list_batches(request: Request) -> dict[str, Any]:
+        return await run_locked(request, lambda: screens.batches_list(get_container(request)))
+
+    @app.post(f"{router_prefix}/batches/{{batch_id}}/run")
+    async def run_batch(batch_id: str, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request, lambda: screens.batch_run(get_container(request), batch_id)
+        )
+
+    @app.get(f"{router_prefix}/jobs")
+    async def list_jobs(request: Request, state: str | None = None) -> dict[str, Any]:
+        return await run_locked(
+            request, lambda: screens.jobs_list(get_container(request), state=state)
+        )
+
+    @app.get(f"{router_prefix}/jobs/{{job_id}}")
+    async def get_job(job_id: str, request: Request) -> dict[str, Any]:
+        return await run_locked(request, lambda: screens.job_detail(get_container(request), job_id))
+
+    @app.post(f"{router_prefix}/jobs/{{job_id}}/cancel")
+    async def cancel_job(job_id: str, request: Request) -> dict[str, Any]:
+        return await run_locked(request, lambda: screens.job_cancel(get_container(request), job_id))
+
+    @app.post(f"{router_prefix}/jobs/{{job_id}}/retry")
+    async def retry_job(job_id: str, request: Request) -> dict[str, Any]:
+        return await run_locked(request, lambda: screens.job_retry(get_container(request), job_id))
+
+    @app.get(f"{router_prefix}/jobs/{{job_id}}/events")
+    async def stream_job_events(job_id: str, request: Request) -> StreamingResponse:
+        """SSE: `ProgressEvent` バス(§10.3)を購読し、既存履歴 → ライブ更新の順で流す。"""
+        cont = get_container(request)
+        lock: asyncio.Lock = request.app.state.db_lock
+        async with lock:
+            cont.jobs.get(job_id)  # NOT_FOUND を先に出す(AppError -> exception handler)
+
+        queue: asyncio.Queue[Any] = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+
+        def on_event(event: Any) -> None:
+            if event.job_id == job_id:
+                loop.call_soon_threadsafe(queue.put_nowait, event)
+
+        unsubscribe = cont.event_bus.subscribe(on_event)
+
+        async def generator() -> Any:
+            try:
+                async with lock:
+                    history = cont.jobs.history(job_id)
+                for evt in history:
+                    yield _sse_line(event_to_dict(evt))
+                async with lock:
+                    job = cont.jobs.get(job_id)
+                if job.state in TERMINAL_STATES:
+                    return
+                while True:
+                    if await request.is_disconnected():
+                        break
+                    try:
+                        evt = await asyncio.wait_for(queue.get(), timeout=15.0)
+                    except TimeoutError:
+                        yield ": keep-alive\n\n"
+                        continue
+                    yield _sse_line(event_to_dict(evt))
+                    async with lock:
+                        job = cont.jobs.get(job_id)
+                    if job.state in TERMINAL_STATES:
+                        break
+            finally:
+                unsubscribe()
+
+        return StreamingResponse(generator(), media_type="text/event-stream")
+
+    @app.get(f"{router_prefix}/documents")
+    async def list_documents(
+        request: Request,
+        source: str | None = None,
+        sync_status: str | None = None,
+        status: str | None = None,
+        path_prefix: str | None = None,
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.documents_list(
+                get_container(request),
+                source=source,
+                sync_status=sync_status,
+                status=status,
+                path_prefix=path_prefix,
+            ),
+        )
+
+    @app.get(f"{router_prefix}/documents/{{path:path}}")
+    async def get_document(path: str, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request, lambda: screens.document_detail(get_container(request), path)
+        )
+
+    @app.get(f"{router_prefix}/search")
+    async def search(
+        request: Request,
+        q: str,
+        corpus: str = "work",
+        source: str | None = None,
+        document_type: str | None = None,
+        status: str | None = None,
+        path_prefix: str | None = None,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.search(
+                get_container(request),
+                q,
+                corpus=corpus,
+                source=source,
+                document_type=document_type,
+                status=status,
+                path_prefix=path_prefix,
+                limit=limit,
+            ),
+        )
+
+    @app.get(f"{router_prefix}/chat")
+    async def chat(request: Request) -> dict[str, Any]:
+        return await run_locked(request, lambda: screens.chat_stub(get_container(request)))
+
+    @app.get(f"{router_prefix}/visualization")
+    async def visualization(request: Request) -> dict[str, Any]:
+        return await run_locked(request, lambda: screens.visualization_stub(get_container(request)))
+
+    @app.get(f"{router_prefix}/quality")
+    async def quality(request: Request) -> dict[str, Any]:
+        return await run_locked(request, lambda: screens.quality_stub(get_container(request)))
+
+    @app.get(f"{router_prefix}/settings/diagnostics")
+    async def diagnostics(request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request, lambda: screens.settings_diagnostics(get_container(request))
+        )
+
+    return app
+
+
+def create_api_app(
+    container: ServiceContainer,
+    *,
+    bind_host: str = "127.0.0.1",
+    access_token: str | None = None,
+    enforce_token_requirement: bool = True,
+) -> FastAPI:
+    """スタンドアロンの `/api/v1` FastAPI アプリ(テスト・独立起動用)。"""
+    app = FastAPI(title="ABIST Knowledge Base API", version="1.0.0")
+    return register_api_routes(
+        app,
+        container,
+        bind_host=bind_host,
+        access_token=access_token,
+        enforce_token_requirement=enforce_token_requirement,
+    )
+
+
+__all__ = ["create_api_app", "register_api_routes"]

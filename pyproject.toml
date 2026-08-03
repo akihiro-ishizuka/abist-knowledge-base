@@ -17,6 +17,11 @@ dependencies = [
     "sentence-transformers>=5.6.1",
     "numpy>=2.1,<3",
     "mcp>=1.2,<2",
+    "fastapi>=0.118,<1",
+    "nicegui>=1.4,<3",
+    "uvicorn[standard]>=0.30,<1",
+    "bleach>=6.1,<7",
+    "markdown>=3.6,<4",
 ]
 
 [project.scripts]
@@ -28,6 +33,10 @@ dev = [
     "pytest-asyncio>=1.4,<2",
     "hypothesis>=6.165,<7",
     "ruff>=0.16,<0.17",
+    # `nicegui.testing.plugin`(tests/ui/test_web_pages.py)は import 時に
+    # 無条件で `selenium` を要求する(スクリーンショット系フィクスチャ用、
+    # 本タスクでは使わないが import エラーになるため必要)。
+    "selenium>=4.20,<5",
 ]
 
 [build-system]
@@ -40,6 +49,11 @@ packages = ["src/abist_kb"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers"
+# NiceGUI の `nicegui.testing.plugin`(`tests/ui/test_web_pages.py`)は素の
+# `async def`/`@pytest.fixture async def` を使う。`auto` にしないと明示マーク漏れで
+# 実行されずに終わる、または pytest-asyncio の strict モードとの相互作用で
+# fixture の finalizer 二重登録エラーになる(実測で確認済み)。
+asyncio_mode = "auto"
 markers = [
     "slow: 実行時間の長いテスト",
     "requires_node: 旧Nodeシステムを必要とするテスト",
