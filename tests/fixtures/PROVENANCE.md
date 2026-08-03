@@ -93,6 +93,46 @@ real-docs フィクスチャに一切依存せず、gate-samples.json 自身の
 100件全件を検証する(スキップ0件)。達成カバレッジ100/100は
 `test_gate_samples_all_cases_carry_verifiable_input_material` で固定している。
 
+### embedding再利用ゲートの実測結果(M4 Task2、`infrastructure/ai/embedding_provider.py`)
+
+`sentence-transformers` で `intfloat/multilingual-e5-small`(fp32、CPU)を読み、
+`gate-samples.json` の100件全件について `embeddingInput_b64` をそのまま入力して
+埋め込みを生成し、記録済み `vector_b64`(旧: `Xenova/multilingual-e5-small`、
+int8量子化ONNX)とのコサイン類似度を実測した(採取スクリプト相当の一回限りの
+測定、`.superpowers/sdd/M4-index-search/task-2-report.md` に手順を記録)。
+
+**判定: 不合格(100/100件が0.999未満)。** これは brief が明記した既定の想定
+どおりであり、量子化と浮動小数点精度の違いに起因する予測された結果である。
+
+| 指標 | 値 |
+|---|---|
+| 最小 | 0.99253 |
+| 中央値 | 0.99599 |
+| 平均 | 0.99581 |
+| 最大 | 0.99748 |
+| 0.999未満の件数 | 100 / 100 |
+
+層(`stratum`)別の最小値はいずれも0.9925〜0.9954の狭い帯に収まり、**明確な
+クラスタリングは無い**——`long_mixed` 層(英日混在・長文)がわずかに低い
+傾向(最小0.99253、中央値0.99452)を示すが、他層との差は0.001〜0.002程度で、
+「特定の層だけ壊滅的に劣化する」という構造は見られない。astral文字を含む
+9件(`contains_astral=true`)の最小値(0.99253)は非astral91件の最小値
+(0.99287)とほぼ同水準で、astral文字の有無による系統的な差も無い(最悪値の
+1件がたまたまastralを含むだけで、astral由来の劣化ではなく `long_mixed` 層の
+特徴による)。
+
+**スループット実測: 8.84件/秒**(バッチサイズ16、モデルロード時間を除く、
+100件を11.3秒)。ロードマップの想定(約17件/秒、全体1時間)の約半分であり、
+51,391チャンク全件では約97分(約1.6時間)を要する計算になる。M8の再生成計画は
+「1時間」ではなく「約1.5〜2時間」を前提に見積もるべきである。詳細は
+`.superpowers/sdd/M4-index-search/task-2-report.md` を参照。
+
+**結論(M8への申し送り)**: ゲート不合格のため、既定の再生成パス
+(§11.2「不合格なら全件をPythonで再生成する」)を採用する。既存の51,411件
+(孤立20件を含む)の埋め込みBLOBは一切再利用せず、`infrastructure.ai.
+embedding_provider.generate_embeddings` が `chunks` 全件を対象に生成する。
+再生成の所要時間見積もりは上記の実測スループットを根拠にすること。
+
 **astral文字(サロゲートペア、絵文字等)を含むサンプルは実測9件**(母集団100件中)。
 うち7件は旧 real-docs フィクスチャでは再構成できなかった36件の側に含まれており、
 今回の追加採取以前は `embedding_input()` の truncate/prefix 順序をこの7件で

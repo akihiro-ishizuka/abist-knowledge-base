@@ -1,14 +1,14 @@
 {
   "capture_dates": {
     "capture": {
-      "commit": "f957a05985737d512df35c26c22f2f5e261080d4",
-      "date": "2026-08-04T00:48:34+09:00",
-      "subject": "docs(m1): readonly:true でも -shm の mtime が動くことを実測し記載を訂正"
+      "commit": "6b6a3acf091c0490a19040dcb7560265bd32acfa",
+      "date": "2026-08-04T05:34:50+09:00",
+      "subject": "fix(m4): reference コーパスの source を実測値 manual に修正(b32doc は誤り)"
     },
     "capture-manifest.json (this file)": {
-      "commit": "658da8e405cb2833cc59650b9d5b2ed65e5cb0b1",
-      "date": "2026-08-04T04:59:37+09:00",
-      "subject": "fix(m3): クローズ前の指摘4件を修正(esa空tags/PARTIAL反映/docs逸脱記録/delay配線確認)"
+      "commit": "6b6a3acf091c0490a19040dcb7560265bd32acfa",
+      "date": "2026-08-04T05:34:50+09:00",
+      "subject": "fix(m4): reference コーパスの source を実測値 manual に修正(b32doc は誤り)"
     },
     "embedding": {
       "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
@@ -41,15 +41,14 @@
       "subject": "feat(m1): 実データ層化サンプルを旧sync-state.sqliteから採取"
     },
     "reference-index": {
-      "commit": null,
-      "date": null,
-      "note": "このカテゴリの全ファイルがまだ未コミット(manifest生成時点)",
-      "subject": null
+      "commit": "6b6a3acf091c0490a19040dcb7560265bd32acfa",
+      "date": "2026-08-04T05:34:50+09:00",
+      "subject": "fix(m4): reference コーパスの source を実測値 manual に修正(b32doc は誤り)"
     },
     "root": {
-      "commit": "658da8e405cb2833cc59650b9d5b2ed65e5cb0b1",
-      "date": "2026-08-04T04:59:37+09:00",
-      "subject": "fix(m3): クローズ前の指摘4件を修正(esa空tags/PARTIAL反映/docs逸脱記録/delay配線確認)"
+      "commit": "6b6a3acf091c0490a19040dcb7560265bd32acfa",
+      "date": "2026-08-04T05:34:50+09:00",
+      "subject": "fix(m4): reference コーパスの source を実測値 manual に修正(b32doc は誤り)"
     }
   },
   "categories": {
@@ -395,12 +394,12 @@
           "sha256": "11dce4ae76a450fa325a88133d4282cff549f31fe82312927b1e16b74be90ef0"
         },
         {
-          "bytes": 43640,
+          "bytes": 46213,
           "path": "PROVENANCE.md",
-          "sha256": "dad2d90c902eac628d266c60312fb4c3d0bccdbc54e907f20803b5e2d693380e"
+          "sha256": "ea8992facd758c49237690fe4b53ccb57145a5573d9289e5f419f03074b057fd"
         }
       ],
-      "total_bytes": 43661
+      "total_bytes": 46234
     }
   },
   "exclusions_registry": [
