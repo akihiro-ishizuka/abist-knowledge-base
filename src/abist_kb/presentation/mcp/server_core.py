@@ -63,20 +63,37 @@ def build_kb_search_server(
     return server
 
 
-def build_kb_download_server(*, app_db_path: Path) -> Server[Any, Any]:
-    """kb-download サーバー(8ツール、M5 task-3a: 契約駆動の半分のみ)を組み立てる。
+def build_kb_download_server(
+    *,
+    app_db_path: Path,
+    root_dir: Path | None = None,
+    docs_dir: Path | None = None,
+    reports_dir: Path | None = None,
+    missing_threshold: int | None = None,
+) -> Server[Any, Any]:
+    """kb-download サーバー(8ツール、M5 task-3b: ブロッキング実処理まで実装)を組み立てる。
 
-    `list_batches`/`run_batch`(未知バッチ名エラー)/`download_web`(URL 形式
-    エラー)/`download_esa_*`・`download_git`(スキーマ検証エラー)以外は
-    ハンドラ本体を呼ぶと `NotImplementedError` になる(`kb_download.py`
-    モジュール docstring 参照)。SQLite 接続はこの `Server` インスタンスの
-    寿命の間開いたままにする(`app.sqlite` は読み取り・書き込み両方に使う)。
+    SQLite 接続はこの `Server` インスタンスの寿命の間開いたままにする
+    (`app.sqlite` は読み取り・書き込み両方に使う)。`root_dir`/`docs_dir`/
+    `reports_dir` はブロッキング実処理(`SyncService` 経由の esa/web/git 同期)が
+    ファイルを読み書きする先。未指定時は `KbDownloadTools` の既定
+    (`root_dir=cwd`、`docs_dir=root_dir/docs`、`reports_dir=root_dir/reports`)
+    を使う。
     """
     from abist_kb.infrastructure.db.schema import open_app_db
+    from abist_kb.infrastructure.sources.esa import DEFAULT_MISSING_THRESHOLD
 
     server: Server[Any, Any] = Server("kb-download", version=_SERVER_VERSION)
     conn: sqlite3.Connection = open_app_db(app_db_path)
-    tools = KbDownloadTools(conn)
+    tools = KbDownloadTools(
+        conn,
+        root_dir=root_dir,
+        docs_dir=docs_dir,
+        reports_dir=reports_dir,
+        missing_threshold=(
+            missing_threshold if missing_threshold is not None else DEFAULT_MISSING_THRESHOLD
+        ),
+    )
 
     @server.list_tools()
     async def _list_tools() -> list[types.Tool]:
@@ -111,6 +128,9 @@ def build_server(
     work_index_path: Path,
     reference_index_path: Path,
     app_db_path: Path | None = None,
+    root_dir: Path | None = None,
+    reports_dir: Path | None = None,
+    missing_threshold: int | None = None,
 ) -> Server[Any, Any]:
     """サーバー名から `Server` を組み立てる。kb-visualize は後続マイルストーン。"""
     if name == "kb-search":
@@ -122,7 +142,13 @@ def build_server(
     if name == "kb-download":
         if app_db_path is None:
             raise ValueError("kb-download サーバーには app_db_path が必要です")
-        return build_kb_download_server(app_db_path=app_db_path)
+        return build_kb_download_server(
+            app_db_path=app_db_path,
+            root_dir=root_dir,
+            docs_dir=docs_dir,
+            reports_dir=reports_dir,
+            missing_threshold=missing_threshold,
+        )
     raise NotImplementedError(
         f"サーバー '{name}' は M5 の範囲外です(kb-search/kb-download のみ実装済み)。"
     )

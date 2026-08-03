@@ -33,7 +33,14 @@ def _stderr_presenter() -> Presenter:
 
 
 async def _serve_stdio(
-    server_name: str, docs_dir, work_index_path, reference_index_path, app_db_path
+    server_name: str,
+    docs_dir,
+    work_index_path,
+    reference_index_path,
+    app_db_path,
+    root_dir,
+    reports_dir,
+    missing_threshold,
 ) -> None:  # type: ignore[no-untyped-def]
     server = build_server(
         server_name,
@@ -41,6 +48,9 @@ async def _serve_stdio(
         work_index_path=work_index_path,
         reference_index_path=reference_index_path,
         app_db_path=app_db_path,
+        root_dir=root_dir,
+        reports_dir=reports_dir,
+        missing_threshold=missing_threshold,
     )
     await run_stdio(server)
 
@@ -51,6 +61,9 @@ async def _serve_http(
     work_index_path,
     reference_index_path,
     app_db_path,
+    root_dir,
+    reports_dir,
+    missing_threshold,
     port: int,  # type: ignore[no-untyped-def]
 ) -> None:
     server = build_server(
@@ -59,6 +72,9 @@ async def _serve_http(
         work_index_path=work_index_path,
         reference_index_path=reference_index_path,
         app_db_path=app_db_path,
+        root_dir=root_dir,
+        reports_dir=reports_dir,
+        missing_threshold=missing_threshold,
     )
     await run_http(server, port=port)
 
@@ -109,6 +125,9 @@ def serve(
                 settings.work_index_path,
                 settings.reference_index_path,
                 settings.app_db_path,
+                settings.root_dir,
+                settings.reports_dir,
+                settings.missing_threshold,
                 port,
             )
         else:
@@ -119,6 +138,9 @@ def serve(
                 settings.work_index_path,
                 settings.reference_index_path,
                 settings.app_db_path,
+                settings.root_dir,
+                settings.reports_dir,
+                settings.missing_threshold,
             )
     except NotImplementedError as exc:
         raise AppError(code=ErrorCode.INVALID_INPUT, message=str(exc)) from exc

@@ -126,10 +126,13 @@ def test_run_batch_unknown_name_matches_fixture_shape(env: Env, fixture_path: Pa
     assert outcome.ok, outcome.reason
 
 
-def test_run_batch_known_name_raises_not_implemented(env: Env) -> None:
-    """実バッチ実行は M5 task-3a の範囲外 — 明確な NotImplementedError で失敗すること。"""
-    with pytest.raises(NotImplementedError):
-        env.tools.run_batch({"batch": "aaa_esa_batch"})
+def test_run_batch_known_name_no_longer_raises_not_implemented(env: Env) -> None:
+    """M5 task-3b: 実バッチ実行が配線された(esa は認証情報が無く FAILURE 応答になる)。"""
+    result = env.tools.run_batch({"batch": "aaa_esa_batch"})
+    payload = json.loads(result.content[0].text)
+    assert payload["ok"] is False
+    assert payload["batchType"] == "esa"
+    assert payload["error"]
 
 
 # ---------------------------------------------------------------------------
@@ -155,17 +158,16 @@ def test_schema_validation_error_matches_fixture_shape(tool_name: str) -> None:
         assert outcome.ok, outcome.reason
 
 
-def test_download_esa_post_handler_not_reached_by_valid_arguments_raises_not_implemented() -> None:
-    """スキーマを通過した(=ハンドラに到達する)場合の実処理は範囲外。"""
-    import sqlite3
-
-    from abist_kb.infrastructure.db.schema import ensure_app_schema
-
-    conn = sqlite3.connect(":memory:")
+def test_download_esa_post_handler_reached_fails_without_credentials(tmp_root: Path) -> None:
+    """スキーマを通過した(=ハンドラに到達する)場合、esa 認証情報が無ければ失敗応答になる。"""
+    app_db_path = tmp_root / "app2.sqlite"
+    conn = connect(app_db_path)
     ensure_app_schema(conn)
-    tools = KbDownloadTools(conn)
-    with pytest.raises(NotImplementedError):
-        tools.download_esa_post({"post": 123})
+    tools = KbDownloadTools(conn, root_dir=tmp_root)
+    result = tools.download_esa_post({"post": 123})
+    payload = json.loads(result.content[0].text)
+    assert payload["ok"] is False
+    assert result.isError
     conn.close()
 
 
@@ -182,9 +184,17 @@ def test_download_web_invalid_url_matches_fixture_shape(env: Env, fixture_path: 
     assert outcome.ok, outcome.reason
 
 
-def test_download_web_valid_url_raises_not_implemented(env: Env) -> None:
-    with pytest.raises(NotImplementedError):
-        env.tools.download_web({"url": "https://example.com/"})
+def test_download_web_valid_url_no_longer_raises_not_implemented(tmp_root: Path) -> None:
+    """M5 task-3b: 実クロールが配線された(到達不能ホストなので error アクションで失敗)。"""
+    app_db_path = tmp_root / "app3.sqlite"
+    conn = connect(app_db_path)
+    ensure_app_schema(conn)
+    tools = KbDownloadTools(conn, root_dir=tmp_root)
+    result = tools.download_web({"url": "http://127.0.0.1:1/unreachable"})
+    payload = json.loads(result.content[0].text)
+    assert payload["batchType"] == "web"
+    assert "sync" in payload
+    conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -192,9 +202,17 @@ def test_download_web_valid_url_raises_not_implemented(env: Env) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_add_web_batch_raises_not_implemented(env: Env) -> None:
-    with pytest.raises(NotImplementedError):
-        env.tools.add_web_batch({"name": "x", "url": "https://example.com/"})
+def test_add_web_batch_creates_new_batch(env: Env) -> None:
+    """M5 task-3b: add_web_batch は新しい batches 行を作成し、list_batches に反映される。"""
+    result = env.tools.add_web_batch({"name": "新規webバッチ", "url": "https://example.com/"})
+    payload = json.loads(result.content[0].text)
+    assert payload["ok"] is True
+    assert payload["batch"]["name"] == "新規webバッチ"
+    assert payload["batch"]["url"] == "https://example.com/"
+
+    listed = json.loads(env.tools.list_batches({}).content[0].text)
+    names = {b["name"] for b in listed["batches"]}
+    assert "新規webバッチ" in names
 
 
 # ---------------------------------------------------------------------------
