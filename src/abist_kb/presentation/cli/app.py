@@ -30,6 +30,8 @@ from abist_kb.presentation.cli.context import (
     fail,
 )
 from abist_kb.presentation.cli.doctor_cmd import doctor
+from abist_kb.presentation.cli.jobs_cmd import jobs_app
+from abist_kb.presentation.cli.worker_cmd import worker_app
 from abist_kb.presentation.console.output import (
     ColorMode,
     OutputMode,
@@ -51,6 +53,8 @@ app = AppTyper(
 )
 
 app.add_typer(config_app, name="config")
+app.add_typer(jobs_app, name="jobs")
+app.add_typer(worker_app, name="worker")
 app.command("doctor")(doctor)
 
 
