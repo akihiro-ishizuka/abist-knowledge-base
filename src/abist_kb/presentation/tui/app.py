@@ -14,6 +14,7 @@ Web(`presentation/web/viewmodels/screens.py`)と同じ view-model 関数を
 
 from __future__ import annotations
 
+import json
 import threading
 from dataclasses import dataclass
 from typing import Any
@@ -21,7 +22,17 @@ from typing import Any
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import Button, DataTable, Footer, Header, Input, ListItem, ListView, Static
+from textual.widgets import (
+    Button,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    ListItem,
+    ListView,
+    Static,
+    TextArea,
+)
 
 from abist_kb.presentation.console.theme import TOKEN_STYLES, SemanticToken
 from abist_kb.presentation.tui.modals import ConfirmModal, HelpModal
@@ -30,6 +41,16 @@ from abist_kb.presentation.web.viewmodels.container import ServiceContainer
 
 MIN_COLUMNS = 100
 MIN_ROWS = 30
+
+_VISUALIZATION_SAMPLE_SPEC = {
+    "schema_version": "1.0",
+    "scene_kind": "explain",
+    "output_format": "mp4",
+    "template": "step_explanation",
+    "title": "サンプルシーン",
+    "sources": [],
+    "beats": [],
+}
 
 
 def badge(token_value: str, text: str) -> str:
@@ -216,7 +237,7 @@ class KbApp(App[None]):
             "documents": self._render_documents_list,
             "search": self._render_search,
             "chat": lambda: self._render_stub(screens.chat_stub(self.container)),
-            "visualization": lambda: self._render_stub(screens.visualization_stub(self.container)),
+            "visualization": self._render_visualization,
             "quality": lambda: self._render_stub(screens.quality_stub(self.container)),
             "settings": self._render_settings,
         }
@@ -691,6 +712,66 @@ class KbApp(App[None]):
             lines.extend(f"  ⚠ {warning}" for warning in warnings)
         chat_log.update("\n".join(lines))
 
+    def _render_visualization(self) -> None:
+        deps = screens.visualization_deps(self.container)
+        if deps.get("ready"):
+            deps_text = "レンダリング可能です(Python・Manim・ffmpeg すべて検出済み)。"
+        else:
+            messages = deps.get("messages") or []
+            deps_text = "レンダリング不可: " + (
+                "\n".join(messages) if messages else "依存が不足しています。"
+            )
+        self._set_body(
+            Static(deps_text, id="visualization-deps"),
+            TextArea(
+                json.dumps(_VISUALIZATION_SAMPLE_SPEC, ensure_ascii=False, indent=2),
+                id="visualization-spec",
+            ),
+            _VisualizationActions(render_disabled=not deps.get("ready")),
+            Static("", id="visualization-result"),
+        )
+
+    def _visualization_spec(self) -> dict[str, Any] | None:
+        text_area = self.query_one("#visualization-spec", TextArea)
+        result_widget = self.query_one("#visualization-result", Static)
+        try:
+            parsed = json.loads(text_area.text or "{}")
+        except json.JSONDecodeError as exc:
+            result_widget.update(f"SceneSpec の JSON パースに失敗しました: {exc}")
+            return None
+        if not isinstance(parsed, dict):
+            result_widget.update("SceneSpec は JSON オブジェクトで指定してください。")
+            return None
+        return parsed
+
+    def validate_visualization(self) -> None:
+        spec = self._visualization_spec()
+        if spec is None:
+            return
+        outcome = screens.visualization_validate(self.container, spec)
+        result_widget = self.query_one("#visualization-result", Static)
+        if outcome.get("ok"):
+            lines = ["検証OK: レンダリング可能です。"]
+            lines.extend(f"警告: {w}" for w in outcome.get("warnings") or [])
+            result_widget.update("\n".join(lines))
+            return
+        lines = [f"検証エラー: {outcome.get('code')}"]
+        lines.extend(f"  {e['path']}: {e['message']}" for e in outcome.get("errors") or [])
+        result_widget.update("\n".join(lines))
+
+    def render_visualization(self) -> None:
+        spec = self._visualization_spec()
+        if spec is None:
+            return
+        outcome = screens.visualization_submit_render(self.container, spec)
+        result_widget = self.query_one("#visualization-result", Static)
+        if "error" in outcome:
+            error = outcome["error"]
+            result_widget.update(f"エラー: {error['code']} - {error['message']}")
+            return
+        job = outcome["job"]
+        result_widget.update(f"レンダリングを投入しました: job_id={job['id']} state={job['state']}")
+
     def _render_quality(self) -> None:
         self._set_body(
             Static(
@@ -838,6 +919,32 @@ class _BatchActions(Vertical):
             app.action_run_selected_batch()
         elif event.button.id == "batch-remove":
             app.action_remove_selected_batch()
+
+
+class _VisualizationActions(Vertical):
+    """可視化画面の検証・レンダリング操作。検証とレンダリングは別操作にする
+    (検証は外部依存なしで即座に返るが、レンダリングは分単位かかり Manim/ffmpeg
+    を要するため、依存未導入時はレンダリングボタンを無効化する)。
+    """
+
+    def __init__(self, *, render_disabled: bool) -> None:
+        super().__init__()
+        self._render_disabled = render_disabled
+
+    def compose(self) -> ComposeResult:
+        yield Button("検証", id="visualization-validate")
+        yield Button(
+            "レンダリング", id="visualization-render", disabled=self._render_disabled
+        )
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        app = self.app
+        if not isinstance(app, KbApp):
+            return
+        if event.button.id == "visualization-validate":
+            app.validate_visualization()
+        elif event.button.id == "visualization-render":
+            app.render_visualization()
 
 
 class _QualityActions(Vertical):

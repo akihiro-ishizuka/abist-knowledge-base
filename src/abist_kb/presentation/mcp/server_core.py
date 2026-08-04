@@ -237,6 +237,8 @@ def build_all_server(
         app_db_path=app_db_path,
         work_index_path=work_index_path,
         reference_index_path=reference_index_path,
+        reports_dir=resolved_reports_dir,
+        repo_root=resolved_root_dir,
     )
 
     handlers: dict[str, Any] = {

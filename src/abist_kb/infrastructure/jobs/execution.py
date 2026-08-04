@@ -307,10 +307,13 @@ def run_job(
             raise
     else:
         # ハンドラは例外を出さずに戻ったが、`JobRunContext.finish_as()` で
-        # SUCCEEDED 以外の終端状態(例: PARTIAL)を宣言している場合がある
-        # (`SyncService.sync_all` の partial-failure 方針参照)。
+        # SUCCEEDED 以外の終端状態(例: PARTIAL)や結果ペイロードを宣言している
+        # 場合がある(`SyncService.sync_all` の partial-failure 方針、
+        # `render_scene` ジョブの出力先情報参照)。
         state = run_ctx._finish_state or JobState.SUCCEEDED
-        repo.finish(job.id, state=state, error=run_ctx._finish_error)
+        repo.finish(
+            job.id, state=state, result=run_ctx._finish_result, error=run_ctx._finish_error
+        )
     result = repo.get(job.id)
     assert result is not None  # 直前に finish した行なので必ず存在する
     return result

@@ -171,12 +171,7 @@ def test_document_delete_without_confirmation_returns_400(client: TestClient) ->
     assert response.json()["code"] == "INVALID_INPUT"
 
 
-def test_chat_visualization_quality_endpoints(client: TestClient) -> None:
-    # 可視化は次パス(M7 Task 7.3/7.4)のためスタブのまま。
-    response = client.get("/api/v1/visualization")
-    assert response.status_code == 200
-    assert response.json()["available"] is False
-
+def test_chat_and_quality_endpoints(client: TestClient) -> None:
     # チャットは openai_api_key 未設定のテスト環境ではスタブへフォールバックする
     # (`_clear_app_env` autouse fixture が ABIST_KB_* を毎回消すため)。
     response = client.get("/api/v1/chat")
@@ -187,6 +182,65 @@ def test_chat_visualization_quality_endpoints(client: TestClient) -> None:
     response = client.get("/api/v1/quality")
     assert response.status_code == 200
     assert response.json()["available"] is True
+
+
+# ---------------------------------------------------------------------------
+# 可視化(設計書 §10: render_scene をジョブとして実行する)
+# ---------------------------------------------------------------------------
+
+
+def test_visualization_deps_endpoint(client: TestClient) -> None:
+    response = client.get("/api/v1/visualization/deps")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is True
+    assert body["ready"] in (True, False)
+
+
+def test_visualization_validate_endpoint_rejects_invalid_scene_spec(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/v1/visualization/validate",
+        json={"scene_spec": {"scene_kind": "explain"}},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["ok"] is False
+    assert body["code"] == "INVALID_SCENE_SPEC"
+
+
+def test_visualization_render_endpoint_returns_worker_unavailable_without_worker(
+    client: TestClient, container: ServiceContainer
+) -> None:
+    (container.settings.docs_dir / "doc.md").write_text("行1\n行2\n", encoding="utf-8")
+    from abist_kb.domain.line_range import range_hash
+
+    hashed = range_hash("行1\n行2\n", 1, 2)
+    assert hashed.ok and hashed.hash is not None
+    scene_spec = {
+        "schema_version": "1.0",
+        "scene_kind": "explain",
+        "output_format": "mp4",
+        "template": "step_explanation",
+        "title": "テスト用シーン",
+        "sources": [
+            {
+                "id": "s1",
+                "path": "doc.md",
+                "start_line": 1,
+                "end_line": 2,
+                "content_hash": hashed.hash,
+            }
+        ],
+        "beats": [{"type": "metric", "label": "テスト指標", "value": "1", "source_refs": ["s1"]}],
+    }
+
+    response = client.post(
+        "/api/v1/visualization/render", json={"scene_spec": scene_spec}
+    )
+    assert response.status_code == 409
+    assert response.json()["code"] == "WORKER_UNAVAILABLE"
 
 
 def test_settings_diagnostics_endpoint(client: TestClient) -> None:

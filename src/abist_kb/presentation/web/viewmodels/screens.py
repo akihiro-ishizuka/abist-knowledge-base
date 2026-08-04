@@ -5,10 +5,12 @@
 表示(色、罫線、HTML)はここに置かない — Web は `presentation/web/pages/*.py`
 が、将来の Textual TUI は同じ関数をそのまま呼んで自分の描画コードへ渡す。
 
-**可視化は次パス(M7 Task 7.3/7.4)のためスタブのまま**(`available: False`)。
-チャット(Task 7.1)と品質監査4種(Task 7.2)は `ChatService`/`application.audit.*`
-に配線済み。チャットは `openai_api_key` 未設定時のみ `chat_stub` がスタブへ
-フォールバックする。
+**可視化はジョブとして実装済み**(設計書 §10)。検証(`visualization_validate`)は
+外部依存なしで即座に返り、レンダリング投入(`visualization_submit_render`)は
+`render_scene` ジョブをキューへ積んで `job_id` を返す(生きた worker が無ければ
+`WORKER_UNAVAILABLE`)。チャット(Task 7.1)と品質監査4種(Task 7.2)は
+`ChatService`/`application.audit.*` に配線済み。チャットは `openai_api_key`
+未設定時のみ `chat_stub` がスタブへフォールバックする。
 """
 
 from __future__ import annotations
@@ -410,18 +412,79 @@ def chat_history(container: ServiceContainer, *, conversation_id: str) -> dict[s
         return _err(exc)
 
 
-# -- 7. 可視化(同上) ----------------------------------------------------------
+# -- 7. 可視化(設計書 §10: render_scene をジョブとして実行する) -----------------
 
 
-def visualization_stub(_container: ServiceContainer) -> dict[str, Any]:
-    """`SceneSpec`/`render_scene` は M7(Task 7.3/7.4)で追加される。"""
-    return {
-        "available": False,
-        "reason": (
-            "SceneSpec 検証・Manim レンダリングは M7 で実装予定です"
-            "(design/plans/M6-M10-remaining.md Task 7.3)。"
-        ),
+def visualization_validate(container: ServiceContainer, spec: dict[str, Any]) -> dict[str, Any]:
+    """SceneSpec を検証する(外部依存なし、Manim を起動せず即座に返る)。
+
+    `domain.scene_spec.validate_scene_spec`(構造検証)→
+    `application.visualization.source_verifier.verify_sources`(出典照合・
+    ビート剪定)の順に適用する(`application.visualization.renderer.render_scene`
+    の手順1〜2と同じ)。`repo_root`/`docs_dir` は container に `visualization`
+    ファサードが無いため `settings` から解決する。
+    """
+    from abist_kb.application.visualization.source_verifier import verify_sources
+    from abist_kb.domain.scene_spec import validate_scene_spec
+
+    validated = validate_scene_spec(spec)
+    if not validated.ok:
+        return {
+            "ok": False,
+            "code": "INVALID_SCENE_SPEC",
+            "errors": [e.to_dict() for e in validated.errors],
+            "warnings": [],
+        }
+    assert validated.spec is not None
+
+    verified = verify_sources(validated.spec, container.settings.docs_dir)
+    if not verified.ok:
+        return {
+            "ok": False,
+            "code": verified.code,
+            "errors": [e.to_dict() for e in verified.errors],
+            "warnings": verified.warnings,
+        }
+    return {"ok": True, "spec": verified.spec, "warnings": verified.warnings}
+
+
+def visualization_deps(container: ServiceContainer) -> dict[str, Any]:
+    """`check_visualize_deps` 相当(Python/Manim/ffmpeg/フォントの診断)。
+
+    依存が欠けていても `ok: True`(診断自体は成功)。描画可否は `ready` で判定
+    する — 画面はここが `False` ならレンダリングボタンを無効化し、不足物を
+    `messages` から名指しすること(押せてしまって数分後に失敗するのを防ぐ)。
+    """
+    from abist_kb.infrastructure.visualization.manim_runner import check_visualize_deps
+
+    return check_visualize_deps(root=container.settings.root_dir)
+
+
+def visualization_submit_render(
+    container: ServiceContainer, spec: dict[str, Any], *, slug: str | None = None
+) -> dict[str, Any]:
+    """`render_scene` ジョブをキューへ投入する(§10: 永続ジョブとして実行)。
+
+    生きた worker(`worker run`)が居なければ `container.jobs.detach()` が
+    `WORKER_UNAVAILABLE` を送出する(他の `start_*`/`batch_run` 系と同じ契約)。
+    検証(`INVALID_SCENE_SPEC`/`SOURCE_HASH_MISMATCH` 等)はジョブハンドラ内で
+    `render_scene()` が改めて行う(ジョブ投入自体は軽量な操作に留める)。
+    """
+    from abist_kb.application.visualization.render_job import RENDER_JOB_KIND
+
+    params: dict[str, Any] = {
+        "scene_spec": spec,
+        "docs_dir": str(container.settings.docs_dir),
+        "reports_dir": str(container.settings.reports_dir / "visualizations"),
+        "repo_root": str(container.settings.root_dir),
     }
+    if slug:
+        params["slug"] = slug
+    try:
+        job = container.jobs.detach(RENDER_JOB_KIND, params)
+    except AppError as exc:
+        return _err(exc)
+    return {"job": job_to_dict(job)}
 
 
 # -- 8. 品質(監査4種は M7 Task 7.2 で追加されるまでスタブ) ---------------------
@@ -580,6 +643,8 @@ __all__ = [
     "source_remove",
     "source_test_connection",
     "sources_list",
-    "visualization_stub",
+    "visualization_deps",
+    "visualization_submit_render",
+    "visualization_validate",
     "job_state_token",
 ]

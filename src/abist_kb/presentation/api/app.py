@@ -69,6 +69,19 @@ class DocumentMetadataRequest(BaseModel):
     document_type: str | None = None
 
 
+class VisualizationValidateRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    scene_spec: dict[str, Any]
+
+
+class VisualizationRenderRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    scene_spec: dict[str, Any]
+    slug: str | None = None
+
+
 def _status_for(err: AppError) -> int:
     return http_status_for(err.code)
 
@@ -368,9 +381,31 @@ def register_api_routes(
     async def chat(request: Request) -> dict[str, Any]:
         return await run_locked(request, lambda: screens.chat_stub(get_container(request)))
 
-    @app.get(f"{router_prefix}/visualization")
-    async def visualization(request: Request) -> dict[str, Any]:
-        return await run_locked(request, lambda: screens.visualization_stub(get_container(request)))
+    @app.get(f"{router_prefix}/visualization/deps")
+    async def visualization_deps(request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request, lambda: screens.visualization_deps(get_container(request))
+        )
+
+    @app.post(f"{router_prefix}/visualization/validate")
+    async def visualization_validate(
+        body: VisualizationValidateRequest, request: Request
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.visualization_validate(get_container(request), body.scene_spec),
+        )
+
+    @app.post(f"{router_prefix}/visualization/render")
+    async def visualization_render(
+        body: VisualizationRenderRequest, request: Request
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.visualization_submit_render(
+                get_container(request), body.scene_spec, slug=body.slug
+            ),
+        )
 
     @app.get(f"{router_prefix}/quality")
     async def quality(request: Request) -> dict[str, Any]:

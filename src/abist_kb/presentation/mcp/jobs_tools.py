@@ -17,9 +17,11 @@
 と同じ契約)ので、ここではその契約をそのまま再利用する — 生きた worker が
 いないのに実行されないジョブをキューへ積まない。
 
-`start_render_scene` はジョブ種別自体が未実装(レンダラーは M7)なので、
-worker の有無に関わらず常に `NOT_YET_AVAILABLE` で拒否する(キューへ積んでも
-誰も処理できないジョブを作らない)。
+`start_render_scene` は `render_scene` ジョブ種別(`application.visualization.
+render_job`)へ投入する。他の `start_*` と同じく `detach()` の
+`WORKER_UNAVAILABLE` 契約をそのまま再利用する(検証は投入時ではなくジョブ
+ハンドラ内で行う — `render_scene()` が `INVALID_SCENE_SPEC`/
+`SOURCE_HASH_MISMATCH` 等を判定する)。
 
 job 種別文字列(`kind`)は `kb_download.py` のブロッキング実装が `run_inline`
 に渡す `kind`(`kb_download_batch`/`kb_download_esa_post`/...)とそろえてある。
@@ -35,6 +37,7 @@ job 種別文字列(`kind`)は `kb_download.py` のブロッキング実装が `
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from pathlib import Path
@@ -46,6 +49,7 @@ import mcp.types as types
 from abist_kb.application.batch_service import BatchService
 from abist_kb.application.index_service import CORPUS_LABELS, IndexService
 from abist_kb.application.job_service import JobService
+from abist_kb.application.visualization.render_job import RENDER_JOB_KIND
 from abist_kb.domain.errors import AppError
 from abist_kb.domain.job import Job
 from abist_kb.domain.job import JobState as _JobState
@@ -78,8 +82,11 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "Git リポジトリ同期をキューに投入する(非ブロック版)。同期版は download_git。"
     ),
     "start_render_scene": (
-        "SceneSpec のレンダリングをキューに投入する(kb-visualize、M7 で実装予定)。"
-        "現時点では常に NOT_YET_AVAILABLE を返す。"
+        "SceneSpec のレンダリングをキューに投入し、即座に job_id を返す(ブロックしない)。"
+        "生きた worker(`worker run`)が居ない場合は WORKER_UNAVAILABLE で失敗する。"
+        "検証(INVALID_SCENE_SPEC/SOURCE_HASH_MISMATCH 等)はジョブ実行時に行われる。"
+        "進捗・結果は job_status で確認する。ブロックして結果を待ちたい場合は "
+        "render_scene(同期版、kb-visualize)を使うこと。"
     ),
     "job_status": (
         "job_id の現在状態(queued/running/succeeded/partial/failed/cancelled/"
@@ -105,6 +112,7 @@ _JOB_KIND_FOR_TOOL: dict[str, str] = {
     "start_download_esa_search": "kb_download_esa_search",
     "start_download_web": "kb_download_web",
     "start_download_git": "kb_download_git",
+    "start_render_scene": RENDER_JOB_KIND,
 }
 
 
@@ -247,8 +255,24 @@ def list_tools() -> list[types.Tool]:
             description=TOOL_DESCRIPTIONS["start_render_scene"],
             inputSchema={
                 "$schema": "http://json-schema.org/draft-07/schema#",
-                "additionalProperties": True,
-                "properties": {},
+                "additionalProperties": False,
+                "properties": {
+                    "sceneSpec": {
+                        "anyOf": [
+                            {"additionalProperties": {}, "type": "object"},
+                            {"type": "string"},
+                        ],
+                        "description": (
+                            "SceneSpec（JSON オブジェクト推奨。JSON 文字列も可）。"
+                            "list_scene_kinds のテンプレートに従うこと"
+                        ),
+                    },
+                    "slug": {
+                        "description": "出力ディレクトリ名の候補(省略可)。",
+                        "type": "string",
+                    },
+                },
+                "required": ["sceneSpec"],
                 "type": "object",
             },
         ),
@@ -358,6 +382,30 @@ def _job_to_status_payload(job: Job) -> dict[str, Any]:
     }
 
 
+def _parse_scene_spec_argument(
+    raw: Any,
+) -> tuple[dict[str, Any] | None, types.CallToolResult | None]:
+    """`sceneSpec` 引数(dict または JSON 文字列)をパースする(`kb_visualize.py`
+    の `_parse_scene_spec` と同じ許容形。深い構造検証はジョブハンドラ側で行う
+    ため、ここでは「JSON オブジェクトとして解釈できるか」だけを見る)。
+    """
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            return None, error_result(
+                f"sceneSpec の JSON パースに失敗しました: {exc}",
+                extra={"code": "INVALID_SCENE_SPEC"},
+            )
+        raw = parsed
+    if not isinstance(raw, dict):
+        return None, error_result(
+            "SceneSpec は JSON オブジェクトで指定してください",
+            extra={"code": "INVALID_SCENE_SPEC"},
+        )
+    return raw, None
+
+
 def _corpus_summary(corpus: str, status: dict[str, Any]) -> dict[str, Any]:
     return {
         "name": corpus,
@@ -382,8 +430,15 @@ class JobTools:
         app_db_path: Path,
         work_index_path: Path,
         reference_index_path: Path,
+        reports_dir: Path | None = None,
+        repo_root: Path | None = None,
     ) -> None:
         self._conn = conn
+        self._docs_dir = docs_dir
+        self._repo_root = repo_root if repo_root is not None else Path.cwd()
+        self._reports_dir = (
+            reports_dir if reports_dir is not None else (self._repo_root / "reports")
+        )
         self._batch_service = BatchService(conn)
         self._batches_repo = BatchRepository(conn)
         self._index_service = IndexService(
@@ -454,13 +509,20 @@ class JobTools:
         }
         return self._start("start_download_git", params)
 
-    def start_render_scene(self, _arguments: dict[str, Any]) -> types.CallToolResult:
-        # kb-visualize のレンダラーは M7 で実装される。生きた worker の有無に
-        # かかわらず、誰も処理できないジョブをキューへ積まない。
-        return error_result(
-            "シーンレンダリングは M7 で実装予定のため、現時点では利用できません。",
-            extra={"code": "NOT_YET_AVAILABLE"},
-        )
+    def start_render_scene(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        spec, parse_error = _parse_scene_spec_argument(arguments.get("sceneSpec"))
+        if parse_error is not None:
+            return parse_error
+        params: dict[str, Any] = {
+            "scene_spec": spec,
+            "docs_dir": str(self._docs_dir),
+            "reports_dir": str(self._reports_dir / "visualizations"),
+            "repo_root": str(self._repo_root),
+        }
+        slug = arguments.get("slug")
+        if slug:
+            params["slug"] = slug
+        return self._start("start_render_scene", params)
 
     # -- job_status -----------------------------------------------------------
 

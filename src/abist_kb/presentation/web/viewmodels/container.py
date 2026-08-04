@@ -30,6 +30,10 @@ from abist_kb.application.job_service import JobService
 from abist_kb.application.search_service import SearchService
 from abist_kb.application.source_service import SourceService
 from abist_kb.application.sync_service import run_sync_inline
+from abist_kb.application.visualization.render_job import (
+    BUILTIN_RENDER_HANDLERS,
+    BUILTIN_RENDER_RESOURCES,
+)
 from abist_kb.config import Settings
 from abist_kb.infrastructure.ai.chat_provider import OpenAIChatProvider
 from abist_kb.infrastructure.db.schema import open_app_db
@@ -37,15 +41,16 @@ from abist_kb.infrastructure.jobs import events as events_mod
 from abist_kb.infrastructure.jobs.supervisor import JobHandler, WorkerSupervisor
 
 #: Web の常駐ワーカー(`WorkerSupervisor`)がキューから消費できるジョブ種別。
-#: `noop`(基盤の疎通確認) + `batch`(バッチ実行)。sync/index-build/index-embed は
-#: CLI と同じく操作の都度 `run_sync_inline`/`run_index_inline` がその場で専用の
-#: `JobService` を組み立てて `docs-write`/`corpus-write:<corpus>` リースを取るため
+#: `noop`(基盤の疎通確認) + `batch`(バッチ実行) + `render_scene`(可視化レンダ
+#: リング、設計書 §10)。sync/index-build/index-embed は CLI と同じく操作の都度
+#: `run_sync_inline`/`run_index_inline` がその場で専用の `JobService` を組み立て
+#: て `docs-write`/`corpus-write:<corpus>` リースを取るため
 #: (`application/sync_service.py::run_sync_inline`, `application/index_service.py::
 #: run_index_inline` を参照)、常駐ワーカーの静的ハンドラ表には含めない。CLI の
-#: `worker run`(`presentation/cli/worker_cmd.py`)も同じ理由で `noop` のみを
-#: 常駐ハンドラとして登録しており、ここではそれに `batch` を加える。
-WEB_WORKER_HANDLERS: dict[str, JobHandler] = dict(BUILTIN_BATCH_HANDLERS)
-WEB_WORKER_RESOURCES: dict[str, Any] = dict(BUILTIN_BATCH_RESOURCES)
+#: `worker run`(`presentation/cli/worker_cmd.py`)も同じ種別を登録する
+#: (`presentation/cli/jobs_cmd.py::BUILTIN_HANDLERS`)。
+WEB_WORKER_HANDLERS: dict[str, JobHandler] = {**BUILTIN_BATCH_HANDLERS, **BUILTIN_RENDER_HANDLERS}
+WEB_WORKER_RESOURCES: dict[str, Any] = {**BUILTIN_BATCH_RESOURCES, **BUILTIN_RENDER_RESOURCES}
 
 
 def _noop_handler(run: Any) -> None:

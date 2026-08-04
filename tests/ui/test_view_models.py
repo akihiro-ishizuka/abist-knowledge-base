@@ -156,15 +156,110 @@ def test_search_without_index_returns_error_dict(container: ServiceContainer) ->
     assert outcome["error"]["code"] == "INVALID_INPUT"
 
 
-def test_chat_visualization_quality_are_stubs(container: ServiceContainer) -> None:
+def test_chat_and_quality_are_stubs(container: ServiceContainer) -> None:
     # チャットは openai_api_key 未設定のテスト環境ではスタブへフォールバックする。
     chat = screens.chat_stub(container)
     assert chat["available"] is False
     assert chat["reason"]
-    # 可視化は次パス(M7 Task 7.3/7.4)のためスタブのまま。
-    assert screens.visualization_stub(container)["available"] is False
     # 品質監査4種(M7 Task 7.2)は配線済み。
     assert screens.quality_stub(container)["available"] is True
+
+
+# ---------------------------------------------------------------------------
+# 可視化(設計書 §10: render_scene をジョブとして実行する)
+# ---------------------------------------------------------------------------
+
+
+_VALID_SCENE_SPEC: dict[str, object] = {
+    "schema_version": "1.0",
+    "scene_kind": "explain",
+    "output_format": "mp4",
+    "template": "step_explanation",
+    "title": "テスト用シーン",
+    "sources": [
+        {
+            "id": "s1",
+            "path": "doc.md",
+            "start_line": 1,
+            "end_line": 2,
+            "content_hash": "",
+        }
+    ],
+    "beats": [{"type": "metric", "label": "テスト指標", "value": "1", "source_refs": ["s1"]}],
+}
+
+
+def _write_doc_and_valid_spec(container: ServiceContainer) -> dict[str, object]:
+    from abist_kb.domain.line_range import range_hash
+
+    text = "行1\n行2\n行3\n"
+    (container.settings.docs_dir / "doc.md").write_text(text, encoding="utf-8")
+    hashed = range_hash(text, 1, 2)
+    assert hashed.ok and hashed.hash is not None
+    spec = dict(_VALID_SCENE_SPEC)
+    spec["sources"] = [{**_VALID_SCENE_SPEC["sources"][0], "content_hash": hashed.hash}]  # type: ignore[index]
+    return spec
+
+
+def test_visualization_validate_rejects_invalid_scene_spec(
+    container: ServiceContainer,
+) -> None:
+    outcome = screens.visualization_validate(container, {"scene_kind": "explain"})
+    assert outcome["ok"] is False
+    assert outcome["code"] == "INVALID_SCENE_SPEC"
+    assert outcome["errors"]
+
+
+def test_visualization_validate_surfaces_source_hash_mismatch(
+    container: ServiceContainer,
+) -> None:
+    spec = _write_doc_and_valid_spec(container)
+    spec["sources"] = [{**spec["sources"][0], "content_hash": "f" * 64}]  # type: ignore[index]
+
+    outcome = screens.visualization_validate(container, spec)
+    assert outcome["ok"] is False
+    assert outcome["code"] == "SOURCE_HASH_MISMATCH"
+
+
+def test_visualization_validate_accepts_valid_scene_spec(container: ServiceContainer) -> None:
+    spec = _write_doc_and_valid_spec(container)
+
+    outcome = screens.visualization_validate(container, spec)
+    assert outcome["ok"] is True
+    assert outcome["spec"]["title"] == "テスト用シーン"
+
+
+def test_visualization_deps_reports_ready_and_messages(container: ServiceContainer) -> None:
+    data = screens.visualization_deps(container)
+    assert data["ok"] is True
+    assert data["ready"] in (True, False)
+    assert isinstance(data["messages"], list)
+
+
+def test_visualization_submit_render_fails_without_live_worker(
+    container: ServiceContainer,
+) -> None:
+    spec = _write_doc_and_valid_spec(container)
+
+    outcome = screens.visualization_submit_render(container, spec)
+    assert outcome["error"]["code"] == "WORKER_UNAVAILABLE"
+
+
+def test_visualization_submit_render_queues_job_when_worker_is_live(
+    container: ServiceContainer,
+) -> None:
+    from abist_kb.infrastructure.jobs import leases
+
+    leases.try_acquire_worker_lease(container.conn, "test-worker", ttl_seconds=300)
+    spec = _write_doc_and_valid_spec(container)
+
+    outcome = screens.visualization_submit_render(container, spec, slug="test-slug")
+    assert "job" in outcome
+    job = outcome["job"]
+    assert job["kind"] == "render_scene"
+    assert job["state"] == str(JobState.QUEUED)
+    assert job["params"]["scene_spec"]["title"] == "テスト用シーン"
+    assert job["params"]["slug"] == "test-slug"
 
 
 def test_settings_diagnostics_reports_paths_and_probes(container: ServiceContainer) -> None:

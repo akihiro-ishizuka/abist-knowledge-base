@@ -6,6 +6,7 @@ Playwright 経由の E2E は次パスの範囲(design/plans/M6-M10-remaining.md 
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -310,11 +311,70 @@ async def test_chat_page_shows_stub_notice(user: User, wired_container: ServiceC
     await user.should_see("チャットは利用できません")
 
 
-async def test_visualization_page_shows_stub_notice(
+async def test_visualization_page_renders_deps_and_sample_spec(
     user: User, wired_container: ServiceContainer
 ) -> None:
     await user.open("/visualization")
-    await user.should_see("M7 で実装予定")
+    await user.should_see("可視化")
+    spec_input = next(iter(user.find(marker="visualization-spec").elements))
+    assert "schema_version" in spec_input.value
+
+
+async def test_visualization_page_validate_shows_invalid_scene_spec_error(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    await user.open("/visualization")
+    user.find(marker="visualization-spec").clear().type('{"scene_kind": "explain"}')
+    user.find("検証").click()
+    await user.should_see("INVALID_SCENE_SPEC")
+
+
+async def test_visualization_page_validate_surfaces_source_hash_mismatch(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    from abist_kb.domain.line_range import range_hash
+
+    text = "行1\n行2\n行3\n"
+    (wired_container.settings.docs_dir / "doc.md").write_text(text, encoding="utf-8")
+    hashed = range_hash(text, 1, 2)
+    assert hashed.ok and hashed.hash is not None
+    spec = {
+        "schema_version": "1.0",
+        "scene_kind": "explain",
+        "output_format": "mp4",
+        "template": "step_explanation",
+        "title": "テスト用シーン",
+        "sources": [
+            {
+                "id": "s1",
+                "path": "doc.md",
+                "start_line": 1,
+                "end_line": 2,
+                "content_hash": "f" * 64,
+            }
+        ],
+        "beats": [{"type": "metric", "label": "テスト指標", "value": "1", "source_refs": ["s1"]}],
+    }
+
+    await user.open("/visualization")
+    user.find(marker="visualization-spec").clear().type(json.dumps(spec, ensure_ascii=False))
+    user.find("検証").click()
+    await user.should_see("SOURCE_HASH_MISMATCH")
+
+
+async def test_visualization_page_render_button_disabled_when_deps_not_ready(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    from abist_kb.presentation.web.viewmodels import screens
+
+    deps = screens.visualization_deps(wired_container)
+
+    await user.open("/visualization")
+    render_button = next(iter(user.find(marker="visualization-render-button").elements))
+    if deps.get("ready"):
+        assert "disable" not in render_button.props
+    else:
+        assert render_button.props.get("disable") is True
 
 
 async def test_quality_page_renders(user: User, wired_container: ServiceContainer) -> None:

@@ -152,16 +152,71 @@ def test_start_download_tools_fail_without_live_worker(
     assert payload["code"] == "WORKER_UNAVAILABLE"
 
 
-def test_start_render_scene_is_always_not_yet_available(tmp_root: Path) -> None:
-    tools, conn = _make_tools(tmp_root)
-    _mark_live_worker(conn)  # worker が生きていても関係ない(kind自体が未実装)
+_VALID_SCENE_SPEC = {
+    "schema_version": "1.0",
+    "scene_kind": "explain",
+    "output_format": "mp4",
+    "template": "step_explanation",
+    "title": "テスト用シーン",
+    "sources": [],
+    "beats": [{"type": "statement", "text": "装飾テキスト", "decorative": True}],
+}
 
-    result = tools.start_render_scene({})
+
+def test_start_render_scene_fails_fast_without_live_worker(tmp_root: Path) -> None:
+    tools, _conn = _make_tools(tmp_root)
+
+    result = tools.start_render_scene({"sceneSpec": _VALID_SCENE_SPEC})
     payload = _payload(result)
 
     assert result.isError
     assert payload["ok"] is False
-    assert payload["code"] == "NOT_YET_AVAILABLE"
+    assert payload["code"] == "WORKER_UNAVAILABLE"
+
+
+def test_start_render_scene_queues_job_when_worker_is_live(tmp_root: Path) -> None:
+    tools, conn = _make_tools(tmp_root)
+    _mark_live_worker(conn)
+
+    result = tools.start_render_scene({"sceneSpec": _VALID_SCENE_SPEC, "slug": "my-slug"})
+    payload = _payload(result)
+
+    assert not result.isError
+    assert payload["ok"] is True
+    assert payload["kind"] == "render_scene"
+    assert payload["state"] == "queued"
+
+    job = JobRepository(conn).get(payload["job_id"])
+    assert job is not None
+    assert job.params["scene_spec"] == _VALID_SCENE_SPEC
+    assert job.params["slug"] == "my-slug"
+    assert job.params["docs_dir"]
+    assert job.params["reports_dir"].endswith("visualizations")
+    assert job.params["repo_root"]
+
+
+def test_start_render_scene_accepts_scene_spec_as_json_string(tmp_root: Path) -> None:
+    tools, conn = _make_tools(tmp_root)
+    _mark_live_worker(conn)
+
+    result = tools.start_render_scene({"sceneSpec": json.dumps(_VALID_SCENE_SPEC)})
+    payload = _payload(result)
+
+    assert not result.isError
+    assert payload["ok"] is True
+
+
+def test_start_render_scene_rejects_invalid_json_string(tmp_root: Path) -> None:
+    tools, conn = _make_tools(tmp_root)
+    _mark_live_worker(conn)
+
+
+    result = tools.start_render_scene({"sceneSpec": "{not json"})
+    payload = _payload(result)
+
+    assert result.isError
+    assert payload["ok"] is False
+    assert payload["code"] == "INVALID_SCENE_SPEC"
 
 
 # ---------------------------------------------------------------------------

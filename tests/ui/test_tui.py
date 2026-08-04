@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import sqlite3
 from pathlib import Path
 
-from textual.widgets import DataTable, Input, Static
+from textual.widgets import Button, DataTable, Input, Static, TextArea
 
 from abist_kb.config import Settings
 from abist_kb.domain.job import JobState
@@ -443,6 +444,91 @@ async def test_narrow_layout_collapses_nav_to_single_pane(container: ServiceCont
         await pilot.resize_terminal(MIN_COLUMNS + 20, MIN_ROWS + 5)
         await pilot.pause()
         assert "hidden" not in nav.classes
+
+
+async def test_visualization_renders_deps_and_sample_spec(container: ServiceContainer) -> None:
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.action_goto_area("visualization")
+        await pilot.pause()
+
+        spec_area = app.query_one("#visualization-spec", TextArea)
+        assert "schema_version" in spec_area.text
+
+
+async def test_visualization_validate_shows_invalid_scene_spec_error(
+    container: ServiceContainer,
+) -> None:
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.action_goto_area("visualization")
+        await pilot.pause()
+
+        spec_area = app.query_one("#visualization-spec", TextArea)
+        spec_area.text = '{"scene_kind": "explain"}'
+        app.validate_visualization()
+        await pilot.pause()
+
+        result = str(app.query_one("#visualization-result", Static).render())
+        assert "INVALID_SCENE_SPEC" in result
+
+
+async def test_visualization_render_submit_without_worker_reports_worker_unavailable(
+    container: ServiceContainer,
+) -> None:
+    from abist_kb.domain.line_range import range_hash
+
+    text = "行1\n行2\n行3\n"
+    (container.settings.docs_dir / "doc.md").write_text(text, encoding="utf-8")
+    hashed = range_hash(text, 1, 2)
+    assert hashed.ok and hashed.hash is not None
+    spec = {
+        "schema_version": "1.0",
+        "scene_kind": "explain",
+        "output_format": "mp4",
+        "template": "step_explanation",
+        "title": "テスト用シーン",
+        "sources": [
+            {
+                "id": "s1",
+                "path": "doc.md",
+                "start_line": 1,
+                "end_line": 2,
+                "content_hash": hashed.hash,
+            }
+        ],
+        "beats": [{"type": "metric", "label": "テスト指標", "value": "1", "source_refs": ["s1"]}],
+    }
+
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.action_goto_area("visualization")
+        await pilot.pause()
+
+        spec_area = app.query_one("#visualization-spec", TextArea)
+        spec_area.text = json.dumps(spec, ensure_ascii=False)
+        app.render_visualization()
+        await pilot.pause()
+
+        result = str(app.query_one("#visualization-result", Static).render())
+        assert "WORKER_UNAVAILABLE" in result
+
+
+async def test_visualization_render_button_disabled_when_deps_not_ready(
+    container: ServiceContainer,
+) -> None:
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.action_goto_area("visualization")
+        await pilot.pause()
+
+        deps = screens.visualization_deps(container)
+        render_button = app.query_one("#visualization-render", Button)
+        assert render_button.disabled is (not deps.get("ready"))
 
 
 async def test_quit_key_exits_app(container: ServiceContainer) -> None:

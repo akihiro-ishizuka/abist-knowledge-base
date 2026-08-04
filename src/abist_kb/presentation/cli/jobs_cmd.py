@@ -28,6 +28,10 @@ from typing import Annotated, Any
 import typer
 
 from abist_kb.application.job_service import JobService, ResourceRequirement
+from abist_kb.application.visualization.render_job import (
+    BUILTIN_RENDER_HANDLERS,
+    BUILTIN_RENDER_RESOURCES,
+)
 from abist_kb.domain.job import Job, JobState, ProgressEvent, Severity
 from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.infrastructure.jobs.supervisor import JobHandler, JobRunContext
@@ -42,8 +46,11 @@ def _noop_handler(run: JobRunContext) -> None:
     run.emit(phase="noop", current=1, total=1, message="ノーオペレーション完了")
 
 
-BUILTIN_HANDLERS: dict[str, JobHandler] = {"noop": _noop_handler}
-BUILTIN_RESOURCE_FOR_KIND: dict[str, ResourceRequirement] = {}
+#: `noop`(基盤の疎通確認) + `render_scene`(可視化レンダリング、設計書 §10)。
+#: `presentation/web/viewmodels/container.py::WEB_WORKER_HANDLERS` と同じ種別を
+#: 登録する(`worker run` はヘッドレス環境向けの同じ Supervisor 起動経路のため)。
+BUILTIN_HANDLERS: dict[str, JobHandler] = {"noop": _noop_handler, **BUILTIN_RENDER_HANDLERS}
+BUILTIN_RESOURCE_FOR_KIND: dict[str, ResourceRequirement] = dict(BUILTIN_RENDER_RESOURCES)
 
 
 def _build_service(settings: Any) -> tuple[JobService, Any]:
