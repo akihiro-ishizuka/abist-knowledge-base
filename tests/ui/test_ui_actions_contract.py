@@ -319,11 +319,25 @@ WebCheck = Callable[[User, ServiceContainer, MonkeyPatch], Awaitable[None]]
 async def _web_open_and_find(
     user: User, path: str, label_or_marker: str, *, marker: bool = False
 ) -> None:
+    """`marker=False` の既定では **`ui.button` に限定して** ラベルを探す。
+
+    `nicegui.testing.User.find(str)` はページ上の任意要素の
+    テキスト/ラベル/値等を対象に**部分一致**で検索する
+    (`ElementFilter`: "Partial matches like 'Hello' in 'Hello World!' are
+    sufficient")。ボタンのラベルが他要素の説明文の部分文字列にもなっている
+    ケース(例: `quality.py` の説明文「...メタデータ補完(dry-run)を実行できます。」
+    は同ページのボタンラベル「メタデータ補完(dry-run)」を部分文字列として含む)
+    では、ボタン自体を消してもこの説明文にマッチして**偽陽性**になる
+    (実際にこの偽陽性を手元で確認し、`kind=ui.button` 限定に修正した)。
+    そのため `kind=ui.button` を必ず付け、ボタンそのものの存在だけを見る。
+    """
+    from nicegui import ui
+
     await user.open(path)
     if marker:
         user.find(marker=label_or_marker)
     else:
-        user.find(label_or_marker)
+        user.find(kind=ui.button, content=label_or_marker)
 
 
 async def _web_source_add(user: User, _c: ServiceContainer, _m: MonkeyPatch) -> None:
@@ -515,9 +529,9 @@ async def _web_decline_source_remove(user: User, container: ServiceContainer) ->
     await user.open("/sources")
     table = next(iter(user.find(kind=ui.table, marker="sources-table").elements))
     table.selected = [source]
-    user.find("ソース削除").click()
+    user.find(kind=ui.button, content="ソース削除").click()
     await user.should_see("削除しますか?")
-    user.find("いいえ").click()
+    user.find(kind=ui.button, content="いいえ").click()
     assert any(s["id"] == source["id"] for s in container.sources.list())
 
 
@@ -528,30 +542,34 @@ async def _web_decline_batch_remove(user: User, container: ServiceContainer) -> 
     await user.open("/sources")
     table = next(iter(user.find(kind=ui.table, marker="batches-table").elements))
     table.selected = [batch]
-    user.find("バッチ削除").click()
+    user.find(kind=ui.button, content="バッチ削除").click()
     await user.should_see("削除しますか?")
-    user.find("いいえ").click()
+    user.find(kind=ui.button, content="いいえ").click()
     assert any(b["id"] == batch["id"] for b in container.batches.list())
 
 
 async def _web_decline_job_cancel(user: User, container: ServiceContainer) -> None:
+    from nicegui import ui
+
     job = JobRepository(container.conn).submit("noop", {})
     await user.open(f"/jobs/{job.id}")
-    user.find("キャンセル").click()
+    user.find(kind=ui.button, content="キャンセル").click()
     await user.should_see("キャンセルしますか?")
-    user.find("いいえ").click()
+    user.find(kind=ui.button, content="いいえ").click()
     assert container.jobs.get(job.id).state == JobState.QUEUED
 
 
 async def _web_decline_document_delete(user: User, container: ServiceContainer) -> None:
+    from nicegui import ui
+
     container.documents.upsert(
         {"path": "decline-test-keep.md", "source": "manual", "status": "active"}
     )
     audit_before = container.conn.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0]
     await user.open("/documents/decline-test-keep.md")
-    user.find("文書を削除").click()
+    user.find(kind=ui.button, content="文書を削除").click()
     await user.should_see("削除しますか?")
-    user.find("いいえ").click()
+    user.find(kind=ui.button, content="いいえ").click()
     assert container.documents.get_or_none("decline-test-keep.md") is not None
     audit_after = container.conn.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0]
     assert audit_after == audit_before

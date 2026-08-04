@@ -54,6 +54,10 @@ def render(container: ServiceContainer) -> None:
             ui.button("整合性を検査", on_click=lambda: _run(screens.quality_run_integrity))
             ui.button("重複を検出", on_click=lambda: _run(screens.quality_run_duplicates))
             ui.button("矛盾候補を検出", on_click=lambda: _run(screens.quality_run_contradictions))
+            ui.button(
+                "メタデータ補完(dry-run)",
+                on_click=lambda: _run(screens.quality_run_backfill_metadata),
+            )
 
 
 __all__ = ["render"]
