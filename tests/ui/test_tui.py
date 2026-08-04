@@ -7,7 +7,7 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from textual.widgets import Static
+from textual.widgets import DataTable, Static
 
 from abist_kb.config import Settings
 from abist_kb.domain.job import JobState
@@ -197,6 +197,70 @@ async def test_job_action_result_does_not_leak_to_another_job(
 
         other_body = str(app.query_one("#content > Static", Static).render())
         assert "操作結果:" not in other_body
+
+
+async def test_batch_run_decline_after_row_selection_creates_no_job(
+    container: ServiceContainer,
+) -> None:
+    container.batches.add(
+        name="定例取り込み",
+        type="web",
+        output_dir="docs/weekly",
+        items=[],
+    )
+    repo = JobRepository(container.conn)
+
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.action_goto_area("sources_batches")
+        await pilot.pause()
+
+        table = app.query_one("#batches-table", DataTable)
+        table.focus()
+        table.move_cursor(row=0)
+        await pilot.press("enter")
+        await pilot.press("e")
+        await pilot.pause()
+
+        assert len(app.screen_stack) == 2
+        await pilot.press("n")
+        await pilot.pause()
+        assert repo.list() == []
+
+
+async def test_batch_run_confirm_after_row_selection_creates_job(
+    container: ServiceContainer,
+) -> None:
+    container.batches.add(
+        name="定例取り込み",
+        type="web",
+        output_dir="docs/weekly",
+        items=[],
+    )
+    repo = JobRepository(container.conn)
+
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.action_goto_area("sources_batches")
+        await pilot.pause()
+
+        table = app.query_one("#batches-table", DataTable)
+        table.focus()
+        table.move_cursor(row=0)
+        await pilot.press("enter")
+        await pilot.press("e")
+        await pilot.pause()
+
+        assert len(app.screen_stack) == 2
+        await pilot.press("y")
+        await pilot.pause()
+        await pilot.pause()
+
+        jobs = repo.list()
+        assert len(jobs) == 1
+        assert jobs[0].kind == "batch"
 
 
 async def test_narrow_layout_collapses_nav_to_single_pane(container: ServiceContainer) -> None:

@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from nicegui import ui
 from nicegui.testing import User
 
 from abist_kb.config import Settings
@@ -18,6 +19,11 @@ from abist_kb.presentation.web.app import register_pages
 from abist_kb.presentation.web.viewmodels.container import ServiceContainer
 
 pytest_plugins = ["nicegui.testing.plugin"]
+
+
+def _select_row(user: User, marker: str, row: dict) -> None:
+    table = next(iter(user.find(kind=ui.table, marker=marker).elements))
+    table.selected = [row]
 
 
 @pytest.fixture
@@ -103,7 +109,8 @@ async def test_batch_run_decline_shows_target_and_output_without_running(
     repo = JobRepository(wired_container.conn)
 
     await user.open("/sources")
-    user.find("定例取り込み を実行").click()
+    _select_row(user, "batches-table", batch)
+    user.find("バッチ実行").click()
     await user.should_see("対象: バッチ 定例取り込み")
     await user.should_see("出力先: docs/weekly")
     await user.should_see("実行しますか?")
@@ -116,7 +123,7 @@ async def test_batch_run_decline_shows_target_and_output_without_running(
 async def test_batch_run_confirm_shows_unset_output_destination(
     user: User, wired_container: ServiceContainer
 ) -> None:
-    wired_container.batches.add(
+    batch = wired_container.batches.add(
         name="出力先なし",
         type="web",
         output_dir=None,
@@ -124,10 +131,85 @@ async def test_batch_run_confirm_shows_unset_output_destination(
     )
 
     await user.open("/sources")
-    user.find("出力先なし を実行").click()
+    _select_row(user, "batches-table", batch)
+    user.find("バッチ実行").click()
 
     await user.should_see("対象: バッチ 出力先なし")
     await user.should_see("出力先: 未設定")
+
+
+async def test_batch_run_confirm_after_selection_creates_job(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    batch = wired_container.batches.add(
+        name="定例取り込み",
+        type="web",
+        output_dir="docs/weekly",
+        items=[],
+    )
+    repo = JobRepository(wired_container.conn)
+
+    await user.open("/sources")
+    _select_row(user, "batches-table", batch)
+    user.find("バッチ実行").click()
+    await user.should_see("実行しますか?")
+    user.find("はい").click()
+    await user.should_see("実行完了")
+
+    jobs = repo.list()
+    assert len(jobs) == 1
+    assert jobs[0].kind == "batch"
+
+
+async def test_source_add_dialog_creates_source(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    await user.open("/sources")
+    user.find("ソース追加").click()
+    user.find(marker="source-display-name").type("社内Web")
+    user.find(marker="source-output-dir").type("docs/internal")
+    user.find("保存").click()
+
+    sources = wired_container.sources.list()
+    assert len(sources) == 1
+    assert sources[0]["display_name"] == "社内Web"
+
+
+async def test_source_remove_confirm_after_selection_deletes_source(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    source = wired_container.sources.add(
+        type="web",
+        display_name="削除対象",
+        connection={"url": "https://example.invalid"},
+        output_dir="docs/remove-me",
+    )
+
+    await user.open("/sources")
+    _select_row(user, "sources-table", source)
+    user.find("ソース削除").click()
+    await user.should_see("対象: ソース 削除対象")
+    user.find("はい").click()
+    await user.should_see("ソースを削除しました。")
+
+    assert wired_container.sources.list() == []
+
+
+async def test_sources_batches_page_exposes_all_web_actions(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    await user.open("/sources")
+    for label in (
+        "ソース追加",
+        "ソース編集",
+        "ソース削除",
+        "接続テスト",
+        "バッチ追加",
+        "バッチ編集",
+        "バッチ削除",
+        "バッチ実行",
+    ):
+        await user.should_see(label)
 
 
 async def test_documents_page_renders(user: User, wired_container: ServiceContainer) -> None:

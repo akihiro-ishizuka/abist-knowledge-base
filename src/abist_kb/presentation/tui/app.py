@@ -88,6 +88,9 @@ class KbApp(App[None]):
         Binding("ctrl+k", "command_palette", "パレット"),
         Binding("slash", "goto_search", "検索", key_display="/"),
         Binding("r", "refresh_view", "更新"),
+        Binding("x", "remove_selected", "選択項目を削除"),
+        Binding("t", "test_selected_source", "接続テスト"),
+        Binding("e", "run_selected_batch", "バッチ実行"),
         Binding("escape", "go_back", "戻る"),
         Binding("question_mark", "show_help", "ヘルプ", key_display="?"),
         Binding("q", "quit", "終了"),
@@ -101,7 +104,11 @@ class KbApp(App[None]):
         self._supervisor_thread: threading.Thread | None = None
         self.current_area = "dashboard"
         self.detail: tuple[str, str] | None = None  # (kind, id) e.g. ("job", "...")
-        self._job_action_results: dict[str, str] = {}
+        self._action_results: dict[tuple[str, str], str] = {}
+        self._sources_batches_action_result: str | None = None
+        self._selected_source_id: str | None = None
+        self._selected_batch_id: str | None = None
+        self._selected_source_or_batch: tuple[str, str] | None = None
 
     # -- ライフサイクル --------------------------------------------------
 
@@ -243,15 +250,41 @@ class KbApp(App[None]):
     def _render_sources_batches(self) -> None:
         sources = screens.sources_list(self.container)["sources"]
         batches = screens.batches_list(self.container)["batches"]
-        table = DataTable(id="sources-table")
-        table.add_columns("種別", "id", "name/status")
+        source_table = DataTable(id="sources-table")
+        source_table.cursor_type = "row"
+        source_table.add_columns("id", "名前", "種別", "出力先")
         for src in sources:
-            table.add_row(
-                "source", str(src.get("id", "")), str(src.get("name", src.get("status", "")))
+            source_table.add_row(
+                str(src.get("id", "")),
+                str(src.get("display_name", "")),
+                str(src.get("type", "")),
+                str(src.get("output_dir", "")),
+                key=str(src.get("id", "")),
             )
+
+        batch_table = DataTable(id="batches-table")
+        batch_table.cursor_type = "row"
+        batch_table.add_columns("id", "名前", "種別", "出力先")
         for batch in batches:
-            table.add_row("batch", str(batch.get("id", "")), str(batch.get("name", "")))
-        self._set_body(table)
+            batch_table.add_row(
+                str(batch.get("id", "")),
+                str(batch.get("name", "")),
+                str(batch.get("type", "")),
+                str(batch.get("output_dir") or "未設定"),
+                key=str(batch.get("id", "")),
+            )
+
+        widgets: list[Any] = [
+            Static("追加・編集は Web / API のみ（フォーム入力が TUI では煩雑なため）"),
+            Static("ソース"),
+            source_table,
+            _SourceActions(),
+        ]
+        widgets.extend([Static("バッチ"), batch_table, _BatchActions()])
+        widgets.append(
+            Static(self._sources_batches_action_result or "", id="sources-batches-result")
+        )
+        self._set_body(*widgets)
 
     def _render_jobs_list(self) -> None:
         jobs = screens.jobs_list(self.container)["jobs"]
@@ -276,6 +309,12 @@ class KbApp(App[None]):
         elif table_id == "documents-table" and row_key:
             self.detail = ("document", str(row_key))
             self.render_area(self.current_area)
+        elif table_id == "sources-table" and row_key:
+            self._selected_source_id = str(row_key)
+            self._selected_source_or_batch = ("source", str(row_key))
+        elif table_id == "batches-table" and row_key:
+            self._selected_batch_id = str(row_key)
+            self._selected_source_or_batch = ("batch", str(row_key))
 
     def _render_job_detail(self, job_id: str) -> None:
         self.current_area = "jobs"
@@ -291,7 +330,7 @@ class KbApp(App[None]):
             f"error: {job['error']}",
             f"progress: {job['progress']}",
         ]
-        if action_result := self._job_action_results.get(job_id):
+        if action_result := self._action_results.get(("job", job_id)):
             lines.extend(["", action_result])
         lines.extend(["", "履歴:"])
         for evt in data["history"]:
@@ -306,16 +345,31 @@ class KbApp(App[None]):
         if isinstance(result, dict) and "job" in result:
             job = result["job"]
             return f"操作結果: 成功: ジョブ {job['id']} state={job['state']}"
+        if isinstance(result, dict) and "ok" in result:
+            status = "成功" if result["ok"] else "失敗"
+            return f"操作結果: {status}: {result.get('detail', '')}"
         return "操作結果: 成功"
 
-    async def confirm_and_run(self, message: str, action: Any, *, job_id: str) -> None:
-        """破壊的操作(cancel/retry)をモーダル確認してから実行する。"""
+    async def confirm_and_run(
+        self,
+        message: str,
+        action: Any,
+        *,
+        result_key: tuple[str, str] | None = None,
+        sources_batches_result: bool = False,
+    ) -> None:
+        """確認モーダルを経由して操作し、対象に対応する領域へ結果を保存する。"""
 
         def _after(confirmed: bool | None) -> None:
             if confirmed:
                 result = action()
-                self._job_action_results[job_id] = self._format_action_result(result)
-                self.render_area(self.current_area)
+                formatted = self._format_action_result(result)
+                if result_key is not None:
+                    self._action_results[result_key] = formatted
+                if sources_batches_result:
+                    self._show_sources_batches_result(formatted)
+                else:
+                    self.render_area(self.current_area)
 
         self.push_screen(ConfirmModal(message), _after)
 
@@ -324,7 +378,11 @@ class KbApp(App[None]):
             return screens.job_cancel(self.container, job_id)
 
         self.run_worker(
-            self.confirm_and_run(f"ジョブ {job_id} をキャンセルしますか?", _do, job_id=job_id)
+            self.confirm_and_run(
+                f"ジョブ {job_id} をキャンセルしますか?",
+                _do,
+                result_key=("job", job_id),
+            )
         )
 
     def retry_job(self, job_id: str) -> None:
@@ -332,8 +390,115 @@ class KbApp(App[None]):
             return screens.job_retry(self.container, job_id)
 
         self.run_worker(
-            self.confirm_and_run(f"ジョブ {job_id} を再投入しますか?", _do, job_id=job_id)
+            self.confirm_and_run(
+                f"ジョブ {job_id} を再投入しますか?",
+                _do,
+                result_key=("job", job_id),
+            )
         )
+
+    def _source(self, source_id: str) -> dict[str, Any] | None:
+        return next(
+            (
+                source
+                for source in screens.sources_list(self.container)["sources"]
+                if source["id"] == source_id
+            ),
+            None,
+        )
+
+    def _batch(self, batch_id: str) -> dict[str, Any] | None:
+        return next(
+            (
+                batch
+                for batch in screens.batches_list(self.container)["batches"]
+                if batch["id"] == batch_id
+            ),
+            None,
+        )
+
+    def _show_sources_batches_result(self, text: str) -> None:
+        self._sources_batches_action_result = text
+        self.query_one("#sources-batches-result", Static).update(text)
+
+    def remove_source(self, source_id: str) -> None:
+        source = self._source(source_id)
+        if source is None:
+            return
+
+        def _do() -> dict[str, Any]:
+            outcome = screens.source_remove(self.container, source_id, confirmed=True)
+            if outcome.get("deleted"):
+                self._selected_source_id = None
+                self._selected_source_or_batch = None
+                self.query_one("#sources-table", DataTable).remove_row(source_id)
+            return outcome
+
+        message = (
+            f"ソース {source['display_name']} を削除しますか?\n"
+            f"出力先: {source.get('output_dir') or '未設定'}"
+        )
+        self.run_worker(
+            self.confirm_and_run(message, _do, sources_batches_result=True)
+        )
+
+    def test_source_connection(self, source_id: str) -> None:
+        result = screens.source_test_connection(self.container, source_id)
+        self._show_sources_batches_result(self._format_action_result(result))
+
+    def remove_batch(self, batch_id: str) -> None:
+        batch = self._batch(batch_id)
+        if batch is None:
+            return
+
+        def _do() -> dict[str, Any]:
+            outcome = screens.batch_remove(self.container, batch_id, confirmed=True)
+            if outcome.get("deleted"):
+                self._selected_batch_id = None
+                self._selected_source_or_batch = None
+                self.query_one("#batches-table", DataTable).remove_row(batch_id)
+            return outcome
+
+        message = (
+            f"バッチ {batch['name']} を削除しますか?\n"
+            f"出力先: {batch.get('output_dir') or '未設定'}"
+        )
+        self.run_worker(
+            self.confirm_and_run(message, _do, sources_batches_result=True)
+        )
+
+    def run_batch(self, batch_id: str) -> None:
+        batch = self._batch(batch_id)
+        if batch is None:
+            return
+
+        def _do() -> dict[str, Any]:
+            return screens.batch_run(self.container, batch_id)
+
+        message = (
+            f"バッチ {batch['name']} を実行しますか?\n"
+            f"出力先: {batch.get('output_dir') or '未設定'}"
+        )
+        self.run_worker(
+            self.confirm_and_run(message, _do, sources_batches_result=True)
+        )
+
+    def action_remove_selected(self) -> None:
+        if self.current_area != "sources_batches" or self._selected_source_or_batch is None:
+            return
+        kind, item_id = self._selected_source_or_batch
+        if kind == "source":
+            self.remove_source(item_id)
+        else:
+            self.remove_batch(item_id)
+
+    def action_test_selected_source(self) -> None:
+        if self.current_area == "sources_batches" and self._selected_source_id:
+            self.test_source_connection(self._selected_source_id)
+
+    def action_run_selected_batch(self) -> None:
+        if self.current_area == "sources_batches" and self._selected_batch_id:
+            self.run_batch(self._selected_batch_id)
 
     def _render_documents_list(self) -> None:
         docs = screens.documents_list(self.container)["documents"]
@@ -421,6 +586,44 @@ class _JobActions(Vertical):
             app.cancel_job(self.job_id)
         elif event.button.id == "job-retry":
             app.retry_job(self.job_id)
+
+
+class _SourceActions(Vertical):
+    """選択中ソースの削除・接続テスト操作。"""
+
+    def compose(self) -> ComposeResult:
+        from textual.widgets import Button
+
+        yield Button("接続テスト (t)", id="source-test", variant="primary")
+        yield Button("削除 (x)", id="source-remove", variant="error")
+
+    def on_button_pressed(self, event: Any) -> None:
+        app = self.app
+        if not isinstance(app, KbApp):
+            return
+        if event.button.id == "source-test":
+            app.action_test_selected_source()
+        elif event.button.id == "source-remove" and app._selected_source_id:
+            app.remove_source(app._selected_source_id)
+
+
+class _BatchActions(Vertical):
+    """選択中バッチの削除・実行操作。"""
+
+    def compose(self) -> ComposeResult:
+        from textual.widgets import Button
+
+        yield Button("実行 (e)", id="batch-run", variant="primary")
+        yield Button("削除 (x)", id="batch-remove", variant="error")
+
+    def on_button_pressed(self, event: Any) -> None:
+        app = self.app
+        if not isinstance(app, KbApp):
+            return
+        if event.button.id == "batch-run":
+            app.action_run_selected_batch()
+        elif event.button.id == "batch-remove" and app._selected_batch_id:
+            app.remove_batch(app._selected_batch_id)
 
 
 def run_tui(container: ServiceContainer, *, start_worker: bool = True) -> None:
