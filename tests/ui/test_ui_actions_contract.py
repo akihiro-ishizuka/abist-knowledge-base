@@ -282,7 +282,9 @@ def test_destructive_api_action_requires_confirmation(
     action_id: str, client: TestClient, container: ServiceContainer
 ) -> None:
     """§2: 破壊的操作は API で `confirmed` 無しだと 400、かつ副作用が無い。"""
-    check = API_DECLINE_CHECKS[action_id]
+    check = API_DECLINE_CHECKS.get(action_id)
+    if check is None:
+        pytest.skip(f"{action_id} は API 面を宣言していない")
     check(client, container)
 
 
@@ -685,9 +687,20 @@ async def _tui_document_delete(
 
 
 async def _tui_search_run(app: KbApp, pilot: Any, _c: ServiceContainer, _m: MonkeyPatch) -> None:
+    _m.setattr(
+        screens,
+        "search",
+        lambda _container, _query: {"results": [{"path": "docs/contract-search.md", "score": 1.0}]},
+    )
     app.action_goto_search()
     await pilot.pause()
-    app.query_one("#search-input", Input)
+    search_input = app.query_one("#search-input", Input)
+    search_input.focus()
+    await pilot.press(*"契約テスト")
+    await pilot.press("enter")
+    await pilot.pause()
+    results_text = str(app.query_one("#search-results", Static).render())
+    assert "docs/contract-search.md" in results_text
 
 
 async def _tui_chat_start(

@@ -47,3 +47,12 @@ Task 8 を完了した。`design/ui-action-matrix.yaml` を正本として、Web
 
 - Full pytest の唯一の失敗は Task 8 と無関係な既知 ANSI purity であり、今回の変更による追加失敗はない。
 - Ruff の非互換な未整形箇所が既存ファイルにも残っていたため、Task 8 の変更ファイル以外にも機械的な format-only 差分を含む。
+
+## Round 1/5 修正
+
+- TUI `search_run` の到達性チェックを、入力欄の存在確認から実操作の検証へ強化した。検索サービスを決定的な結果に差し替え、検索語を入力して Enter を送信し、`#search-results` に期待する文書パスが描画されることを確認する。入力ハンドラを削除すると失敗する。
+- API の破壊的操作確認テストは `API_DECLINE_CHECKS.get()` を使い、API surface を意図的に省略した操作を skip するよう変更した。`api_omitted_reason` 付きの正当な省略で `KeyError` にならない。
+- 検証:
+  - `uv run pytest -q tests/ui/test_ui_actions_contract.py`: `91 passed`
+  - `uv run ruff check .`: passed
+  - `uv run ruff format --check .`: `266 files already formatted`
