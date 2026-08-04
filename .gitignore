@@ -72,3 +72,6 @@ media/
 
 # Agent scratch (subagent-driven-development ledger, briefs, review packages)
 .superpowers/
+
+# Agent worktrees (scratch)
+.claude/worktrees/
