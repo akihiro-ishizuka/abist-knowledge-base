@@ -73,15 +73,21 @@ def test_all_server_tools_list_is_additions_only() -> None:
         assert actual_task_support == expected_task_support, name
 
     # kb-search 4ツール: `all` に組み込んでも `kb_search.list_tools()` 単体の
-    # 出力とバイト同一であること(=結合そのものが何も変えていないこと)を確認する。
-    # fixture(tools-list.json)との一字一句比較は行わない — 既存コード
-    # (kb_search.py、task-2で実装済み)の入力スキーマ文言に全角/半角括弧の
-    # 揺れが既にあり(fixture: （）、実装: ()、`all` 追加とは無関係の既存差分)、
-    # これは task-4 の範囲外の別問題としてレポートに記録する。
+    # 出力とバイト同一であること(=結合そのものが何も変えていないこと)を確認し、
+    # かつ fixture(tools-list.json)とも一字一句突き合わせる(kb-download 側と
+    # 同じ水準。以前は全角/半角括弧の description drift を素通りさせていたが、
+    # `test_contract_search.py::test_tools_list_matches_fixture_descriptions_and_schemas`
+    # で drift を検出・修正済みなので、ここでも fixture 一致を要求してよい)。
     kb_search_standalone = {tool.name: tool for tool in kb_search_list_tools()}
     for name, standalone_tool in kb_search_standalone.items():
         assert actual[name].inputSchema == standalone_tool.inputSchema, name
         assert actual[name].description == standalone_tool.description, name
+        expected_tool = expected[name]
+        assert actual[name].description == expected_tool["description"], name
+        assert actual[name].inputSchema == expected_tool["inputSchema"], name
+        expected_task_support = expected_tool.get("execution", {}).get("taskSupport")
+        actual_task_support = actual[name].execution.taskSupport if actual[name].execution else None
+        assert actual_task_support == expected_task_support, name
 
     # 新規ツールは compat ツールと一切名前が衝突していない(diff の主眼)。
     assert _NEW_TOOL_NAMES.isdisjoint(expected)

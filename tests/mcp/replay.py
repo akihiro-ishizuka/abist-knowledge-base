@@ -11,7 +11,26 @@
   `-32602` を含むこと・`content[0].text` が JSON としてパースできないこと
   のみを検証する(prose は zod/pydantic のバージョン固有の生成物のため)。
 - `tool_result_json`: `content[0].text` を JSON としてパースし、期待payload
-  とキー集合・値(`nondeterministic_fields` に挙がるパスは無視)を比較する。
+  と**キー集合・型のみ**を比較する(`nondeterministic_fields` に挙がるパスは
+  比較前に除去)。**値そのものは基本的に比較しない** — CI はこのリポジトリの
+  テストから生産環境の `docs/`・`data/*.sqlite` を参照できず(`tests/search/
+  test_services.py` と同じ制約)、テストは合成した小さなコーパスに対して実行
+  するため、fixture が記録した実測値(パス・件数・スコア・tokenizer 判定等)
+  と一致するはずがない。したがって `tool_result_json` の replay は「キー集合・
+  必須性・大まかな型が変わっていないこと」を保証するのみで、「返す値が正しい
+  こと」は保証しない(値の正しさは `tests/search/test_services.py` 等の単体
+  テストが別途担う)。この限界は `tests/fixtures/PROVENANCE.md` §3にも記録
+  してある — replay が「ビット互換」と呼ぶのは JSON-RPC 応答の**形**であって、
+  中身の実測値ではない。
+  例外として `_STATIC_VALUE_FIELDS` に列挙したフィールドだけは値まで比較する。
+  これは「入力データや索引の中身に一切依存しない、コード上のリテラル文字列や
+  設定値」であることを個別に確認した上で追加したホワイトリストであり、
+  fixture 側を書き換えずに(`fixture そのものは一切書き換えない`原則を保った
+  まま)値検証を上乗せする唯一の手段。対象を広げる際は、その値が本当に
+  データ非依存(索引の中身にもテスト実行環境にも左右されない)であることを
+  確認すること — 大半のフィールド(パス・件数・tokenizer 判定結果・
+  vectorAvailable 等の bool フラグを含む)は実際には索引/環境依存であり、
+  安易にこの一覧へ加えると CI で偽陽性の失敗を招く。
 """
 
 from __future__ import annotations
@@ -119,6 +138,38 @@ def _structural_mismatch(expected: Any, actual: Any, *, path: str) -> str | None
     return None
 
 
+#: `{case} 相対パス (例: "kb-search/get_document/path_traversal_attempt")` ->
+#: 値まで完全一致を要求するドット区切りフィールドパスのタプル。
+#: ここに載せてよいのは、引数・索引・実行環境の値に一切依存しない、コード上の
+#: リテラル文字列/設定値だけ(モジュール docstring 参照)。現時点で確認できた
+#: のは以下の1件のみ: `get_document` のパス封じ込め拒否メッセージ
+#: (`kb_search.py` の `"docs/ の外は参照できません"`)は引数のパス文字列を
+#: 含まない固定文言であり、値まで安全に比較できる。他の error 系フィールド
+#: (`nonexistent_path`/`nonexistent_chunk_id`/`invalid_url_format`/
+#: `unknown_batch_name` 等)はいずれも引数値やサンドボックスパスをメッセージに
+#: 埋め込んでおり、fixture の実測値とテスト実行時の値が一致しないため対象外。
+_STATIC_VALUE_FIELDS: dict[str, tuple[str, ...]] = {
+    "kb-search/get_document/path_traversal_attempt": ("error",),
+}
+
+
+def _value_mismatch(expected: Any, actual: Any, *, field_path: str) -> str | None:
+    node_expected, node_actual = expected, actual
+    for part in field_path.split("."):
+        if not isinstance(node_expected, dict) or part not in node_expected:
+            return None  # フィールド自体が無ければ構造比較側が既に検出済み
+        if not isinstance(node_actual, dict) or part not in node_actual:
+            return None
+        node_expected = node_expected[part]
+        node_actual = node_actual[part]
+    if node_expected != node_actual:
+        return (
+            f"$.{field_path}: 値不一致(静的フィールド) "
+            f"expected={node_expected!r} actual={node_actual!r}"
+        )
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class ReplayOutcome:
     """1ケースの判定結果。`ok=False` なら `reason` に人間向けの理由を持つ。"""
@@ -165,6 +216,15 @@ def check_result(fixture: Fixture, actual: types.CallToolResult) -> ReplayOutcom
         mismatch = _structural_mismatch(expected_norm, actual_norm, path="$")
         if mismatch is not None:
             return ReplayOutcome(ok=False, reason=mismatch)
+
+        static_key = "/".join(
+            fixture.path.parts[fixture.path.parts.index("mcp") + 1 :]
+        ).removesuffix(".json")
+        for field_path in _STATIC_VALUE_FIELDS.get(static_key, ()):
+            value_mismatch = _value_mismatch(expected, actual_obj, field_path=field_path)
+            if value_mismatch is not None:
+                return ReplayOutcome(ok=False, reason=value_mismatch)
+
         return ReplayOutcome(ok=True)
 
     return ReplayOutcome(ok=False, reason=f"未知の response_kind です: {fixture.response_kind}")

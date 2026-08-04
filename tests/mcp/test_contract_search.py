@@ -25,9 +25,10 @@ from abist_kb.application.index_service import IndexService
 from abist_kb.infrastructure.db.connection import connect
 from abist_kb.infrastructure.db.documents_repo import DocumentRepository
 from abist_kb.infrastructure.db.schema import ensure_app_schema
-from abist_kb.presentation.mcp.kb_search import KbSearchTools
+from abist_kb.presentation.mcp.kb_search import KbSearchTools, list_tools
 
 FIXTURES_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "mcp" / "kb-search"
+TOOLS_LIST_FIXTURE = FIXTURES_DIR.parent / "tools-list.json"
 
 _SEEDED_CONTENT = """---
 title: "テスト文書"
@@ -231,3 +232,29 @@ def test_index_status_call_1_and_call_2_are_idempotent(env: Env) -> None:
     first = env.tools.index_status({})
     second = env.tools.index_status({})
     assert first.content[0].text == second.content[0].text
+
+
+# ---------------------------------------------------------------------------
+# tools/list(`test_contract_download.py::test_tools_list_matches_fixture_schemas`
+# と同じ水準で kb-search 側も一字一句の description/schema 一致を要求する。
+# 旧実装は全角括弧の description を半角括弧で再実装しており、この assertion が
+# 無かったために `tools/list` の契約(=LLMクライアントが読む文言)が drift した
+# まま気付かれなかった)。
+# ---------------------------------------------------------------------------
+
+
+def test_tools_list_matches_fixture_descriptions_and_schemas() -> None:
+    tools_list_fixture = json.loads(TOOLS_LIST_FIXTURE.read_text(encoding="utf-8"))
+    expected_tools = {
+        tool["name"]: tool for tool in tools_list_fixture["servers"]["kb-search"]["tools"]
+    }
+    actual_tools = {tool.name: tool for tool in list_tools()}
+
+    assert set(actual_tools) == set(expected_tools)
+    for name, expected in expected_tools.items():
+        actual = actual_tools[name]
+        assert actual.description == expected["description"], name
+        assert actual.inputSchema == expected["inputSchema"], name
+        expected_task_support = expected.get("execution", {}).get("taskSupport")
+        actual_task_support = actual.execution.taskSupport if actual.execution else None
+        assert actual_task_support == expected_task_support, name

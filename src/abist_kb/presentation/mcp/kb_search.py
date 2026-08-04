@@ -31,7 +31,7 @@ from abist_kb.presentation.mcp.payloads import error_result, ok_result
 #: のスキーマ互換もビット互換契約の対象)。
 TOOL_DESCRIPTIONS: dict[str, str] = {
     "search_kb": (
-        "ナレッジベースを検索し、出典(パス・行番号)付きで返す。全文検索(FTS5/BM25)"
+        "ナレッジベースを検索し、出典（パス・行番号）付きで返す。全文検索（FTS5/BM25）"
         "を基本とし、埋め込みがある場合はベクトル検索と RRF で統合する。結果の "
         "index_stale が true の場合、索引後にファイルが変わっているため行番号を"
         "信用せず get_document で読み直すこと。同一記事が複数パスに存在する場合は"
@@ -40,13 +40,13 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
     "get_document": (
         "文書の原文を取得する。検索結果の行番号が陳腐化している場合や、前後の文脈を"
         "確認したい場合に使う。行範囲を指定すると該当部分だけを行番号付きで返し、"
-        "その範囲の content_hash(range_hash)も返す(可視化の SceneSpec "
-        "sources[].content_hash にはこの値を使う)。"
+        "その範囲の content_hash（range_hash）も返す（可視化の SceneSpec "
+        "sources[].content_hash にはこの値を使う）。"
     ),
     "get_chunk": "検索結果の chunk_id からチャンク本文とその行範囲を取得する。",
     "index_status": (
-        "コーパスごとの索引の状態(文書数・チャンク数・埋め込み数・tokenizer・"
-        "最終索引日時)を返す。検索結果が不自然なときや、索引が最新かを確認したい"
+        "コーパスごとの索引の状態（文書数・チャンク数・埋め込み数・tokenizer・"
+        "最終索引日時）を返す。検索結果が不自然なときや、索引が最新かを確認したい"
         "ときに使う。"
     ),
 }
@@ -54,17 +54,19 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
 
 def list_tools() -> list[types.Tool]:
     """`tools/list` に返す4ツールのスキーマ(`tests/fixtures/mcp/tools-list.json` 準拠)。"""
+    forbidden = types.ToolExecution(taskSupport="forbidden")
     return [
         types.Tool(
             name="search_kb",
             description=TOOL_DESCRIPTIONS["search_kb"],
+            execution=forbidden,
             inputSchema={
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "additionalProperties": False,
                 "properties": {
                     "corpus": {
                         "description": (
-                            "検索対象。work=実務資料(既定) / reference=CATIA原本(B32doc)"
+                            "検索対象。work=実務資料（既定） / reference=CATIA原本（B32doc）"
                         ),
                         "enum": ["work", "reference"],
                         "type": "string",
@@ -75,7 +77,7 @@ def list_tools() -> list[types.Tool]:
                         "type": "string",
                     },
                     "limit": {
-                        "description": "返す件数(既定10)",
+                        "description": "返す件数（既定10）",
                         "maximum": 50,
                         "minimum": 1,
                         "type": "integer",
@@ -85,7 +87,7 @@ def list_tools() -> list[types.Tool]:
                         "type": "string",
                     },
                     "query": {
-                        "description": "検索したい質問または識別子(日本語自然文可)",
+                        "description": "検索したい質問または識別子（日本語自然文可）",
                         "minLength": 1,
                         "type": "string",
                     },
@@ -107,12 +109,13 @@ def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_document",
             description=TOOL_DESCRIPTIONS["get_document"],
+            execution=forbidden,
             inputSchema={
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "additionalProperties": False,
                 "properties": {
                     "context": {
-                        "description": "前後に含める行数(既定0)",
+                        "description": "前後に含める行数（既定0）",
                         "maximum": 50,
                         "minimum": 0,
                         "type": "integer",
@@ -124,7 +127,7 @@ def list_tools() -> list[types.Tool]:
                         "type": "string",
                     },
                     "start_line": {
-                        "description": "開始行(1始まり)",
+                        "description": "開始行（1始まり）",
                         "minimum": 1,
                         "type": "integer",
                     },
@@ -136,6 +139,7 @@ def list_tools() -> list[types.Tool]:
         types.Tool(
             name="get_chunk",
             description=TOOL_DESCRIPTIONS["get_chunk"],
+            execution=forbidden,
             inputSchema={
                 "$schema": "http://json-schema.org/draft-07/schema#",
                 "additionalProperties": False,
@@ -146,7 +150,7 @@ def list_tools() -> list[types.Tool]:
                         "type": "integer",
                     },
                     "corpus": {
-                        "description": "chunk_id が属するコーパス(既定 work)",
+                        "description": "chunk_id が属するコーパス（既定 work）",
                         "enum": ["work", "reference"],
                         "type": "string",
                     },
@@ -158,6 +162,7 @@ def list_tools() -> list[types.Tool]:
         types.Tool(
             name="index_status",
             description=TOOL_DESCRIPTIONS["index_status"],
+            execution=forbidden,
             inputSchema={"properties": {}, "type": "object"},
         ),
     ]

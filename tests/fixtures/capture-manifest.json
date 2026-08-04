@@ -6,9 +6,9 @@
       "subject": "fix(m4): reference コーパスの source を実測値 manual に修正(b32doc は誤り)"
     },
     "capture-manifest.json (this file)": {
-      "commit": "6b6a3acf091c0490a19040dcb7560265bd32acfa",
-      "date": "2026-08-04T05:34:50+09:00",
-      "subject": "fix(m4): reference コーパスの source を実測値 manual に修正(b32doc は誤り)"
+      "commit": "69303ba8080e361b5fa57dfe3add06e6a06de4d0",
+      "date": "2026-08-04T06:00:37+09:00",
+      "subject": "feat(m4): IndexService/SearchService と index/search CLI を実装(task4)"
     },
     "embedding": {
       "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
@@ -46,9 +46,9 @@
       "subject": "fix(m4): reference コーパスの source を実測値 manual に修正(b32doc は誤り)"
     },
     "root": {
-      "commit": "6b6a3acf091c0490a19040dcb7560265bd32acfa",
-      "date": "2026-08-04T05:34:50+09:00",
-      "subject": "fix(m4): reference コーパスの source を実測値 manual に修正(b32doc は誤り)"
+      "commit": "69303ba8080e361b5fa57dfe3add06e6a06de4d0",
+      "date": "2026-08-04T06:00:37+09:00",
+      "subject": "feat(m4): IndexService/SearchService と index/search CLI を実装(task4)"
     }
   },
   "categories": {
@@ -394,12 +394,12 @@
           "sha256": "11dce4ae76a450fa325a88133d4282cff549f31fe82312927b1e16b74be90ef0"
         },
         {
-          "bytes": 46213,
+          "bytes": 48465,
           "path": "PROVENANCE.md",
-          "sha256": "ea8992facd758c49237690fe4b53ccb57145a5573d9289e5f419f03074b057fd"
+          "sha256": "f6338e867e68bf2f7157efa79617173153c5413e4e10004143901674cfaaeb3f"
         }
       ],
-      "total_bytes": 46234
+      "total_bytes": 48486
     }
   },
   "exclusions_registry": [
