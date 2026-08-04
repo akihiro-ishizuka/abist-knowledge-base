@@ -21,6 +21,7 @@ from abist_kb.application.audit.backfill_metadata import (
 )
 from abist_kb.application.audit.check_contradictions import CheckContradictionsService
 from abist_kb.application.audit.find_duplicates import FindDuplicatesService
+from abist_kb.application.audit.parallel_compare import default_repo_root, run_parallel_compare
 from abist_kb.application.audit.search_quality import (
     DEFAULT_QUERIES_RELATIVE_PATH,
     compare_with_previous,
@@ -123,6 +124,87 @@ def search_quality(
             f"{warning['previous']:.4f} -> {warning['current']:.4f}"
         )
     cli_ctx.presenter.info(f"レポート: {report_path}")
+
+
+@audit_app.command("parallel-compare")
+def parallel_compare(
+    ctx: typer.Context,
+    corpus: Annotated[
+        str, typer.Option("--corpus", help="検索品質比較に使う索引コーパス(work/reference)。")
+    ] = "work",
+    queries: Annotated[
+        Path | None, typer.Option("--queries", help="評価クエリの JSON Lines ファイル。")
+    ] = None,
+    skip_search_quality: Annotated[
+        bool,
+        typer.Option(
+            "--skip-search-quality", help="検索品質(22クエリ)の比較を省略する(索引未構築時)。"
+        ),
+    ] = False,
+    repo_root: Annotated[
+        Path | None,
+        typer.Option(
+            "--repo-root",
+            help="pytest を実行する abist-knowledge-base ソースツリーのルート"
+            "(既定: このパッケージの所在から自動検出。`--root` とは別物)。",
+        ),
+    ] = None,
+) -> None:
+    """M9 並行稼働比較(設計書 §14 step 8): 同期・MCP・検索品質を1コマンドで比較する。
+
+    M3 のバイト同一検証(`tests/sources/test_e2e_byte_identity.py`)、
+    M5 の MCP契約diff(`tests/mcp/test_all_server_tools_list_diff.py`)、
+    M4 の検索品質評価(`audit search-quality` と同じ計算)を1回で実行し、
+    まとめて記録する。読み取り専用(`corpus-write` リースは取得しない)。
+    旧リポジトリが無い環境では同期比較セクションが自動的に `skipped` になる。
+    """
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+
+    conn = None
+    queries_path = None
+    if not skip_search_quality:
+        index_path = _index_path_for(settings, corpus)
+        if index_path.is_file():
+            queries_path = _resolve_queries_path(settings, queries)
+            conn = connect(index_path, read_only=True)
+
+    try:
+        report = run_parallel_compare(
+            repo_root=repo_root or default_repo_root(),
+            work_index_conn=conn,
+            queries_path=queries_path,
+            reports_dir=settings.reports_dir,
+            docs_dir=settings.docs_dir,
+        )
+    finally:
+        if conn is not None:
+            conn.close()
+
+    result = report.as_dict()
+    if cli_ctx.presenter.is_json:
+        cli_ctx.presenter.json_result(result)
+        return
+
+    cli_ctx.presenter.line(f"同期・収集(バイト同一): {report.sync_and_collection.status}")
+    cli_ctx.presenter.line(f"MCP契約diff: {report.mcp_contract.status}")
+    sq_status = report.search_quality.get("status", "skipped")
+    cli_ctx.presenter.line(f"検索品質(22クエリ): {sq_status}")
+    if sq_status == "ok":
+        for method, metrics in report.search_quality["macro"].items():
+            cli_ctx.presenter.line(
+                f"  {method}: recall5={metrics['recall5']:.4f} mrr={metrics['mrr']:.4f} "
+                f"ndcg10={metrics['ndcg10']:.4f}"
+            )
+        for warning in report.search_quality.get("warnings", []):
+            cli_ctx.presenter.warning(
+                f"{warning['method']}/{warning['metric']} が悪化しました: "
+                f"{warning['previous']:.4f} -> {warning['current']:.4f}"
+            )
+    if not report.all_ok():
+        cli_ctx.presenter.warning(
+            "並行比較で不一致・失敗が検出されました。詳細は上記を確認してください。"
+        )
 
 
 @audit_app.command("integrity")
