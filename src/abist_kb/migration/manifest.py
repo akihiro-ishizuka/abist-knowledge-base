@@ -30,6 +30,9 @@ class StepRecord:
     """除外されたアイテム。各要素は最低限 `{"path": ..., "reason": ...}`。"""
     started_at: str = ""
     finished_at: str = ""
+    details: dict[str, Any] = field(default_factory=dict)
+    """任意の工程固有データ(例: `.env` キー名一覧、埋め込み工程の進捗ログパス)。
+    値そのもの(秘密情報等)を入れてはならない。"""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -42,6 +45,7 @@ class StepRecord:
             "excluded": self.excluded,
             "started_at": self.started_at,
             "finished_at": self.finished_at,
+            "details": self.details,
         }
 
     @staticmethod
@@ -56,6 +60,7 @@ class StepRecord:
             excluded=list(data.get("excluded", [])),
             started_at=data.get("started_at", ""),
             finished_at=data.get("finished_at", ""),
+            details=dict(data.get("details", {})),
         )
 
 

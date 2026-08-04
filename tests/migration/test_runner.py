@@ -70,6 +70,78 @@ def test_run_imports_sync_state_rows(old_repo: Path, tmp_path: Path) -> None:
     assert row == ("docs/a.md", "git")
 
 
+def test_run_resolves_source_id_by_creating_matching_source(old_repo: Path, tmp_path: Path) -> None:
+    """`source_id` は `sources` テーブルとの突合(無ければ最小限の新規作成)で解決され、
+    NULL のまま放置されない(旧行の source='git' に一致する sources.type='git' が
+    作られ、その id が documents.source_id へ入る)。
+    """
+    build_dir, manifest_path, _to_root = _run_once(old_repo, tmp_path)
+    manifest = load_manifest(manifest_path)
+    assert manifest is not None
+    step = manifest.steps["import_sync_state"]
+    assert step.counts["source_id_resolved"] == 1
+    assert step.counts["source_id_unresolved"] == 0
+
+    conn = sqlite3.connect(build_dir / "app.sqlite")
+    try:
+        doc_source_id = conn.execute(
+            "SELECT source_id FROM documents WHERE path = 'docs/a.md'"
+        ).fetchone()[0]
+        assert doc_source_id is not None
+        source_type = conn.execute(
+            "SELECT type FROM sources WHERE id = ?", (doc_source_id,)
+        ).fetchone()[0]
+        assert source_type == "git"
+    finally:
+        conn.close()
+
+
+def test_run_records_unresolvable_source_id_with_reason(old_repo: Path, tmp_path: Path) -> None:
+    """旧行の source が空の場合、source_id は NULL のままだが manifest に理由付きで
+    記録される(黙って NULL にしない)。
+    """
+    import sqlite3 as _sqlite3
+
+    sync_db = old_repo / "data" / "sync-state.sqlite"
+    conn = _sqlite3.connect(sync_db)
+    conn.execute(
+        "INSERT INTO documents VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            "docs/no-source.md",
+            "22222222-2222-2222-2222-222222222222",
+            None,
+            "work",
+            "active",
+            "NoSource",
+            "synced",
+            "2026-07-29T07:09:56Z",
+            "2026-07-29T07:09:56Z",
+        ),
+    )
+    (old_repo / "docs" / "no-source.md").write_text("本文", encoding="utf-8")
+    conn.commit()
+    conn.close()
+
+    build_dir, manifest_path, _to_root = _run_once(old_repo, tmp_path)
+    manifest = load_manifest(manifest_path)
+    assert manifest is not None
+    step = manifest.steps["import_sync_state"]
+    assert step.counts["source_id_unresolved"] == 1
+    unresolved_paths = [e["path"] for e in step.excluded]
+    assert "docs/no-source.md" in unresolved_paths
+    for entry in step.excluded:
+        assert entry["reason"]
+
+    conn = sqlite3.connect(build_dir / "app.sqlite")
+    try:
+        source_id = conn.execute(
+            "SELECT source_id FROM documents WHERE path = 'docs/no-source.md'"
+        ).fetchone()[0]
+    finally:
+        conn.close()
+    assert source_id is None
+
+
 def test_run_is_idempotent_on_second_invocation(old_repo: Path, tmp_path: Path) -> None:
     build_dir, manifest_path, to_root = _run_once(old_repo, tmp_path)
     manifest_after_first = load_manifest(manifest_path)

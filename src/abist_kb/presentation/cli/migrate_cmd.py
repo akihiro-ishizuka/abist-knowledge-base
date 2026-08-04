@@ -120,6 +120,15 @@ def migrate_run(
         bool,
         typer.Option("--swap/--no-swap", help="検証は別途 verify で行う。既定では swap しない。"),
     ] = False,
+    with_embeddings: Annotated[
+        bool,
+        typer.Option(
+            "--with-embeddings/--no-embeddings",
+            help="埋め込み再生成工程(§11.2)も実行する。実測52,000チャンクで約100分。"
+            "中断しても未処理チャンクのみ次回実行で処理される(再開可能)。"
+            "進捗は <build-dir>/logs/embedding-progress.log に追記される。",
+        ),
+    ] = False,
 ) -> None:
     """`plan.json` に従って移行先を構築する(再開可能)。"""
     cli_ctx = get_context(ctx)
@@ -135,7 +144,13 @@ def migrate_run(
     sandbox_dir = effective_build_dir.parent / f"{to_root.name}.migration-sandbox"
 
     manifest = run_migration(
-        plan, manifest, manifest_path, from_root, effective_build_dir, sandbox_dir
+        plan,
+        manifest,
+        manifest_path,
+        from_root,
+        effective_build_dir,
+        sandbox_dir,
+        run_embeddings=with_embeddings,
     )
     save_manifest(manifest, manifest_path)
 
@@ -166,6 +181,34 @@ def migrate_verify(
     manifest_path: Annotated[
         Path, typer.Option("--manifest", help="migration-manifest.json のパス。")
     ],
+    search_quality_baseline: Annotated[
+        Path | None,
+        typer.Option(
+            "--search-quality-baseline",
+            help="旧システムの評価baseline.json(§11.4のRecall@5比較・出典行一致率の"
+            "基準)。省略時は search_quality 条件を未計測のまま fail-closed する。",
+        ),
+    ] = None,
+    search_quality_index_db: Annotated[
+        Path | None,
+        typer.Option(
+            "--search-quality-index-db",
+            help="Recall@5比較を実行する移行先の work索引DB(未指定なら計測しない)。",
+        ),
+    ] = None,
+    search_quality_docs_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--search-quality-docs-dir", help="評価対象の docs/ ルート(既定: 移行先docs/)。"
+        ),
+    ] = None,
+    search_quality_queries: Annotated[
+        Path | None,
+        typer.Option(
+            "--search-quality-queries",
+            help="評価クエリのjsonl(既定: tests/fixtures/eval/queries.jsonl、M1採取分)。",
+        ),
+    ] = None,
 ) -> None:
     """manifest を §11.4 の検証条件と突合する。"""
     cli_ctx = get_context(ctx)
@@ -177,7 +220,37 @@ def migrate_verify(
     # 一時ビルドディレクトリ(既定の命名規約)を検証対象にする。
     build_dir_name = f"{to_root.name}.migration-build"
     content_dir = to_root if manifest.swapped_in else to_root.parent / build_dir_name
-    result = verify_migration(manifest, Path(manifest.from_root), content_dir)
+
+    search_quality_kwargs: dict[str, object] = {}
+    index_conn = None
+    if search_quality_baseline is not None and search_quality_index_db is not None:
+        import json
+        import sqlite3
+
+        from abist_kb.application.audit.search_quality import (
+            DEFAULT_QUERIES_RELATIVE_PATH,
+            load_queries,
+        )
+
+        baseline_data = json.loads(search_quality_baseline.read_text(encoding="utf-8"))
+        queries_path = search_quality_queries or DEFAULT_QUERIES_RELATIVE_PATH
+        queries_data = load_queries(queries_path)
+        index_conn = sqlite3.connect(f"file:{search_quality_index_db.as_posix()}?mode=ro", uri=True)
+        index_conn.row_factory = sqlite3.Row
+        search_quality_kwargs = {
+            "search_quality_conn": index_conn,
+            "search_quality_docs_dir": search_quality_docs_dir or (content_dir / "docs"),
+            "search_quality_baseline": baseline_data,
+            "search_quality_queries": queries_data,
+        }
+
+    try:
+        result = verify_migration(
+            manifest, Path(manifest.from_root), content_dir, **search_quality_kwargs
+        )
+    finally:
+        if index_conn is not None:
+            index_conn.close()
     if cli_ctx.presenter.is_json:
         cli_ctx.presenter.json_result(result.to_dict())
     else:

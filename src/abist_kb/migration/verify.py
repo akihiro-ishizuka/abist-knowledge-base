@@ -4,14 +4,81 @@ from __future__ import annotations
 
 import hashlib
 import json
+import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from abist_kb.application.search_service import ProviderFactory, default_provider_factory
 from abist_kb.migration.manifest import Manifest
 
 _RECALL_TOLERANCE = 0.01
 _CITATION_MIN_AGREEMENT = 0.95
+_DEFAULT_SEARCH_QUALITY_METHOD = "hybrid"
+
+
+def _citation_key(row: dict[str, Any]) -> tuple[Any, Any, Any]:
+    return (row.get("path"), row.get("start_line"), row.get("end_line"))
+
+
+def _citation_agreement(
+    baseline_per_query: list[dict[str, Any]],
+    new_per_query: list[dict[str, Any]],
+    method: str,
+) -> float:
+    """baseline/newそれぞれのクエリ単位 folded top5 引用行(path+行範囲)の一致率。
+
+    baseline の引用行集合を分母(何を再現できているべきか)とし、new 側に
+    同じ引用行が含まれる割合をクエリごとに算出してマクロ平均する。
+    baseline 側に引用が無いクエリ(ゼロヒット)は分母0のため比較対象から除く。
+    """
+    new_by_id = {q["id"]: q for q in new_per_query}
+    ratios: list[float] = []
+    for base_q in baseline_per_query:
+        base_result = base_q.get("results", {}).get(method)
+        if base_result is None:
+            continue
+        base_keys = {_citation_key(r) for r in base_result.get("folded", [])[:5]}
+        if not base_keys:
+            continue
+        new_q = new_by_id.get(base_q["id"])
+        new_result = (new_q or {}).get("results", {}).get(method, {})
+        new_keys = {_citation_key(r) for r in new_result.get("folded", [])[:5]}
+        ratios.append(len(base_keys & new_keys) / len(base_keys))
+    return (sum(ratios) / len(ratios)) if ratios else 0.0
+
+
+def measure_search_quality(
+    conn: sqlite3.Connection,
+    docs_dir: Path,
+    *,
+    baseline: dict[str, Any],
+    queries: list[dict[str, Any]],
+    method: str = _DEFAULT_SEARCH_QUALITY_METHOD,
+    embedding_provider_factory: ProviderFactory = default_provider_factory,
+) -> tuple[float, float, float]:
+    """移行先の索引DBに対して M4 のクエリ集合を実際に実行し、baseline と比較する。
+
+    §11.4: Recall@5 は baseline との差分が `_RECALL_TOLERANCE` 以内、出典行一致率は
+    `_CITATION_MIN_AGREEMENT` 以上。ここでは実測値そのもの
+    (recall_before/recall_after/citation_agreement)を返すだけで、判定は
+    `_check_search_quality()` が行う。
+    """
+    # ローカル import: application.audit は infrastructure.ai(埋め込みモデル)へ
+    # 依存し、migration パッケージの他モジュールからは重い依存を持ち込みたくないため。
+    from abist_kb.application.audit.search_quality import evaluate
+
+    report = evaluate(
+        conn,
+        queries,
+        docs_dir=docs_dir,
+        methods=(method,),
+        embedding_provider_factory=embedding_provider_factory,
+    )
+    recall_before = float(baseline["macro"][method]["recall5"])
+    recall_after = float(report["macro"][method]["recall5"])
+    citation_agreement = _citation_agreement(baseline["per_query"], report["per_query"], method)
+    return recall_before, recall_after, citation_agreement
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,8 +222,40 @@ def verify_migration(
     recall_before: float | None = None,
     recall_after: float | None = None,
     citation_agreement: float | None = None,
+    search_quality_conn: sqlite3.Connection | None = None,
+    search_quality_docs_dir: Path | None = None,
+    search_quality_baseline: dict[str, Any] | None = None,
+    search_quality_queries: list[dict[str, Any]] | None = None,
+    search_quality_method: str = _DEFAULT_SEARCH_QUALITY_METHOD,
+    embedding_provider_factory: ProviderFactory = default_provider_factory,
 ) -> VerifyResult:
-    """§11.4 の検証条件を manifest と移行先の実ファイルに対して確認する。"""
+    """§11.4 の検証条件を manifest と移行先の実ファイルに対して確認する。
+
+    `recall_before`/`recall_after`/`citation_agreement` を直接渡せば(呼び出し側で
+    既に計測済みの場合)そのまま使う。渡されず、代わりに
+    `search_quality_conn`/`search_quality_baseline`/`search_quality_queries` が
+    揃っている場合は `measure_search_quality()` で実際に計測する
+    (`tests/fixtures/eval/baseline.json` と M4 の評価クエリ集合を接続先の
+    索引DBに対して実行し、Recall@5低下・出典行一致率を測る)。
+    どちらも無ければ従来どおり「未計測」として fail-closed する。
+    """
+    if (
+        recall_before is None
+        and recall_after is None
+        and citation_agreement is None
+        and search_quality_conn is not None
+        and search_quality_baseline is not None
+        and search_quality_queries is not None
+    ):
+        recall_before, recall_after, citation_agreement = measure_search_quality(
+            search_quality_conn,
+            search_quality_docs_dir or to_root / "docs",
+            baseline=search_quality_baseline,
+            queries=search_quality_queries,
+            method=search_quality_method,
+            embedding_provider_factory=embedding_provider_factory,
+        )
+
     conditions = [
         _check_markdown_bytes(manifest, from_root, to_root),
         _check_excluded_have_reason(manifest),
