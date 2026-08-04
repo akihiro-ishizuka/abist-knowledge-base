@@ -78,3 +78,6 @@ media/
 
 # Pre-force-sync backups (local safety copies)
 backup/
+
+# Project-local agent worktrees
+.worktrees/

@@ -1,0 +1,136 @@
+screens:
+  dashboard:
+    label: ダッシュボード
+    actions: {}
+
+  sources_batches:
+    label: ソース・バッチ
+    actions:
+      source_add:
+        label: ソース追加
+        destructive: false
+        surfaces: [web, api]
+        tui_omitted_reason: フォーム入力が TUI では煩雑なため Web/API に限定
+      source_edit:
+        label: ソース編集
+        destructive: false
+        surfaces: [web, api]
+        tui_omitted_reason: フォーム入力が TUI では煩雑なため Web/API に限定
+      source_remove:
+        label: ソース削除
+        destructive: true
+        surfaces: [web, tui, api]
+      source_test_connection:
+        label: ソース接続テスト
+        destructive: false
+        surfaces: [web, tui, api]
+      batch_add:
+        label: バッチ追加
+        destructive: false
+        surfaces: [web, api]
+        tui_omitted_reason: フォーム入力が TUI では煩雑なため Web/API に限定
+      batch_edit:
+        label: バッチ編集
+        destructive: false
+        surfaces: [web, api]
+        tui_omitted_reason: フォーム入力が TUI では煩雑なため Web/API に限定
+      batch_remove:
+        label: バッチ削除
+        destructive: true
+        surfaces: [web, tui, api]
+      batch_run:
+        label: バッチ実行
+        destructive: false
+        surfaces: [web, tui, api]
+
+  jobs:
+    label: ジョブ
+    actions:
+      job_cancel:
+        label: ジョブキャンセル
+        destructive: true
+        surfaces: [web, tui, api]
+      job_retry:
+        label: ジョブ再試行
+        destructive: false
+        surfaces: [web, tui, api]
+
+  documents:
+    label: 文書
+    actions:
+      document_update_metadata:
+        label: 文書メタデータ編集（status/document_type のみ）
+        destructive: false
+        surfaces: [web, tui, api]
+      document_delete:
+        label: 文書削除
+        destructive: true
+        surfaces: [web, tui, api]
+
+  search:
+    label: 検索
+    actions:
+      search_run:
+        label: 検索実行
+        destructive: false
+        surfaces: [web, tui, api]
+
+  chat:
+    label: チャット
+    actions:
+      chat_start:
+        label: 会話開始
+        destructive: false
+        surfaces: [web, tui, api]
+      chat_ask:
+        label: 質問
+        destructive: false
+        surfaces: [web, tui, api]
+      chat_history:
+        label: 会話履歴
+        destructive: false
+        surfaces: [web, tui, api]
+
+  visualization:
+    label: 可視化
+    actions:
+      visualization_validate:
+        label: SceneSpec 検証
+        destructive: false
+        surfaces: [web, tui, api]
+      visualization_submit_render:
+        label: レンダリング投入
+        destructive: false
+        surfaces: [web, tui, api]
+      visualization_deps:
+        label: 可視化依存関係診断
+        destructive: false
+        surfaces: [web, tui, api]
+
+  quality:
+    label: 品質
+    actions:
+      quality_run_integrity:
+        label: 整合性監査
+        destructive: false
+        surfaces: [web, tui, api]
+      quality_run_duplicates:
+        label: 重複監査
+        destructive: false
+        surfaces: [web, tui, api]
+      quality_run_contradictions:
+        label: 矛盾候補監査
+        destructive: false
+        surfaces: [web, tui, api]
+      quality_run_search_quality:
+        label: 検索品質監査
+        destructive: false
+        surfaces: [web, tui, api]
+      quality_run_backfill_metadata:
+        label: メタデータ補完監査（apply=false / dry-run）
+        destructive: false
+        surfaces: [web, tui, api]
+
+  settings:
+    label: 設定・診断
+    actions: {}
