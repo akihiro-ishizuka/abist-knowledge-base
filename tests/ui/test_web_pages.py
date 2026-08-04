@@ -253,6 +253,52 @@ async def test_documents_page_renders(user: User, wired_container: ServiceContai
     await user.open("/documents")
 
 
+async def test_document_detail_updates_only_editable_metadata(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    wired_container.documents.upsert(
+        {
+            "path": "editable.md",
+            "source": "manual",
+            "status": "draft",
+            "document_type": "memo",
+        }
+    )
+
+    await user.open("/documents/editable.md")
+    await user.should_see("読み取り専用")
+    user.find(marker="document-status").clear().type("active")
+    user.find(marker="document-type").clear().type("guide")
+    user.find("メタデータを保存").click()
+
+    updated = wired_container.documents.get("editable.md")
+    assert updated["status"] == "active"
+    assert updated["document_type"] == "guide"
+    assert updated["source"] == "manual"
+
+
+async def test_document_delete_decline_preserves_document_and_audit_count(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    wired_container.documents.upsert(
+        {"path": "keep.md", "source": "manual", "status": "active"}
+    )
+    audit_before = wired_container.conn.execute(
+        "SELECT COUNT(*) FROM audit_events"
+    ).fetchone()[0]
+
+    await user.open("/documents/keep.md")
+    user.find("文書を削除").click()
+    await user.should_see("対象パス: keep.md")
+    user.find("いいえ").click()
+
+    assert wired_container.documents.get_or_none("keep.md") is not None
+    audit_after = wired_container.conn.execute(
+        "SELECT COUNT(*) FROM audit_events"
+    ).fetchone()[0]
+    assert audit_after == audit_before
+
+
 async def test_search_page_renders(user: User, wired_container: ServiceContainer) -> None:
     await user.open("/search")
     await user.should_see("検索")

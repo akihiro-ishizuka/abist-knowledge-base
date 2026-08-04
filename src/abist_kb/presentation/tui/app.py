@@ -559,10 +559,55 @@ class KbApp(App[None]):
             self._set_body(Static(f"エラー: {data['error']['code']} - {data['error']['message']}"))
             return
         record = data["document"]
-        lines = [f"{k}: {v}" for k, v in record.items()]
+        lines = ["読み取り専用メタデータ:"]
+        lines.extend(
+            f"  {key}: {value}"
+            for key, value in record.items()
+            if key not in {"status", "document_type"}
+        )
         if data["body_missing"]:
             lines.append("(本文ファイルが見つかりません)")
-        self._set_body(Static("\n".join(lines)))
+        if action_result := self._action_results.get(("document", path)):
+            lines.extend(["", action_result])
+        self._set_body(
+            Static("\n".join(lines), id="document-readonly"),
+            _DocumentActions(
+                path,
+                status=str(record.get("status") or ""),
+                document_type=str(record.get("document_type") or ""),
+            ),
+        )
+
+    def update_document_metadata(
+        self, path: str, *, status: str, document_type: str
+    ) -> None:
+        outcome = screens.document_update_metadata(
+            self.container,
+            path,
+            {
+                "status": status or None,
+                "document_type": document_type or None,
+            },
+        )
+        self._action_results[("document", path)] = self._format_action_result(outcome)
+        self.query_one("#document-result", Static).update(
+            self._action_results[("document", path)]
+        )
+
+    def delete_document(self, path: str) -> None:
+        def _do() -> dict[str, Any]:
+            outcome = screens.document_delete(self.container, path, confirmed=True)
+            if outcome.get("deleted"):
+                self.detail = None
+            return outcome
+
+        self.run_worker(
+            self.confirm_and_run(
+                f"文書を削除しますか?\n対象パス: {path}",
+                _do,
+                result_key=("document", path),
+            )
+        )
 
     def _render_search(self) -> None:
         self._set_body(
@@ -624,6 +669,43 @@ class _JobActions(Vertical):
             app.cancel_job(self.job_id)
         elif event.button.id == "job-retry":
             app.retry_job(self.job_id)
+
+
+class _DocumentActions(Vertical):
+    """文書詳細の編集可能項目と削除操作。"""
+
+    def __init__(self, path: str, *, status: str, document_type: str) -> None:
+        super().__init__()
+        self.path = path
+        self.status = status
+        self.document_type = document_type
+
+    def compose(self) -> ComposeResult:
+        from textual.widgets import Button
+
+        yield Static("編集可能メタデータ:")
+        yield Input(value=self.status, placeholder="status", id="document-status")
+        yield Input(
+            value=self.document_type,
+            placeholder="document_type",
+            id="document-type",
+        )
+        yield Button("メタデータを保存", id="document-save", variant="primary")
+        yield Button("文書を削除", id="document-delete", variant="error")
+        yield Static("", id="document-result")
+
+    def on_button_pressed(self, event: Any) -> None:
+        app = self.app
+        if not isinstance(app, KbApp):
+            return
+        if event.button.id == "document-save":
+            app.update_document_metadata(
+                self.path,
+                status=self.query_one("#document-status", Input).value,
+                document_type=self.query_one("#document-type", Input).value,
+            )
+        elif event.button.id == "document-delete":
+            app.delete_document(self.path)
 
 
 class _SourceActions(Vertical):

@@ -7,7 +7,7 @@ import logging
 import sqlite3
 from pathlib import Path
 
-from textual.widgets import DataTable, Static
+from textual.widgets import DataTable, Input, Static
 
 from abist_kb.config import Settings
 from abist_kb.domain.job import JobState
@@ -282,6 +282,73 @@ async def test_sources_batches_actions_show_invalid_input_without_selection(
             result = str(app.query_one("#sources-batches-result", Static).render())
             assert "INVALID_INPUT" in result
             assert expected_message in result
+
+
+async def test_document_detail_updates_only_editable_metadata(
+    container: ServiceContainer,
+) -> None:
+    container.documents.upsert(
+        {
+            "path": "editable.md",
+            "source": "manual",
+            "status": "draft",
+            "document_type": "memo",
+        }
+    )
+    app = KbApp(container, start_worker=False)
+
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.detail = ("document", "editable.md")
+        app.current_area = "documents"
+        app.render_area("documents")
+        await pilot.pause()
+
+        readonly = str(app.query_one("#document-readonly", Static).render())
+        assert "読み取り専用" in readonly
+        status = app.query_one("#document-status", Input)
+        document_type = app.query_one("#document-type", Input)
+        status.value = "active"
+        document_type.value = "guide"
+        await pilot.click("#document-save")
+        await pilot.pause()
+
+        updated = container.documents.get("editable.md")
+        assert updated["status"] == "active"
+        assert updated["document_type"] == "guide"
+        assert updated["source"] == "manual"
+
+
+async def test_document_delete_decline_preserves_document_and_audit_count(
+    container: ServiceContainer,
+) -> None:
+    container.documents.upsert(
+        {"path": "keep.md", "source": "manual", "status": "active"}
+    )
+    audit_before = container.conn.execute(
+        "SELECT COUNT(*) FROM audit_events"
+    ).fetchone()[0]
+    app = KbApp(container, start_worker=False)
+
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.detail = ("document", "keep.md")
+        app.current_area = "documents"
+        app.render_area("documents")
+        await pilot.pause()
+
+        app.delete_document("keep.md")
+        await pilot.pause()
+        modal = str(app.screen.query_one(Static).render())
+        assert "keep.md" in modal
+        await pilot.press("n")
+        await pilot.pause()
+
+        assert container.documents.get_or_none("keep.md") is not None
+        audit_after = container.conn.execute(
+            "SELECT COUNT(*) FROM audit_events"
+        ).fetchone()[0]
+        assert audit_after == audit_before
 
 
 async def test_narrow_layout_collapses_nav_to_single_pane(container: ServiceContainer) -> None:
