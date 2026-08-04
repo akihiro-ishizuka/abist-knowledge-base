@@ -31,6 +31,7 @@ from abist_kb.presentation.cli.context import (
     CliContext,
     fail,
 )
+from abist_kb.presentation.cli.curate_cmd import curate_app
 from abist_kb.presentation.cli.doctor_cmd import doctor
 from abist_kb.presentation.cli.document_cmd import document_app
 from abist_kb.presentation.cli.index_cmd import index_app
@@ -70,6 +71,7 @@ app.add_typer(sync_app, name="sync")
 app.add_typer(document_app, name="document")
 app.add_typer(index_app, name="index")
 app.add_typer(audit_app, name="audit")
+app.add_typer(curate_app, name="curate")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(ui_app, name="ui")
 app.command("search")(search)

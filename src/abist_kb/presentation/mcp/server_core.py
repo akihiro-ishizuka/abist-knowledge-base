@@ -29,6 +29,11 @@ from abist_kb.presentation.mcp.kb_download import (
 )
 from abist_kb.presentation.mcp.kb_search import KbSearchTools
 from abist_kb.presentation.mcp.kb_search import list_tools as kb_search_list_tools
+from abist_kb.presentation.mcp.kb_visualize import KbVisualizeTools
+from abist_kb.presentation.mcp.kb_visualize import list_tools as kb_visualize_list_tools
+from abist_kb.presentation.mcp.kb_visualize import (
+    validate_arguments as validate_kb_visualize_arguments,
+)
 from abist_kb.presentation.mcp.payloads import error_result
 
 SERVER_NAMES: tuple[str, ...] = ("kb-download", "kb-search", "kb-visualize")
@@ -128,6 +133,52 @@ def build_kb_download_server(
     return server
 
 
+def build_kb_visualize_server(
+    *,
+    app_db_path: Path,
+    docs_dir: Path,
+    repo_root: Path | None = None,
+    reports_dir: Path | None = None,
+) -> Server[Any, Any]:
+    """kb-visualize サーバー(list_scene_kinds/check_visualize_deps/render_scene)を組み立てる。
+
+    `render` リソースリースの直列化(`CONCURRENT_RENDER` 互換)には SQLite 接続が
+    必要なため、`app_db_path` を kb-download と同じ `app.sqlite` に向ける。出力は
+    `reports_dir` 未指定時 `<repo_root>/reports` の `visualizations/` 配下。
+    """
+    from abist_kb.infrastructure.db.schema import open_app_db
+
+    server: Server[Any, Any] = Server("kb-visualize", version=_SERVER_VERSION)
+    conn: sqlite3.Connection = open_app_db(app_db_path)
+    resolved_root = repo_root if repo_root is not None else Path.cwd()
+    resolved_reports = (
+        reports_dir if reports_dir is not None else (resolved_root / "reports")
+    ) / "visualizations"
+    tools = KbVisualizeTools(
+        conn, docs_dir=docs_dir, reports_dir=resolved_reports, repo_root=resolved_root
+    )
+
+    @server.list_tools()
+    async def _list_tools() -> list[types.Tool]:
+        return kb_visualize_list_tools()
+
+    @server.call_tool(validate_input=False)
+    async def _call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
+        validation_error = validate_kb_visualize_arguments(name, arguments)
+        if validation_error is not None:
+            return validation_error
+        handler = {
+            "list_scene_kinds": tools.list_scene_kinds,
+            "check_visualize_deps": tools.check_visualize_deps,
+            "render_scene": tools.render_scene,
+        }.get(name)
+        if handler is None:
+            return error_result(f"未知のツールです: {name}")
+        return handler(arguments)
+
+    return server
+
+
 def build_all_server(
     *,
     docs_dir: Path,
@@ -138,25 +189,27 @@ def build_all_server(
     reports_dir: Path | None = None,
     missing_threshold: int | None = None,
 ) -> Server[Any, Any]:
-    """`all` サーバー: 既存15ツール(kb-search 4 + kb-download 8 + task-3a/3b互換)に
-    加え、M5 task-4 の新規ジョブ指向ツール(`start_*`/`job_status`/`cancel_job`/
-    `get_batch`/`list_corpora`/`system_status`)を同一プロセスで公開する。
+    """`all` サーバー: 既存18ツール(kb-search 4 + kb-download 8 + kb-visualize 3 +
+    task-3a/3b互換)に加え、M5 task-4 の新規ジョブ指向ツール(`start_*`/`job_status`/
+    `cancel_job`/`get_batch`/`list_corpora`/`system_status`)を同一プロセスで公開する。
 
-    **`kb-visualize` の扱い(task-4 の判断事項)**: `kb-visualize` の3ツールは
-    M7 まで実装されない。ここでは「宣言だけして未実装」ではなく、単純に
-    `all` の `tools/list` から**省略する**(未実装スキーマを今から固定して
-    後で壊す方が、後から追加するより互換上のリスクが高いと判断した)。M7 で
-    kb-visualize が実装され次第、この関数に組み込む。
+    **`kb-visualize` の扱い(M7 で解禁)**: M5 時点では未実装のため `tools/list`
+    から省略していたが、M7 でレンダラーが実装されたためここに組み込む。
 
-    `kb-download`/`kb-search`/新規ジョブツールはいずれも同じ `app.sqlite`
-    接続を共有する(`docs-write` リースの single-flight 契約は接続をまたいでも
-    DB 行ベースで効くため問題ない)。
+    `kb-download`/`kb-search`/`kb-visualize`/新規ジョブツールはいずれも同じ
+    `app.sqlite` 接続を共有する(`docs-write`/`render` リースの single-flight
+    契約は接続をまたいでも DB 行ベースで効くため問題ない)。
     """
     from abist_kb.infrastructure.db.schema import open_app_db
     from abist_kb.infrastructure.sources.esa import DEFAULT_MISSING_THRESHOLD
 
     server: Server[Any, Any] = Server(ALL_SERVER_NAME, version=_SERVER_VERSION)
     conn: sqlite3.Connection = open_app_db(app_db_path)
+
+    resolved_root_dir = root_dir if root_dir is not None else Path.cwd()
+    resolved_reports_dir = (
+        reports_dir if reports_dir is not None else (resolved_root_dir / "reports")
+    )
 
     search_tools = KbSearchTools(
         docs_dir=docs_dir,
@@ -171,6 +224,12 @@ def build_all_server(
         missing_threshold=(
             missing_threshold if missing_threshold is not None else DEFAULT_MISSING_THRESHOLD
         ),
+    )
+    visualize_tools = KbVisualizeTools(
+        conn,
+        docs_dir=docs_dir,
+        reports_dir=resolved_reports_dir / "visualizations",
+        repo_root=resolved_root_dir,
     )
     job_tools = JobTools(
         conn,
@@ -193,6 +252,9 @@ def build_all_server(
         "download_esa_search": download_tools.download_esa_search,
         "download_web": download_tools.download_web,
         "download_git": download_tools.download_git,
+        "list_scene_kinds": visualize_tools.list_scene_kinds,
+        "check_visualize_deps": visualize_tools.check_visualize_deps,
+        "render_scene": visualize_tools.render_scene,
         "start_run_batch": job_tools.start_run_batch,
         "start_download_esa_post": job_tools.start_download_esa_post,
         "start_download_esa_category": job_tools.start_download_esa_category,
@@ -209,11 +271,19 @@ def build_all_server(
 
     @server.list_tools()
     async def _list_tools() -> list[types.Tool]:
-        return [*kb_search_list_tools(), *kb_download_list_tools(), *jobs_list_tools()]
+        return [
+            *kb_search_list_tools(),
+            *kb_download_list_tools(),
+            *kb_visualize_list_tools(),
+            *jobs_list_tools(),
+        ]
 
     @server.call_tool(validate_input=False)
     async def _call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
         validation_error = validate_kb_download_arguments(name, arguments)
+        if validation_error is not None:
+            return validation_error
+        validation_error = validate_kb_visualize_arguments(name, arguments)
         if validation_error is not None:
             return validation_error
         validation_error = validate_jobs_arguments(name, arguments)
@@ -238,7 +308,7 @@ def build_server(
     reports_dir: Path | None = None,
     missing_threshold: int | None = None,
 ) -> Server[Any, Any]:
-    """サーバー名から `Server` を組み立てる。kb-visualize は後続マイルストーン。"""
+    """サーバー名から `Server` を組み立てる。"""
     if name == "kb-search":
         return build_kb_search_server(
             docs_dir=docs_dir,
@@ -255,6 +325,15 @@ def build_server(
             reports_dir=reports_dir,
             missing_threshold=missing_threshold,
         )
+    if name == "kb-visualize":
+        if app_db_path is None:
+            raise ValueError("kb-visualize サーバーには app_db_path が必要です")
+        return build_kb_visualize_server(
+            app_db_path=app_db_path,
+            docs_dir=docs_dir,
+            repo_root=root_dir,
+            reports_dir=reports_dir,
+        )
     if name == ALL_SERVER_NAME:
         if app_db_path is None:
             raise ValueError("'all' サーバーには app_db_path が必要です")
@@ -268,7 +347,7 @@ def build_server(
             missing_threshold=missing_threshold,
         )
     raise NotImplementedError(
-        f"サーバー '{name}' は M5 の範囲外です(kb-search/kb-download/all のみ実装済み)。"
+        f"未知のサーバー名です: '{name}'(kb-search/kb-download/kb-visualize/all のみ実装済み)。"
     )
 
 
@@ -317,6 +396,7 @@ __all__ = [
     "SERVER_NAMES",
     "build_kb_download_server",
     "build_kb_search_server",
+    "build_kb_visualize_server",
     "build_server",
     "run_http",
     "run_stdio",
