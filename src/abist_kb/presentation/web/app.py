@@ -97,10 +97,17 @@ def build_web_app(
     register_pages(container)
 
     if start_worker:
-        supervisor = container.build_worker_supervisor()
-        thread = threading.Thread(
-            target=supervisor.run_forever, daemon=True, name="worker-supervisor"
-        )
+        # `build_worker_supervisor()` opens its own SQLite connection, which
+        # SQLite forbids using from any thread other than the one that
+        # created it. Build it *inside* the thread's target so the connection
+        # is created on the same thread that runs `run_forever()` (see the
+        # matching fix/comment in `presentation/tui/app.py`, which hit this as
+        # a production TUI bug: every tick raised `sqlite3.ProgrammingError`).
+        def _run_supervisor() -> None:
+            supervisor = container.build_worker_supervisor()
+            supervisor.run_forever()
+
+        thread = threading.Thread(target=_run_supervisor, daemon=True, name="worker-supervisor")
         thread.start()
 
     return nicegui_app

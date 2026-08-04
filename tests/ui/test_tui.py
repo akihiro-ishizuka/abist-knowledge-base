@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
+import sqlite3
+from pathlib import Path
+
+from abist_kb.config import Settings
 from abist_kb.domain.job import JobState
 from abist_kb.infrastructure.jobs.repository import JobRepository
+from abist_kb.infrastructure.jobs.supervisor import WorkerSupervisor
 from abist_kb.presentation.tui.app import MIN_COLUMNS, MIN_ROWS, KbApp
 from abist_kb.presentation.web.viewmodels.container import ServiceContainer
 
@@ -153,6 +160,68 @@ async def test_quit_key_exits_app(container: ServiceContainer) -> None:
     app = KbApp(container, start_worker=False)
     async with app.run_test(size=(120, 40)) as pilot:
         await pilot.pause()
+        await pilot.press("q")
+        await pilot.pause()
+        assert app._exit is True
+
+
+async def test_start_worker_supervisor_runs_on_own_thread_without_thread_boundary_error(
+    tmp_root: Path, caplog
+) -> None:
+    """回帰テスト: `ServiceContainer.build_worker_supervisor()` は専用のSQLite接続を
+    開くが、その接続は `WorkerSupervisor.run_forever()` を実行するスレッド"自身"で
+    作らなければならない(SQLiteはコネクション作成スレッド以外からの利用を禁じる)。
+
+    以前の `KbApp.on_mount` は `build_worker_supervisor()` をメイン(TUI)スレッドで
+    呼んでから別スレッドで `run_forever()` を実行しており、毎tick
+    `sqlite3.ProgrammingError` が発生し続けて画面・キー入力が応答不能になった
+    (`taskkill` でしか止められない実障害)。本テストはその起動パターンを実際に
+    再現し、tick失敗ログ(`worker_tick_failed`)が一切出ないことを確認する。
+    """
+    settings = Settings(root_dir=tmp_root)
+    settings.ensure_directories()
+    settings.docs_dir.mkdir(parents=True, exist_ok=True)
+    # 本番の `ui tui` と同じく既定(`check_same_thread=True`)で構築する。
+    real_container = ServiceContainer(settings)
+    try:
+        app = KbApp(real_container, start_worker=True)
+        with caplog.at_level(logging.WARNING, logger="abist_kb.infrastructure.jobs.supervisor"):
+            async with app.run_test(size=(120, 40)) as pilot:
+                await pilot.pause()
+                thread = app._supervisor_thread
+                assert thread is not None
+                deadline = asyncio.get_event_loop().time() + 3.0
+                while asyncio.get_event_loop().time() < deadline:
+                    if not thread.is_alive():
+                        break
+                    await asyncio.sleep(0.05)
+                # スレッドは(バグ再現時のように死なずに)動き続けているはず。
+                assert thread.is_alive()
+        assert "worker_tick_failed" not in caplog.text
+        assert "ProgrammingError" not in caplog.text
+    finally:
+        real_container.close()
+
+
+async def test_quit_still_works_while_worker_supervisor_is_erroring_repeatedly(
+    container: ServiceContainer, monkeypatch
+) -> None:
+    """バックグラウンドワーカーが延々と失敗し続けても、TUIは応答不能にならず
+    `q` で終了できなければならない(スレッド境界バグの症状そのものの再発防止)。
+    """
+
+    def _always_fails(self: WorkerSupervisor) -> bool:
+        raise sqlite3.ProgrammingError(
+            "SQLite objects created in a thread can only be used in that same thread."
+        )
+
+    monkeypatch.setattr(WorkerSupervisor, "tick", _always_fails)
+
+    app = KbApp(container, start_worker=True)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        # ワーカースレッドが数回失敗する時間を与える。
+        await asyncio.sleep(0.2)
         await pilot.press("q")
         await pilot.pause()
         assert app._exit is True

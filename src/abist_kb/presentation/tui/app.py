@@ -106,9 +106,21 @@ class KbApp(App[None]):
 
     def on_mount(self) -> None:
         if self._start_worker:
-            supervisor = self.container.build_worker_supervisor()
+            # `ServiceContainer.build_worker_supervisor()` opens its own SQLite
+            # connection (`open_app_db`), and SQLite forbids using a connection
+            # from a thread other than the one that created it. It must be
+            # called from *inside* the background thread's target, not before
+            # `Thread.start()` on the main (TUI) thread — otherwise every tick
+            # raises `sqlite3.ProgrammingError` forever (previously observed:
+            # this flooded the terminal via stderr logging and made the TUI
+            # unresponsive/unkillable, since the worker thread never dies and
+            # the flood interferes with Textual's raw-mode terminal handling).
+            def _run_supervisor() -> None:
+                supervisor = self.container.build_worker_supervisor()
+                supervisor.run_forever()
+
             self._supervisor_thread = threading.Thread(
-                target=supervisor.run_forever, daemon=True, name="tui-worker-supervisor"
+                target=_run_supervisor, daemon=True, name="tui-worker-supervisor"
             )
             self._supervisor_thread.start()
         self._apply_layout(self.size.width, self.size.height)

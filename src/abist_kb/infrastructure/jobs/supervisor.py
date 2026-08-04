@@ -15,7 +15,6 @@ import uuid
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from abist_kb.domain.errors import AppError
 from abist_kb.domain.job import Job, JobState, ResourceRequirement
 from abist_kb.infrastructure.jobs import events as events_mod
 from abist_kb.infrastructure.jobs import leases
@@ -128,10 +127,21 @@ class WorkerSupervisor:
         self._repo = JobRepository(conn)
         self._is_leader = False
         self._stop_requested = False
+        self._last_error: BaseException | None = None
 
     @property
     def is_leader(self) -> bool:
         return self._is_leader
+
+    @property
+    def last_error(self) -> BaseException | None:
+        """直近の `tick()` が失敗していればその例外、成功していれば `None`。
+
+        ホストUI(TUI/Web)が「ワーカーが繰り返し失敗している」ことを1箇所の
+        状態表示として出すために使う想定(繰り返しログを画面へ流し込まない
+        ようにするため、ログ自体は `run_forever` 側で間引く)。
+        """
+        return self._last_error
 
     @property
     def events(self) -> events_mod.EventBus:
@@ -209,17 +219,50 @@ class WorkerSupervisor:
             reraise=False,
         )
 
-    def run_forever(self, *, poll_interval: float = 1.0) -> None:
-        """`tick()` をループする(`<cli> worker run` の実体)。"""
+    def run_forever(self, *, poll_interval: float = 1.0, max_backoff_seconds: float = 30.0) -> None:
+        """`tick()` をループする(`<cli> worker run` の実体)。
+
+        ここで捕捉するのは `AppError` に限らない(`Exception` 全般)。ホストの
+        接続設定に問題があるなど `tick()` が毎回同じ理由で失敗し続ける場合でも、
+        ワーカーはあくまでバックグラウンドの1構成要素であり、その異常を理由に
+        ホストの長時間稼働エントリポイント(TUI/Web/デスクトップ/MCP)全体を
+        巻き込んで落としたり、ログを無制限に吐き続けて画面・端末を使用不能に
+        したりしてはならない(実際に TUI でスレッド境界を越えた SQLite 接続
+        共有が原因で `sqlite3.ProgrammingError` が毎tick発生し、無間隔でログが
+        流れ続けて画面もキー入力も応答不能になった不具合の再発防止)。
+        `KeyboardInterrupt`/`SystemExit` は `Exception` のサブクラスではないため
+        素通しする。
+
+        連続失敗時は指数バックオフ(`poll_interval` を基準に最大
+        `max_backoff_seconds` まで)し、ログも初回とその後は間引いて出す
+        (毎tickではなく30回に1回)ことで、原因調査に必要な情報は残しつつ
+        フラッディングを防ぐ。
+        """
         self._stop_requested = False
+        consecutive_failures = 0
         while not self._stop_requested:
             try:
                 did_work = self.tick()
-            except AppError:
-                logger.warning("worker_tick_conflict", exc_info=True)
+            except Exception as exc:  # noqa: BLE001 - ホストUIを巻き込まないための最終防衛線
+                consecutive_failures += 1
+                self._last_error = exc
+                if consecutive_failures == 1 or consecutive_failures % 30 == 0:
+                    logger.warning(
+                        "worker_tick_failed",
+                        exc_info=True,
+                        extra={"consecutive_failures": consecutive_failures},
+                    )
                 did_work = False
+            else:
+                consecutive_failures = 0
+                self._last_error = None
             if not did_work:
-                time.sleep(poll_interval)
+                sleep_seconds = poll_interval
+                if consecutive_failures:
+                    sleep_seconds = min(
+                        poll_interval * (2 ** (consecutive_failures - 1)), max_backoff_seconds
+                    )
+                time.sleep(sleep_seconds)
 
 
 __all__ = [
