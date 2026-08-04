@@ -21,7 +21,7 @@ from typing import Any
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import DataTable, Footer, Header, Input, ListItem, ListView, Static
+from textual.widgets import Button, DataTable, Footer, Header, Input, ListItem, ListView, Static
 
 from abist_kb.presentation.console.theme import TOKEN_STYLES, SemanticToken
 from abist_kb.presentation.tui.modals import ConfirmModal, HelpModal
@@ -109,6 +109,7 @@ class KbApp(App[None]):
         self._selected_source_id: str | None = None
         self._selected_batch_id: str | None = None
         self._selected_source_or_batch: tuple[str, str] | None = None
+        self._chat_conversation_id: str | None = None
 
     # -- ライフサイクル --------------------------------------------------
 
@@ -222,6 +223,14 @@ class KbApp(App[None]):
         renderers[area_id]()
 
     def _render_stub(self, data: dict[str, Any]) -> None:
+        if data.get("available"):
+            renderer = {
+                "chat": self._render_chat,
+                "quality": self._render_quality,
+            }.get(self.current_area)
+            if renderer is not None:
+                renderer()
+                return
         text = "利用不可\n\n" + str(data.get("reason", ""))
         self._set_body(Static(text))
 
@@ -616,6 +625,9 @@ class KbApp(App[None]):
         )
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "chat-input":
+            self._ask_chat(event.value.strip())
+            return
         if event.input.id != "search-input":
             return
         query = event.value.strip()
@@ -631,6 +643,88 @@ class KbApp(App[None]):
         for r in results:
             lines.append(f"  {r.get('path', r.get('id', ''))}  score={r.get('score', '')}")
         results_widget.update("\n".join(lines))
+
+    def _render_chat(self) -> None:
+        self._set_body(
+            Static("チャット"),
+            Input(placeholder="質問を入力して Enter", id="chat-input"),
+            Static("", id="chat-log"),
+        )
+
+    def _ask_chat(self, question: str) -> None:
+        if not question:
+            return
+        chat_input = self.query_one("#chat-input", Input)
+        chat_log = self.query_one("#chat-log", Static)
+        if self._chat_conversation_id is None:
+            started = screens.chat_start(self.container)
+            if "error" in started:
+                error = started["error"]
+                chat_log.update(f"エラー: {error.get('code', '')} - {error['message']}")
+                return
+            self._chat_conversation_id = started["conversation_id"]
+
+        result = screens.chat_ask(
+            self.container,
+            conversation_id=self._chat_conversation_id,
+            question=question,
+        )
+        chat_input.value = ""
+        if "error" in result:
+            error = result["error"]
+            chat_log.update(f"エラー: {error.get('code', '')} - {error['message']}")
+            return
+
+        lines = [f"あなた: {question}", f"アシスタント: {result['text']}"]
+        citations = result.get("citations", [])
+        if citations:
+            lines.append("引用:")
+            for citation in citations:
+                validity = "" if citation.get("valid") else " (検証失敗)"
+                lines.append(
+                    f"  {citation['path']}:{citation['start_line']}-"
+                    f"{citation['end_line']}{validity}"
+                )
+        warnings = result.get("citation_warnings", [])
+        if warnings:
+            lines.append("警告:")
+            lines.extend(f"  ⚠ {warning}" for warning in warnings)
+        chat_log.update("\n".join(lines))
+
+    def _render_quality(self) -> None:
+        self._set_body(
+            Static(
+                "品質監査\n"
+                "整合性・重複・矛盾・メタデータ補完(dry-run)を実行できます。\n"
+                "メタデータ補完の apply=True はハード拒否されます。"
+                "適用は CLI の --apply と確認プロンプトを使用してください。"
+            ),
+            _QualityActions(),
+            Static("", id="quality-result"),
+        )
+
+    @staticmethod
+    def _format_quality_result(result: dict[str, Any]) -> str:
+        if "error" in result:
+            return f"エラー: {result['error']['message']}"
+        run_id = result.get("run_id", result.get("mode", ""))
+        lines = [f"監査実行ID: {run_id}"]
+        if totals := result.get("totals"):
+            lines.append("件数:")
+            lines.extend(f"  {key}: {value}" for key, value in totals.items())
+        return "\n".join(lines)
+
+    def run_quality_audit(self, audit: str) -> None:
+        runners = {
+            "integrity": screens.quality_run_integrity,
+            "duplicates": screens.quality_run_duplicates,
+            "contradictions": screens.quality_run_contradictions,
+            "backfill": screens.quality_run_backfill_metadata,
+        }
+        result = runners[audit](self.container)
+        self.query_one("#quality-result", Static).update(
+            self._format_quality_result(result)
+        )
 
     def _render_settings(self) -> None:
         data = screens.settings_diagnostics(self.container)
@@ -744,6 +838,22 @@ class _BatchActions(Vertical):
             app.action_run_selected_batch()
         elif event.button.id == "batch-remove":
             app.action_remove_selected_batch()
+
+
+class _QualityActions(Vertical):
+    """品質監査4種の実行ボタン。backfill は dry-run のみ。"""
+
+    def compose(self) -> ComposeResult:
+        yield Button("整合性を検査", id="quality-integrity")
+        yield Button("重複を検出", id="quality-duplicates")
+        yield Button("矛盾候補を検出", id="quality-contradictions")
+        yield Button("メタデータ補完(dry-run)", id="quality-backfill")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        app = self.app
+        if not isinstance(app, KbApp) or event.button.id is None:
+            return
+        app.run_quality_audit(event.button.id.removeprefix("quality-"))
 
 
 def run_tui(container: ServiceContainer, *, start_worker: bool = True) -> None:

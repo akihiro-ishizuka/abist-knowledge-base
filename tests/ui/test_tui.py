@@ -14,6 +14,7 @@ from abist_kb.domain.job import JobState
 from abist_kb.infrastructure.jobs.repository import JobRepository
 from abist_kb.infrastructure.jobs.supervisor import WorkerSupervisor
 from abist_kb.presentation.tui.app import MIN_COLUMNS, MIN_ROWS, KbApp
+from abist_kb.presentation.web.viewmodels import screens
 from abist_kb.presentation.web.viewmodels.container import ServiceContainer
 
 # `pyproject.toml` の `asyncio_mode = "auto"`(nicegui.testing.plugin との相互作用で
@@ -61,6 +62,83 @@ async def test_search_submits_and_reports_invalid_input_error(
         results = app.query_one("#search-results")
         text = str(results.render())
         assert "件" in text or "エラー" in text
+
+
+async def test_available_chat_renders_and_surfaces_citations_and_warnings(
+    container: ServiceContainer, monkeypatch
+) -> None:
+    monkeypatch.setattr(screens, "chat_stub", lambda _container: {"available": True})
+    monkeypatch.setattr(
+        screens,
+        "chat_start",
+        lambda _container: {"conversation_id": "conversation-1"},
+    )
+    monkeypatch.setattr(
+        screens,
+        "chat_ask",
+        lambda _container, *, conversation_id, question: {
+            "conversation_id": conversation_id,
+            "message_id": "message-1",
+            "text": f"回答: {question}",
+            "citations": [
+                {
+                    "path": "guide.md",
+                    "start_line": 10,
+                    "end_line": 12,
+                    "valid": True,
+                    "reason": None,
+                }
+            ],
+            "citation_warnings": ["引用 warning.md:20-30 を検証できませんでした"],
+        },
+    )
+
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.action_goto_area("chat")
+        await pilot.pause()
+
+        body = "\n".join(
+            str(widget.render()) for widget in app.query("#content Static")
+        )
+        assert "利用不可" not in body
+
+        chat_input = app.query_one("#chat-input", Input)
+        chat_input.focus()
+        await pilot.press(*"question")
+        await pilot.press("enter")
+        await pilot.pause()
+
+        result = str(app.query_one("#chat-log", Static).render())
+        assert "回答: question" in result
+        assert "guide.md:10-12" in result
+        assert "警告" in result
+        assert "warning.md:20-30" in result
+
+
+async def test_available_quality_renders_all_audits_without_unavailable_notice(
+    container: ServiceContainer,
+) -> None:
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.action_goto_area("quality")
+        await pilot.pause()
+
+        body = "\n".join(
+            str(widget.render()) for widget in app.query("#content Static")
+        )
+        assert "利用不可" not in body
+        assert "apply=True" in body
+        assert "CLI" in body
+        labels = {button.label for button in app.query("#content Button")}
+        assert labels == {
+            "整合性を検査",
+            "重複を検出",
+            "矛盾候補を検出",
+            "メタデータ補完(dry-run)",
+        }
 
 
 async def test_help_modal_opens_and_escape_closes_it(container: ServiceContainer) -> None:
