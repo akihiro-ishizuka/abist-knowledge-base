@@ -41,6 +41,136 @@ def test_batch_run_not_found_returns_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+def test_batch_crud_routes(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/batches",
+        json={
+            "name": "定例取り込み",
+            "type": "web",
+            "output_dir": "docs/weekly",
+            "items": [],
+        },
+    )
+    assert created.status_code == 200
+    batch = created.json()["batch"]
+
+    updated = client.patch(
+        f"/api/v1/batches/{batch['id']}",
+        json={"name": "週次取り込み", "enabled": False},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["batch"]["name"] == "週次取り込み"
+    assert updated.json()["batch"]["enabled"] is False
+
+    deleted = client.delete(f"/api/v1/batches/{batch['id']}?confirmed=true")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"deleted": True}
+
+
+def test_batch_delete_without_confirmation_has_no_side_effect(
+    client: TestClient,
+) -> None:
+    created = client.post(
+        "/api/v1/batches",
+        json={"name": "保持対象", "type": "web", "items": []},
+    ).json()["batch"]
+
+    response = client.delete(f"/api/v1/batches/{created['id']}")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_INPUT"
+    assert any(
+        batch["id"] == created["id"] for batch in client.get("/api/v1/batches").json()["batches"]
+    )
+
+
+def test_batch_edit_missing_id_returns_404(client: TestClient) -> None:
+    response = client.patch("/api/v1/batches/missing", json={"enabled": False})
+    assert response.status_code == 404
+
+
+def test_source_crud_routes(client: TestClient) -> None:
+    created = client.post(
+        "/api/v1/sources",
+        json={
+            "type": "web",
+            "display_name": "社内サイト",
+            "connection": {"url": "https://example.invalid"},
+            "output_dir": "docs/web",
+        },
+    )
+    assert created.status_code == 200
+    source = created.json()["source"]
+
+    updated = client.patch(
+        f"/api/v1/sources/{source['id']}",
+        json={"display_name": "社内 Web", "enabled": False},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["source"]["display_name"] == "社内 Web"
+    assert updated.json()["source"]["enabled"] is False
+
+    deleted = client.delete(f"/api/v1/sources/{source['id']}?confirmed=true")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"deleted": True}
+
+
+def test_source_delete_without_confirmation_returns_400(client: TestClient) -> None:
+    response = client.delete("/api/v1/sources/missing")
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_INPUT"
+
+
+def test_source_delete_missing_id_returns_404(client: TestClient) -> None:
+    response = client.delete("/api/v1/sources/missing?confirmed=true")
+    assert response.status_code == 404
+
+
+def test_document_update_and_delete_routes(client: TestClient, container: ServiceContainer) -> None:
+    container.documents.upsert(
+        {
+            "path": "nested/note.md",
+            "source": "manual",
+            "status": "active",
+            "sync_status": "synced",
+        }
+    )
+
+    updated = client.patch(
+        "/api/v1/documents/nested/note.md",
+        json={"status": "archived", "document_type": "memo"},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["document"]["status"] == "archived"
+    assert updated.json()["document"]["document_type"] == "memo"
+
+    deleted = client.delete("/api/v1/documents/nested/note.md?confirmed=true")
+    assert deleted.status_code == 200
+    assert deleted.json() == {"deleted": True}
+
+
+def test_document_update_rejects_disallowed_key(
+    client: TestClient, container: ServiceContainer
+) -> None:
+    container.documents.upsert(
+        {
+            "path": "note.md",
+            "source": "manual",
+            "status": "active",
+            "sync_status": "synced",
+        }
+    )
+    response = client.patch("/api/v1/documents/note.md", json={"title": "書換禁止"})
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_INPUT"
+
+
+def test_document_delete_without_confirmation_returns_400(client: TestClient) -> None:
+    response = client.delete("/api/v1/documents/missing.md")
+    assert response.status_code == 400
+    assert response.json()["code"] == "INVALID_INPUT"
+
+
 def test_chat_visualization_quality_endpoints(client: TestClient) -> None:
     # 可視化は次パス(M7 Task 7.3/7.4)のためスタブのまま。
     response = client.get("/api/v1/visualization")

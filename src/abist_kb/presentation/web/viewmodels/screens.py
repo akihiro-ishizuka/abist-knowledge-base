@@ -17,7 +17,7 @@ import shutil
 import sqlite3
 from typing import Any
 
-from abist_kb.domain.errors import AppError
+from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.domain.job import JobState
 
 from .container import ServiceContainer
@@ -81,6 +81,53 @@ def batches_list(container: ServiceContainer) -> dict[str, Any]:
     return {"batches": container.batches.list()}
 
 
+def batch_add(
+    container: ServiceContainer,
+    *,
+    name: str,
+    type: str,
+    output_dir: str | None = None,
+    enabled: bool = True,
+    items: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    try:
+        batch = container.batches.add(
+            name=name,
+            type=type,
+            output_dir=output_dir,
+            enabled=enabled,
+            items=items,
+        )
+    except AppError as exc:
+        return _err(exc)
+    return {"batch": batch}
+
+
+def batch_edit(
+    container: ServiceContainer, batch_id: str, fields: dict[str, Any]
+) -> dict[str, Any]:
+    try:
+        batch = container.batches.edit(batch_id, **fields)
+    except AppError as exc:
+        return _err(exc)
+    return {"batch": batch}
+
+
+def batch_remove(container: ServiceContainer, batch_id: str, *, confirmed: bool) -> dict[str, Any]:
+    if not confirmed:
+        return _err(
+            AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message="バッチを削除するには確認が必要です。",
+            )
+        )
+    try:
+        removed = container.batches.remove(batch_id, confirm=lambda _msg: confirmed)
+    except AppError as exc:
+        return _err(exc)
+    return {"deleted": True} if removed else {"cancelled": True}
+
+
 def batch_run(container: ServiceContainer, batch_id: str) -> dict[str, Any]:
     """バッチを実行する(§10.2: `docs-write` を全プロセス横断で直列化する)。"""
     try:
@@ -95,6 +142,55 @@ def source_test_connection(container: ServiceContainer, source_id: str) -> dict[
         return container.sources.test_connection(source_id)
     except AppError as exc:
         return _err(exc)
+
+
+def source_add(
+    container: ServiceContainer,
+    *,
+    type: str,
+    display_name: str,
+    connection: dict[str, Any] | None = None,
+    output_dir: str,
+    enabled: bool = True,
+) -> dict[str, Any]:
+    try:
+        source = container.sources.add(
+            type=type,
+            display_name=display_name,
+            connection=connection,
+            output_dir=output_dir,
+            enabled=enabled,
+        )
+    except AppError as exc:
+        return _err(exc)
+    return {"source": source}
+
+
+def source_edit(
+    container: ServiceContainer, source_id: str, fields: dict[str, Any]
+) -> dict[str, Any]:
+    try:
+        source = container.sources.edit(source_id, **fields)
+    except AppError as exc:
+        return _err(exc)
+    return {"source": source}
+
+
+def source_remove(
+    container: ServiceContainer, source_id: str, *, confirmed: bool
+) -> dict[str, Any]:
+    if not confirmed:
+        return _err(
+            AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message="ソースを削除するには確認が必要です。",
+            )
+        )
+    try:
+        removed = container.sources.remove(source_id, confirm=lambda _msg: confirmed)
+    except AppError as exc:
+        return _err(exc)
+    return {"deleted": True} if removed else {"cancelled": True}
 
 
 # -- 3. ジョブ ---------------------------------------------------------------
@@ -169,6 +265,51 @@ def document_detail(container: ServiceContainer, path: str) -> dict[str, Any]:
     return {"document": record, "body_html": body_html, "body_missing": body_missing}
 
 
+def document_update_metadata(
+    container: ServiceContainer, path: str, fields: dict[str, Any]
+) -> dict[str, Any]:
+    allowed_keys = {"status", "document_type"}
+    disallowed_keys = set(fields) - allowed_keys
+    if disallowed_keys:
+        return _err(
+            AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message=(
+                    "更新できない文書メタデータが指定されました: "
+                    + ", ".join(sorted(disallowed_keys))
+                ),
+            )
+        )
+    filtered_fields = {key: value for key, value in fields.items() if key in allowed_keys}
+    if not filtered_fields:
+        return _err(
+            AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message="更新する文書メタデータを指定してください。",
+            )
+        )
+    try:
+        document = container.documents.update_metadata(path, filtered_fields)
+    except AppError as exc:
+        return _err(exc)
+    return {"document": document}
+
+
+def document_delete(container: ServiceContainer, path: str, *, confirmed: bool) -> dict[str, Any]:
+    if not confirmed:
+        return _err(
+            AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message="文書を削除するには確認が必要です。",
+            )
+        )
+    try:
+        deleted = container.documents.delete(path, confirm=lambda _msg: confirmed)
+    except AppError as exc:
+        return _err(exc)
+    return {"deleted": True} if deleted else {"cancelled": True}
+
+
 # -- 5. 検索 -----------------------------------------------------------------
 
 
@@ -213,7 +354,12 @@ def chat_stub(container: ServiceContainer) -> dict[str, Any]:
 def chat_start(container: ServiceContainer, *, title: str | None = None) -> dict[str, Any]:
     chat = container.chat
     if chat is None:
-        return {"error": {"message": "ChatService が利用できません(openai_api_key 未設定)。"}}
+        return _err(
+            AppError(
+                code=ErrorCode.CONFIG_ERROR,
+                message="ChatService が利用できません(openai_api_key 未設定)。",
+            )
+        )
     return {"conversation_id": chat.start_conversation(title=title)}
 
 
@@ -221,7 +367,12 @@ def chat_ask(container: ServiceContainer, *, conversation_id: str, question: str
     """1問1答。**引用検証に失敗した引用は黙って落とさず `citation_warnings` に含める。**"""
     chat = container.chat
     if chat is None:
-        return {"error": {"message": "ChatService が利用できません(openai_api_key 未設定)。"}}
+        return _err(
+            AppError(
+                code=ErrorCode.CONFIG_ERROR,
+                message="ChatService が利用できません(openai_api_key 未設定)。",
+            )
+        )
     try:
         answer = chat.ask(conversation_id, question)
     except AppError as exc:
@@ -247,7 +398,12 @@ def chat_ask(container: ServiceContainer, *, conversation_id: str, question: str
 def chat_history(container: ServiceContainer, *, conversation_id: str) -> dict[str, Any]:
     chat = container.chat
     if chat is None:
-        return {"error": {"message": "ChatService が利用できません(openai_api_key 未設定)。"}}
+        return _err(
+            AppError(
+                code=ErrorCode.CONFIG_ERROR,
+                message="ChatService が利用できません(openai_api_key 未設定)。",
+            )
+        )
     try:
         return {"messages": chat.history(conversation_id)}
     except AppError as exc:
@@ -394,6 +550,9 @@ def settings_diagnostics(container: ServiceContainer) -> dict[str, Any]:
 
 
 __all__ = [
+    "batch_add",
+    "batch_edit",
+    "batch_remove",
     "batch_run",
     "batches_list",
     "chat_ask",
@@ -401,7 +560,9 @@ __all__ = [
     "chat_start",
     "chat_stub",
     "dashboard",
+    "document_delete",
     "document_detail",
+    "document_update_metadata",
     "documents_list",
     "job_cancel",
     "job_detail",
@@ -414,6 +575,9 @@ __all__ = [
     "quality_stub",
     "search",
     "settings_diagnostics",
+    "source_add",
+    "source_edit",
+    "source_remove",
     "source_test_connection",
     "sources_list",
     "visualization_stub",

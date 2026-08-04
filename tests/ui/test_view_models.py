@@ -89,6 +89,25 @@ def test_batch_run_not_found_returns_error_dict(container: ServiceContainer) -> 
     assert outcome["error"]["code"] == "NOT_FOUND"
 
 
+def test_document_update_metadata_rejects_empty_fields(container: ServiceContainer) -> None:
+    outcome = screens.document_update_metadata(container, "missing.md", {})
+    assert outcome["error"]["code"] == "INVALID_INPUT"
+
+
+def test_chat_actions_return_config_error_when_service_is_unavailable(
+    container: ServiceContainer,
+) -> None:
+    assert screens.chat_start(container)["error"]["code"] == "CONFIG_ERROR"
+    assert (
+        screens.chat_ask(container, conversation_id="missing", question="質問")["error"]["code"]
+        == "CONFIG_ERROR"
+    )
+    assert (
+        screens.chat_history(container, conversation_id="missing")["error"]["code"]
+        == "CONFIG_ERROR"
+    )
+
+
 def test_documents_list_empty(container: ServiceContainer) -> None:
     assert screens.documents_list(container) == {"documents": []}
 

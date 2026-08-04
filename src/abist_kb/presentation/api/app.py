@@ -18,6 +18,7 @@ from typing import Any, TypeVar
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, ConfigDict
 
 from abist_kb.domain.errors import AppError, ErrorCode, http_status_for
 from abist_kb.domain.job import TERMINAL_STATES
@@ -27,6 +28,45 @@ from abist_kb.presentation.web.viewmodels.container import ServiceContainer
 from abist_kb.presentation.web.viewmodels.serialize import error_to_dict, event_to_dict
 
 T = TypeVar("T")
+
+
+class BatchCreateRequest(BaseModel):
+    name: str
+    type: str
+    output_dir: str | None = None
+    enabled: bool = True
+    items: list[dict[str, Any]] | None = None
+
+
+class BatchEditRequest(BaseModel):
+    name: str | None = None
+    type: str | None = None
+    output_dir: str | None = None
+    enabled: bool | None = None
+    items: list[dict[str, Any]] | None = None
+
+
+class SourceCreateRequest(BaseModel):
+    type: str
+    display_name: str
+    connection: dict[str, Any] | None = None
+    output_dir: str
+    enabled: bool = True
+
+
+class SourceEditRequest(BaseModel):
+    type: str | None = None
+    display_name: str | None = None
+    connection: dict[str, Any] | None = None
+    output_dir: str | None = None
+    enabled: bool | None = None
+
+
+class DocumentMetadataRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    status: str | None = None
+    document_type: str | None = None
 
 
 def _status_for(err: AppError) -> int:
@@ -117,6 +157,35 @@ def register_api_routes(
     async def list_sources(request: Request) -> dict[str, Any]:
         return await run_locked(request, lambda: screens.sources_list(get_container(request)))
 
+    @app.post(f"{router_prefix}/sources")
+    async def add_source(body: SourceCreateRequest, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.source_add(get_container(request), **body.model_dump()),
+        )
+
+    @app.patch(f"{router_prefix}/sources/{{source_id}}")
+    async def edit_source(
+        source_id: str, body: SourceEditRequest, request: Request
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.source_edit(
+                get_container(request),
+                source_id,
+                body.model_dump(exclude_unset=True),
+            ),
+        )
+
+    @app.delete(f"{router_prefix}/sources/{{source_id}}")
+    async def remove_source(
+        source_id: str, request: Request, confirmed: bool = False
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.source_remove(get_container(request), source_id, confirmed=confirmed),
+        )
+
     @app.post(f"{router_prefix}/sources/{{source_id}}/test")
     async def test_source(source_id: str, request: Request) -> dict[str, Any]:
         return await run_locked(
@@ -126,6 +195,33 @@ def register_api_routes(
     @app.get(f"{router_prefix}/batches")
     async def list_batches(request: Request) -> dict[str, Any]:
         return await run_locked(request, lambda: screens.batches_list(get_container(request)))
+
+    @app.post(f"{router_prefix}/batches")
+    async def add_batch(body: BatchCreateRequest, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.batch_add(get_container(request), **body.model_dump()),
+        )
+
+    @app.patch(f"{router_prefix}/batches/{{batch_id}}")
+    async def edit_batch(batch_id: str, body: BatchEditRequest, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.batch_edit(
+                get_container(request),
+                batch_id,
+                body.model_dump(exclude_unset=True),
+            ),
+        )
+
+    @app.delete(f"{router_prefix}/batches/{{batch_id}}")
+    async def remove_batch(
+        batch_id: str, request: Request, confirmed: bool = False
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.batch_remove(get_container(request), batch_id, confirmed=confirmed),
+        )
 
     @app.post(f"{router_prefix}/batches/{{batch_id}}/run")
     async def run_batch(batch_id: str, request: Request) -> dict[str, Any]:
@@ -219,6 +315,28 @@ def register_api_routes(
     async def get_document(path: str, request: Request) -> dict[str, Any]:
         return await run_locked(
             request, lambda: screens.document_detail(get_container(request), path)
+        )
+
+    @app.patch(f"{router_prefix}/documents/{{path:path}}")
+    async def update_document_metadata(
+        path: str, body: DocumentMetadataRequest, request: Request
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.document_update_metadata(
+                get_container(request),
+                path,
+                body.model_dump(exclude_unset=True),
+            ),
+        )
+
+    @app.delete(f"{router_prefix}/documents/{{path:path}}")
+    async def delete_document(
+        path: str, request: Request, confirmed: bool = False
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.document_delete(get_container(request), path, confirmed=confirmed),
         )
 
     @app.get(f"{router_prefix}/search")
