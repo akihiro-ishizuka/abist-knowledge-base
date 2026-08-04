@@ -1,5 +1,6 @@
 import io
 import json
+import re
 import sys
 
 import pytest
@@ -10,17 +11,34 @@ from abist_kb.presentation.cli.app import app, main
 
 runner = CliRunner()
 
+# Typer は `rich_utils.FORCE_TERMINAL` を `GITHUB_ACTIONS`(や `FORCE_COLOR`/
+# `PY_COLORS`)が設定されている場合に無条件で True にする(このマシンの
+# ローカル実行では立たない条件のため、CI 環境専用に発現する差異)。強制的に
+# 端末扱いされると Rich の Option ハイライタが `--output` のような文字列を
+# `--` と `output` に分割し、それぞれ別の ANSI エスケープシーケンスで包む
+# (実測: CI 上で `--output` が連続した部分文字列として出現しなくなり、
+# `test_global_options_are_declared` が windows-latest/ubuntu-latest 両方で
+# 落ちた。ローカルでは色付けが働かないため気づけなかった)。`--help` の内容を
+# 文字列一致で検証するテストは ANSI エスケープの有無に依存すべきではないため、
+# 比較前に取り除く。
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+def _plain(text: str) -> str:
+    return _ANSI_ESCAPE_RE.sub("", text)
+
 
 def test_help_shows_the_cli_name_and_display_name():
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert identity.DISPLAY_NAME in result.output
+    assert identity.DISPLAY_NAME in _plain(result.output)
 
 
 def test_global_options_are_declared():
     result = runner.invoke(app, ["--help"])
+    output = _plain(result.output)
     for flag in ("--output", "--color", "--quiet", "--verbose", "--debug", "--yes"):
-        assert flag in result.output
+        assert flag in output
 
 
 def test_invalid_output_mode_exits_with_input_error():
@@ -36,7 +54,7 @@ def test_unknown_command_exits_with_input_error():
 def test_version_flag_prints_version():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert "0.1.0" in result.output
+    assert "0.1.0" in _plain(result.output)
 
 
 def test_version_flag_does_not_crash_when_package_metadata_is_missing(monkeypatch):
@@ -140,12 +158,13 @@ def test_unhandled_exception_in_command_is_wrapped_without_traceback_by_default(
 
     result = runner.invoke(throwaway, ["boom"])
     assert result.exit_code == 1
-    assert "FAILURE" in result.output
-    assert "--debug" in result.output
+    output = _plain(result.output)
+    assert "FAILURE" in output
+    assert "--debug" in output
     # `cause_type`(例外のクラス名のみ、秘密情報を含まない)は診断のため
     # `--debug` 無しでも details に出る(既存の `_DEBUG_ONLY_DETAIL_KEYS` の
     # 設計どおり)。ここで守るのは「トレースバック本体は出ない」ことだけ。
-    assert "Traceback (most recent call last)" not in result.output
+    assert "Traceback (most recent call last)" not in output
 
 
 def test_unhandled_exception_shows_traceback_only_with_debug(tmp_root):
@@ -208,12 +227,12 @@ def test_main_backstop_wraps_unhandled_exception_without_traceback(monkeypatch, 
         app_module.main()
     assert exc_info.value.code == 1
 
-    captured = capsys.readouterr()
+    captured_err = _plain(capsys.readouterr().err)
     # `cause_type`(例外のクラス名のみ)は診断のため出てよい。守るのは
     # トレースバック本体(コードやスタックフレームなど)が出ないことだけ。
-    assert "Traceback (most recent call last)" not in captured.err
-    assert "FAILURE" in captured.err
-    assert "--debug" in captured.err
+    assert "Traceback (most recent call last)" not in captured_err
+    assert "FAILURE" in captured_err
+    assert "--debug" in captured_err
 
 
 def test_command_raising_app_error_without_local_handling_still_maps_exit_code():

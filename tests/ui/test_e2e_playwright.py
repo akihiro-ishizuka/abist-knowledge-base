@@ -16,7 +16,17 @@ from collections.abc import Iterator
 import pytest
 import uvicorn
 from nicegui import ui
-from playwright.sync_api import Page, expect
+
+pytest.importorskip(
+    "playwright",
+    reason=(
+        "playwright is an opt-in dev dependency (real-browser E2E, "
+        "installed separately via `uv run playwright install`); "
+        "skipping means this file's browser-level checks are unverified "
+        "in this environment"
+    ),
+)
+from playwright.sync_api import Page, expect  # noqa: E402
 
 from abist_kb.config import Settings
 from abist_kb.domain.job import JobState
