@@ -163,7 +163,7 @@ def source_test(
     cli_ctx = get_context(ctx)
     conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
-        service = SourceService(conn)
+        service = SourceService(conn, settings=cli_ctx.settings)
         result = service.test_connection(source_id)
         if cli_ctx.presenter.is_json:
             cli_ctx.presenter.json_result(result)

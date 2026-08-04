@@ -127,12 +127,15 @@ def test_ensure_directories_creates_data_and_reports(tmp_root: Path):
 def test_redacted_dict_masks_secrets(tmp_root: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ABIST_KB_ESA_ACCESS_TOKEN", "super-secret-token")
     monkeypatch.setenv("ABIST_KB_OPENAI_API_KEY", "sk-abcdef")
+    monkeypatch.setenv("ABIST_KB_GIT_TOKEN", "ghp-super-secret")
     s = load_settings(root=tmp_root)
     dumped = s.redacted_dict()
     assert dumped["esa_access_token"] == "***"
     assert dumped["openai_api_key"] == "***"
+    assert dumped["git_token"] == "***"
     assert "super-secret-token" not in repr(dumped)
     assert "sk-abcdef" not in repr(dumped)
+    assert "ghp-super-secret" not in repr(dumped)
 
 
 def test_secret_fields_guardrail_covers_every_secret_shaped_field_name():

@@ -15,7 +15,7 @@ from abist_kb.domain.errors import ErrorCode, ExitCode, wrap
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-_SECRET_FIELDS = frozenset({"esa_access_token", "openai_api_key"})
+_SECRET_FIELDS = frozenset({"esa_access_token", "openai_api_key", "git_token"})
 
 
 class Settings(BaseSettings):
@@ -63,6 +63,10 @@ class Settings(BaseSettings):
 
     esa_team_name: str | None = None
     esa_access_token: str | None = None
+    #: private リポジトリ用の Git 認証トークン(§12: DB/ログ/移行成果物へは書かない)。
+    #: `sources.connection` の `token` キーがチーム/リポジトリ単位の上書きとして
+    #: 優先され、これは単一トークンで足りる一般的な運用向けのフォールバック。
+    git_token: str | None = None
     openai_api_key: str | None = None
     chat_model: str = "gpt-4o-mini"
 

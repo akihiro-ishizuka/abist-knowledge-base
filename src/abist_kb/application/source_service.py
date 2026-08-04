@@ -14,6 +14,7 @@ import sqlite3
 from collections.abc import Callable
 from typing import Any
 
+from abist_kb.config import Settings
 from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.infrastructure.db import audit
 from abist_kb.infrastructure.db.sources_repo import SourceRepository
@@ -29,11 +30,19 @@ _REQUIRED_CONNECTION_KEYS: dict[str, tuple[str, ...]] = {
 
 
 class SourceService:
-    """`SourceRepository` を包み、確認・監査を伴う操作を提供する。"""
+    """`SourceRepository` を包み、確認・監査を伴う操作を提供する。
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    `settings` は `test_connection` の健全性チェックにのみ使う。§12 に従い
+    esa/git の資格情報は `sources.connection` へ書かせないため、`connection` が
+    空でも `Settings`(`.env`)から埋まる分は「不足」と報告しない
+    (`application.sync_service.SyncService._resolve_esa_credentials` と同じ理由)。
+    `settings` を渡さない呼び出し元は従来通り DB の `connection` のみで判定する。
+    """
+
+    def __init__(self, conn: sqlite3.Connection, *, settings: Settings | None = None) -> None:
         self._conn = conn
         self._repo = SourceRepository(conn)
+        self._settings = settings
 
     def add(
         self,
@@ -88,7 +97,13 @@ class SourceService:
         if required is None:
             return {"ok": False, "detail": f"未知のソース種別です: {source['type']}"}
         connection = source.get("connection") or {}
-        missing = [key for key in required if not connection.get(key)]
+        fallback: dict[str, Any] = {}
+        if self._settings is not None and source["type"] == "esa":
+            fallback = {
+                "team": self._settings.esa_team_name,
+                "access_token": self._settings.esa_access_token,
+            }
+        missing = [key for key in required if not connection.get(key) and not fallback.get(key)]
         if missing:
             return {
                 "ok": False,

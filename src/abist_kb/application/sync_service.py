@@ -24,6 +24,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from abist_kb import identity
+from abist_kb.config import Settings, load_settings
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
 from abist_kb.domain.job import JobState, ResourceKind
 from abist_kb.domain.sync_policy import ACTION_BUCKET, SyncAction
@@ -156,6 +158,34 @@ def _sanitize_label(label: str) -> str:
     return cleaned[:80] or "sync"
 
 
+#: `scheme://user:pass@host/...` のように既に認証情報を含む URL は上書きしない。
+_GIT_URL_HAS_CREDENTIALS_RE = re.compile(r"^https?://[^/@\s]+@")
+
+
+def _resolve_git_repository(
+    repository: str, *, options: Mapping[str, Any], settings: Settings
+) -> str:
+    """`repository` に認証トークンを埋め込む(DB には書かず、この場限りで使う)。
+
+    優先順位: `repository` に既に `user:pass@`/`token@` が埋め込まれていればそれを
+    尊重 > バッチ/ソースの `options.token`(リポジトリごとの上書き) >
+    `Settings.git_token`(`.env` の `ABIST_KB_GIT_TOKEN`、単一トークン運用の既定)。
+    どれも無ければトークン無しの URL のまま返す(公開リポジトリはそれで動く。
+    esa と異なり git は資格情報が無くても成立し得るユースケースがあるため、
+    ここではハードエラーにしない — 失敗時の扱いは呼び出し元の `_sync_git_target`
+    が担う)。
+    """
+    if not repository.startswith(("http://", "https://")):
+        return repository
+    if _GIT_URL_HAS_CREDENTIALS_RE.match(repository):
+        return repository
+    token = options.get("token") or settings.git_token
+    if not token:
+        return repository
+    scheme, rest = repository.split("://", 1)
+    return f"{scheme}://{token}@{rest}"
+
+
 def write_sync_report(summary: SyncSummary, *, reports_dir: Path, label: str) -> Path:
     """`reports/sync/sync-<source>-<label>-<timestamp>.json` へ書き出す。"""
     sync_dir = reports_dir / "sync"
@@ -182,6 +212,7 @@ class SyncService:
         sources: SourceRepository,
         batches: BatchRepository,
         missing_threshold: int = DEFAULT_MISSING_THRESHOLD,
+        settings: Settings | None = None,
     ) -> None:
         self._root_dir = root_dir
         self._docs_dir = docs_dir
@@ -190,8 +221,47 @@ class SyncService:
         self._sources = sources
         self._batches = batches
         self._missing_threshold = missing_threshold
+        # §12: 資格情報は DB(`sources.connection`)へ書かない。マイグレーションが
+        # `esa`/`git` ソースを空の `connection={}` プレースホルダーとして作るのは
+        # そのためで、本物の値は `.env` 経由の `Settings` から読む
+        # (`_resolve_esa_credentials`/`_resolve_git_repository` 参照)。呼び出し側が
+        # 明示的に注入しない限り、ここで一度だけ `.env` を読む。
+        self._settings = settings if settings is not None else load_settings(root=root_dir)
 
     # -- ソース単位の同期 -----------------------------------------------------
+
+    def _resolve_esa_credentials(self, connection: Mapping[str, Any]) -> tuple[str, str]:
+        """`connection` の team/access_token が空なら `Settings`(`.env`)へフォールバックする。
+
+        優先順位: ソースごとの `connection.team`/`connection.access_token`(複数チームを
+        使い分ける運用向けの明示的な上書き) > `Settings.esa_team_name`/`esa_access_token`
+        (`.env` の `ABIST_KB_ESA_TEAM_NAME`/`ABIST_KB_ESA_ACCESS_TOKEN`、単一チーム運用の
+        既定)。どちらでも埋まらなければ、DB ではなく設定すべき環境変数名を名指しした
+        `CONFIG_ERROR` にする(§12: 資格情報は `.env` にのみ置く)。
+        """
+        team = connection.get("team") or self._settings.esa_team_name
+        token = connection.get("access_token") or self._settings.esa_access_token
+        missing_vars = [
+            identity.env_var(name)
+            for name, value in (("esa_team_name", team), ("esa_access_token", token))
+            if not value
+        ]
+        if missing_vars:
+            raise AppError(
+                code=ErrorCode.CONFIG_ERROR,
+                message=(
+                    "esa の接続情報が不足しています。環境変数 "
+                    f"{' / '.join(missing_vars)} を `.env` に設定してください。"
+                ),
+                hint=(
+                    "チームごとに異なる資格情報を使う場合は、"
+                    '`source edit --connection \'{"team": ..., "access_token": ...}\'` '
+                    "で個別のソースにだけ上書きできます(資格情報は DB に書かないため、"
+                    "この上書きも `.env` の値と同じ扱いで機密として保管してください)。"
+                ),
+                exit_code=ExitCode.CONFIG_ERROR,
+            )
+        return team, token
 
     def _require_esa_source(self, source_id: str) -> dict[str, Any]:
         source = self._sources.get(source_id)
@@ -204,15 +274,10 @@ class SyncService:
                 exit_code=ExitCode.INVALID_INPUT,
             )
         connection = source.get("connection") or {}
-        team = connection.get("team")
-        token = connection.get("access_token")
-        if not team or not token:
-            raise AppError(
-                code=ErrorCode.INVALID_INPUT,
-                message="ソースの接続設定に team/access_token が不足しています。",
-                exit_code=ExitCode.INVALID_INPUT,
-            )
-        return source
+        team, token = self._resolve_esa_credentials(connection)
+        resolved = dict(source)
+        resolved["connection"] = {**connection, "team": team, "access_token": token}
+        return resolved
 
     async def _sync_categories(
         self,
@@ -563,12 +628,20 @@ class SyncService:
                     message="git バッチ/ソースの出力先(output_dir)が決まりません。",
                     exit_code=ExitCode.INVALID_INPUT,
                 )
+            # §12: `repository`(接続設定/DB)に資格情報は書かせない。private
+            # リポジトリ向けのトークンは `.env`(`Settings.git_token`)から
+            # この場限りで埋め込む(`_resolve_git_repository` 参照、DB/レポートへは
+            # `GitSyncRunner`/`redact_credentials` が常にマスクしてから書く)。
+            token_available = bool(options.get("token") or self._settings.git_token)
+            resolved_repository = _resolve_git_repository(
+                repository, options=options, settings=self._settings
+            )
             runner = GitSyncRunner(
                 documents=self._documents,
                 root_dir=self._root_dir,
                 docs_dir=self._docs_dir,
                 output_dir=output_dir,
-                repository=repository,
+                repository=resolved_repository,
                 branch=options.get("branch"),
             )
             result = runner.sync(check_lease=check_lease, emit=emit)
@@ -576,7 +649,19 @@ class SyncService:
                 record_sync_result(summary, _git_item_payload(git_item))
             overall_ok = overall_ok and result.full_sync_succeeded
             if result.error:
-                summary.note = f"{summary.note} / {result.error}" if summary.note else result.error
+                error_message = result.error
+                if not token_available:
+                    # 資格情報が一切無い状態での失敗は、認証エラーかどうかに
+                    # 関わらず「どの環境変数を設定すれば良いか」を添える
+                    # (§12: 接続設定を編集させるのではなく `.env` を指す)。
+                    error_message = (
+                        f"{error_message} (private リポジトリの場合は環境変数 "
+                        f"{identity.env_var('git_token')} を `.env` に設定するか、"
+                        "対象の接続設定に token を指定してください)"
+                    )
+                summary.note = (
+                    f"{summary.note} / {error_message}" if summary.note else error_message
+                )
         summary.full_sync_succeeded = overall_ok
         summary.finished_at = datetime.now(UTC).isoformat()
         report_path = write_sync_report(summary, reports_dir=self._reports_dir, label=label)

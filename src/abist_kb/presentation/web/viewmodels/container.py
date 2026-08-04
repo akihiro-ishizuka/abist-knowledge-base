@@ -88,7 +88,7 @@ class ServiceContainer:
         )
         self.event_bus = events_mod.EventBus()
 
-        self.sources = SourceService(self.conn)
+        self.sources = SourceService(self.conn, settings=settings)
         self.batches = BatchService(self.conn)
         self.documents = DocumentService(self.conn)
         self.search = SearchService(

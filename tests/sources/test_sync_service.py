@@ -14,8 +14,9 @@ from unittest import mock
 
 import pytest
 
-from abist_kb.application.sync_service import SyncService
-from abist_kb.domain.errors import AppError
+from abist_kb.application.sync_service import SyncService, _resolve_git_repository
+from abist_kb.config import Settings
+from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.infrastructure.db.batches_repo import BatchRepository
 from abist_kb.infrastructure.db.connection import connect
 from abist_kb.infrastructure.db.documents_repo import DocumentRepository
@@ -538,3 +539,217 @@ def test_sync_batch_web_concurrent_requests_within_delay_window_still_overlap(
     # 明確に速い。CPU高負荷下でも誤検知しないよう、直列実行の下限(0.3s)に対して
     # 十分な余裕(1.5s)を持たせる(timing_sensitive、上記docstring参照)。
     assert elapsed < 1.5, f"delay がクロール全体を直列化している疑い: {elapsed:.2f}s"
+
+
+# ---------------------------------------------------------------------------
+# 資格情報の解決(post-cutover fix): §12 は esa/git の資格情報を DB へ書くことを
+# 禁じているため、マイグレーションが作った空の `connection={}` プレースホルダーは
+# `Settings`(`.env`)へフォールバックできなければならない。優先順位はソースごとの
+# `connection` 上書き > `Settings`、どちらも無ければ環境変数名を名指しした
+# `CONFIG_ERROR` にする(接続設定を編集させない)。
+# ---------------------------------------------------------------------------
+
+
+def _build_service_with_settings(
+    tmp_root: Path, esa_server: MockEsaServer, *, settings: Settings, connection: dict | None
+) -> tuple[SyncService, str]:
+    conn = connect(tmp_root / "app.sqlite")
+    ensure_app_schema(conn)
+    docs_dir = tmp_root / "docs"
+    docs_dir.mkdir(exist_ok=True)
+    sources = SourceRepository(conn)
+    source = sources.create(
+        type="esa",
+        display_name="テストesa",
+        connection=connection,
+        output_dir="docs/_svc_test",
+    )
+    service = SyncService(
+        root_dir=tmp_root,
+        docs_dir=docs_dir,
+        reports_dir=tmp_root / "reports",
+        documents=DocumentRepository(conn),
+        sources=sources,
+        batches=BatchRepository(conn),
+        settings=settings,
+    )
+    return service, source["id"]
+
+
+def test_sync_source_esa_resolves_credentials_from_settings_when_connection_empty(
+    tmp_root: Path, esa_server: MockEsaServer
+) -> None:
+    """マイグレーションが作る `connection={}` プレースホルダーのまま同期できる
+    (`Settings.esa_team_name`/`esa_access_token` へフォールバックする)。
+    `base_url` だけはテスト専用の抜け道としてソース側の接続設定に残す。
+    """
+    esa_server.add_post(make_post(category="対象カテゴリ"))
+    settings = Settings(
+        root_dir=tmp_root,
+        esa_team_name=esa_server.team,
+        esa_access_token=FAKE_TOKEN,
+        _env_file=None,
+    )
+    service, source_id = _build_service_with_settings(
+        tmp_root, esa_server, settings=settings, connection={"base_url": esa_server.base_url}
+    )
+
+    summary, report_path = service.sync_source(source_id, categories=["対象カテゴリ"])
+
+    assert summary.totals["added"] == 1
+    assert report_path is not None
+    assert FAKE_TOKEN not in report_path.read_text(encoding="utf-8")
+
+
+def test_sync_source_esa_connection_override_wins_over_settings(
+    tmp_root: Path, esa_server: MockEsaServer
+) -> None:
+    """ソース固有の `connection.team`/`access_token`(複数チーム運用向けの上書き)は
+    `Settings` より優先される。`Settings` 側にわざと別チーム/別トークンを入れ、
+    実際にモックサーバーへ届いたのはソース側の値だと(認証成功で)確認する。
+    """
+    esa_server.add_post(make_post(category="対象カテゴリ"))
+    settings = Settings(
+        root_dir=tmp_root,
+        esa_team_name="wrong-team",
+        esa_access_token="wrong-token",
+        _env_file=None,
+    )
+    service, source_id = _build_service_with_settings(
+        tmp_root,
+        esa_server,
+        settings=settings,
+        connection={
+            "team": esa_server.team,
+            "access_token": FAKE_TOKEN,
+            "base_url": esa_server.base_url,
+        },
+    )
+
+    summary, _report = service.sync_source(source_id, categories=["対象カテゴリ"])
+
+    assert summary.totals["added"] == 1
+
+
+def test_sync_source_esa_missing_credentials_raises_actionable_config_error(
+    tmp_root: Path, esa_server: MockEsaServer
+) -> None:
+    """`connection` も `Settings` も空なら、DB の接続設定ではなく設定すべき
+    環境変数名(`ABIST_KB_ESA_TEAM_NAME`/`ABIST_KB_ESA_ACCESS_TOKEN`)を名指しした
+    `CONFIG_ERROR` になる。旧メッセージ(「ソースの接続設定に...」)には戻さない。
+    """
+    settings = Settings(root_dir=tmp_root, _env_file=None)
+    service, source_id = _build_service_with_settings(
+        tmp_root, esa_server, settings=settings, connection={}
+    )
+
+    with pytest.raises(AppError) as exc_info:
+        service.sync_source(source_id, categories=["対象カテゴリ"])
+
+    err = exc_info.value
+    assert err.code == ErrorCode.CONFIG_ERROR
+    assert "ABIST_KB_ESA_TEAM_NAME" in err.message
+    assert "ABIST_KB_ESA_ACCESS_TOKEN" in err.message
+    assert "接続設定に team/access_token が不足しています" not in err.message
+
+
+def test_sync_source_esa_missing_credentials_error_never_names_the_missing_secret(
+    tmp_root: Path, esa_server: MockEsaServer
+) -> None:
+    """欠落エラーは「何が無いか」を環境変数名で示すだけで、値そのものは当然
+    含まない(値がそもそも存在しないケースだが、`hint` にも FAKE_TOKEN が
+    紛れ込んでいないことを合わせて確認する)。
+    """
+    settings = Settings(root_dir=tmp_root, esa_team_name="abist", _env_file=None)  # token だけ欠落
+    service, source_id = _build_service_with_settings(
+        tmp_root, esa_server, settings=settings, connection={}
+    )
+
+    with pytest.raises(AppError) as exc_info:
+        service.sync_source(source_id, categories=["対象カテゴリ"])
+
+    err = exc_info.value
+    assert "ABIST_KB_ESA_ACCESS_TOKEN" in err.message
+    assert "ABIST_KB_ESA_TEAM_NAME" not in err.message  # team は既に埋まっている
+    assert FAKE_TOKEN not in err.message
+    assert FAKE_TOKEN not in (err.hint or "")
+
+
+def test_resolve_git_repository_uses_settings_token_when_connection_has_none() -> None:
+    settings = Settings(git_token="ghp-from-env", _env_file=None)  # noqa: S106 - テスト専用のダミー値
+    resolved = _resolve_git_repository(
+        "https://github.com/example/repo.git", options={}, settings=settings
+    )
+    assert resolved == "https://ghp-from-env@github.com/example/repo.git"
+
+
+def test_resolve_git_repository_per_source_token_overrides_settings() -> None:
+    settings = Settings(git_token="ghp-from-env", _env_file=None)  # noqa: S106
+    resolved = _resolve_git_repository(
+        "https://github.com/example/repo.git",
+        options={"token": "ghp-from-connection"},
+        settings=settings,
+    )
+    assert resolved == "https://ghp-from-connection@github.com/example/repo.git"
+
+
+def test_resolve_git_repository_respects_credentials_already_embedded_in_url() -> None:
+    settings = Settings(git_token="ghp-from-env", _env_file=None)  # noqa: S106
+    resolved = _resolve_git_repository(
+        "https://explicit-user:explicit-pass@github.com/example/repo.git",
+        options={},
+        settings=settings,
+    )
+    assert resolved == "https://explicit-user:explicit-pass@github.com/example/repo.git"
+
+
+def test_resolve_git_repository_leaves_url_unchanged_when_no_token_available() -> None:
+    """git は esa と違い、資格情報が無くても公開リポジトリなら成立する。
+    トークンが無ければエラーにせず URL をそのまま返す(ハードエラーにしない
+    設計判断、`_sync_git_target` 側で clone 失敗時のヒント表示を担う)。
+    """
+    settings = Settings(_env_file=None)
+    resolved = _resolve_git_repository(
+        "https://github.com/example/repo.git", options={}, settings=settings
+    )
+    assert resolved == "https://github.com/example/repo.git"
+
+
+def test_sync_batch_git_missing_token_error_hints_at_git_token_env_var_not_connection(
+    tmp_root: Path,
+) -> None:
+    """private リポジトリ相当(存在しない/認証が必要なURL)への clone 失敗時、
+    トークンが一切無い状態なら `ABIST_KB_GIT_TOKEN` を案内する。DB の接続設定を
+    編集しろとは言わない(esa の教訓と同じ理由)。トークンの値そのものは
+    このケースではそもそも存在しないため、案内メッセージにも当然含まれない。
+    """
+    conn = connect(tmp_root / "app.sqlite")
+    ensure_app_schema(conn)
+    docs_dir = tmp_root / "docs"
+    docs_dir.mkdir(exist_ok=True)
+    batches = BatchRepository(conn)
+    # 存在しないローカルパスへの clone は git 側の認証プロンプトなしで確実に失敗する
+    # (実ネットワークに依存せず、`token_available=False` 経路をエクササイズする)。
+    missing_repo = str(tmp_root / "no-such-repo-here")
+    batch = batches.create(
+        name="gitバッチ",
+        type="git",
+        output_dir="docs/_svc_git_missing_test",
+        items=[{"options": {"repository": missing_repo}}],
+    )
+    service = SyncService(
+        root_dir=tmp_root,
+        docs_dir=docs_dir,
+        reports_dir=tmp_root / "reports",
+        documents=DocumentRepository(conn),
+        sources=SourceRepository(conn),
+        batches=batches,
+        settings=Settings(root_dir=tmp_root, _env_file=None),
+    )
+
+    summary, _report = service.sync_batch(batch["id"])
+
+    assert summary.full_sync_succeeded is False
+    assert summary.note is not None
+    assert "ABIST_KB_GIT_TOKEN" in summary.note
+    assert "接続設定に team/access_token が不足しています" not in summary.note
