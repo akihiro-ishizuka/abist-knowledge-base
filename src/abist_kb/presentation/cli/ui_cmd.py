@@ -65,12 +65,16 @@ def ui_desktop(ctx: typer.Context) -> None:
 
 @ui_app.command("tui")
 def ui_tui(ctx: typer.Context) -> None:
-    """Textual TUI を起動する(M6 の後続タスクで実装)。"""
+    """Textual TUI を起動する(§7.1 Task 6.3)。"""
+    from abist_kb.presentation.tui.app import run_tui
+    from abist_kb.presentation.web.viewmodels.container import ServiceContainer
+
     cli_ctx = get_context(ctx)
-    cli_ctx.presenter.warning(
-        "Textual TUI は本タスクの範囲外です"
-        "(design/plans/M6-M10-remaining.md Task 6.3、後続パスで実装します)。"
-    )
+    container = ServiceContainer(cli_ctx.settings)
+    try:
+        run_tui(container)
+    finally:
+        container.close()
 
 
 __all__ = ["ui_app"]

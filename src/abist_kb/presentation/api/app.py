@@ -19,34 +19,18 @@ from typing import Any, TypeVar
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from abist_kb.domain.errors import AppError, ErrorCode
+from abist_kb.domain.errors import AppError, ErrorCode, http_status_for
 from abist_kb.domain.job import TERMINAL_STATES
 from abist_kb.presentation.api.auth import AccessTokenMiddleware, require_token_when_exposed
 from abist_kb.presentation.web.viewmodels import screens
 from abist_kb.presentation.web.viewmodels.container import ServiceContainer
 from abist_kb.presentation.web.viewmodels.serialize import error_to_dict, event_to_dict
 
-_ERROR_STATUS: dict[ErrorCode, int] = {
-    ErrorCode.NOT_FOUND: 404,
-    ErrorCode.INVALID_INPUT: 400,
-    ErrorCode.CONFLICT: 409,
-    ErrorCode.WORKER_UNAVAILABLE: 409,
-    ErrorCode.CONFIG_ERROR: 500,
-    ErrorCode.EXTERNAL_SERVICE: 502,
-    ErrorCode.CANCELLED: 409,
-    ErrorCode.UNSUPPORTED_BATCH_CONFIG: 400,
-    ErrorCode.FTS5_TRIGRAM_UNAVAILABLE: 500,
-    ErrorCode.SQLITE_TOO_OLD: 500,
-    ErrorCode.MIGRATION_FAILED: 500,
-    ErrorCode.FAILURE: 500,
-}
-
-
 T = TypeVar("T")
 
 
 def _status_for(err: AppError) -> int:
-    return _ERROR_STATUS.get(err.code, 500)
+    return http_status_for(err.code)
 
 
 def _sse_line(payload: dict[str, Any]) -> str:
@@ -116,7 +100,7 @@ def register_api_routes(
                 code = ErrorCode(error_payload.get("code"))
             except ValueError:
                 code = ErrorCode.FAILURE
-            return JSONResponse(error_payload, status_code=_ERROR_STATUS.get(code, 500))
+            return JSONResponse(error_payload, status_code=http_status_for(code))
         return result
 
     router_prefix = "/api/v1"
