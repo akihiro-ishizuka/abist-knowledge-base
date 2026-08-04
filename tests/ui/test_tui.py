@@ -100,9 +100,7 @@ async def test_available_chat_renders_and_surfaces_citations_and_warnings(
         app.action_goto_area("chat")
         await pilot.pause()
 
-        body = "\n".join(
-            str(widget.render()) for widget in app.query("#content Static")
-        )
+        body = "\n".join(str(widget.render()) for widget in app.query("#content Static"))
         assert "利用不可" not in body
 
         chat_input = app.query_one("#chat-input", Input)
@@ -127,9 +125,7 @@ async def test_available_quality_renders_all_audits_without_unavailable_notice(
         app.action_goto_area("quality")
         await pilot.pause()
 
-        body = "\n".join(
-            str(widget.render()) for widget in app.query("#content Static")
-        )
+        body = "\n".join(str(widget.render()) for widget in app.query("#content Static"))
         assert "利用不可" not in body
         assert "apply=True" in body
         assert "CLI" in body
@@ -401,12 +397,8 @@ async def test_document_detail_updates_only_editable_metadata(
 async def test_document_delete_decline_preserves_document_and_audit_count(
     container: ServiceContainer,
 ) -> None:
-    container.documents.upsert(
-        {"path": "keep.md", "source": "manual", "status": "active"}
-    )
-    audit_before = container.conn.execute(
-        "SELECT COUNT(*) FROM audit_events"
-    ).fetchone()[0]
+    container.documents.upsert({"path": "keep.md", "source": "manual", "status": "active"})
+    audit_before = container.conn.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0]
     app = KbApp(container, start_worker=False)
 
     async with app.run_test(size=(120, 40)) as pilot:
@@ -424,9 +416,7 @@ async def test_document_delete_decline_preserves_document_and_audit_count(
         await pilot.pause()
 
         assert container.documents.get_or_none("keep.md") is not None
-        audit_after = container.conn.execute(
-            "SELECT COUNT(*) FROM audit_events"
-        ).fetchone()[0]
+        audit_after = container.conn.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0]
         assert audit_after == audit_before
 
 

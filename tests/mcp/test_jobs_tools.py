@@ -210,7 +210,6 @@ def test_start_render_scene_rejects_invalid_json_string(tmp_root: Path) -> None:
     tools, conn = _make_tools(tmp_root)
     _mark_live_worker(conn)
 
-
     result = tools.start_render_scene({"sceneSpec": "{not json"})
     payload = _payload(result)
 

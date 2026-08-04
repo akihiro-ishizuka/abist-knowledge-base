@@ -54,7 +54,7 @@ def render_detail(container: ServiceContainer, job_id: str) -> None:
                 detail=f"対象: ジョブ {job_id}",
             ):
                 return
-            outcome = screens.job_cancel(container, job_id)
+            outcome = screens.job_cancel(container, job_id, confirmed=True)
             state = outcome.get("job", {}).get("state")
             show_result(outcome, success=f"キャンセル要求: {state}")
 

@@ -31,9 +31,7 @@ RENDER_JOB_KIND = "render_scene"
 
 
 def _outcome_to_error(outcome: RenderOutcome) -> dict[str, Any]:
-    message = (
-        outcome.errors[0]["message"] if outcome.errors else "レンダリングに失敗しました。"
-    )
+    message = outcome.errors[0]["message"] if outcome.errors else "レンダリングに失敗しました。"
     return {
         "code": outcome.code or "RENDER_FAILED",
         "message": message,

@@ -311,9 +311,7 @@ def run_job(
         # 場合がある(`SyncService.sync_all` の partial-failure 方針、
         # `render_scene` ジョブの出力先情報参照)。
         state = run_ctx._finish_state or JobState.SUCCEEDED
-        repo.finish(
-            job.id, state=state, result=run_ctx._finish_result, error=run_ctx._finish_error
-        )
+        repo.finish(job.id, state=state, result=run_ctx._finish_result, error=run_ctx._finish_error)
     result = repo.get(job.id)
     assert result is not None  # 直前に finish した行なので必ず存在する
     return result

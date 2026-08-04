@@ -188,9 +188,9 @@ def render(container: ServiceContainer) -> None:
         def open_batch_dialog(batch: dict[str, Any] | None = None) -> None:
             with ui.dialog() as dialog, ui.card().classes("min-w-96"):
                 ui.label("バッチ編集" if batch else "バッチ追加").classes("text-lg font-bold")
-                name = ui.input(
-                    "名前", value=str(batch.get("name", "")) if batch else ""
-                ).mark("batch-name")
+                name = ui.input("名前", value=str(batch.get("name", "")) if batch else "").mark(
+                    "batch-name"
+                )
                 batch_type = ui.select(
                     ["esa", "web", "git"],
                     label="種別",
@@ -273,10 +273,7 @@ def render(container: ServiceContainer) -> None:
             batch = selected(batch_table, "バッチ")
             if batch is None:
                 return
-            detail = (
-                f"対象: バッチ {batch['name']}\n"
-                f"出力先: {batch.get('output_dir') or '未設定'}"
-            )
+            detail = f"対象: バッチ {batch['name']}\n出力先: {batch.get('output_dir') or '未設定'}"
             if not await confirm_dialog("削除しますか?", detail=detail):
                 return
             outcome = screens.batch_remove(container, batch["id"], confirmed=True)
@@ -287,10 +284,7 @@ def render(container: ServiceContainer) -> None:
             batch = selected(batch_table, "バッチ")
             if batch is None:
                 return
-            detail = (
-                f"対象: バッチ {batch['name']}\n"
-                f"出力先: {batch.get('output_dir') or '未設定'}"
-            )
+            detail = f"対象: バッチ {batch['name']}\n出力先: {batch.get('output_dir') or '未設定'}"
             if not await confirm_dialog("実行しますか?", detail=detail, danger=False):
                 return
             outcome = screens.batch_run(container, batch["id"])

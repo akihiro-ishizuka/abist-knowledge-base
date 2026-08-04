@@ -278,8 +278,11 @@ def register_api_routes(
         return await run_locked(request, lambda: screens.job_detail(get_container(request), job_id))
 
     @app.post(f"{router_prefix}/jobs/{{job_id}}/cancel")
-    async def cancel_job(job_id: str, request: Request) -> dict[str, Any]:
-        return await run_locked(request, lambda: screens.job_cancel(get_container(request), job_id))
+    async def cancel_job(job_id: str, request: Request, confirmed: bool = False) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.job_cancel(get_container(request), job_id, confirmed=confirmed),
+        )
 
     @app.post(f"{router_prefix}/jobs/{{job_id}}/retry")
     async def retry_job(job_id: str, request: Request) -> dict[str, Any]:
@@ -436,9 +439,7 @@ def register_api_routes(
 
     @app.get(f"{router_prefix}/visualization/deps")
     async def visualization_deps(request: Request) -> dict[str, Any]:
-        return await run_locked(
-            request, lambda: screens.visualization_deps(get_container(request))
-        )
+        return await run_locked(request, lambda: screens.visualization_deps(get_container(request)))
 
     @app.post(f"{router_prefix}/visualization/validate")
     async def visualization_validate(

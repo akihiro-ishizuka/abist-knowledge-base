@@ -44,7 +44,7 @@ def render(container: ServiceContainer) -> None:
         deps = screens.visualization_deps(container)
         ui.label(_deps_summary(deps)).classes(
             "text-sm" if deps.get("ready") else "text-sm text-danger"
-        )
+        ).mark("visualization-deps")
 
         spec_input = (
             ui.textarea(
@@ -120,7 +120,9 @@ def render(container: ServiceContainer) -> None:
             )
             if not deps.get("ready"):
                 render_button.props("disable")
-                render_button.tooltip("依存が不足しているため無効です。上部の診断を確認してください。")
+                render_button.tooltip(
+                    "依存が不足しているため無効です。上部の診断を確認してください。"
+                )
 
 
 __all__ = ["render"]

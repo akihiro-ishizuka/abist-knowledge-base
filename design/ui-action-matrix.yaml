@@ -122,10 +122,6 @@ screens:
         label: 矛盾候補監査
         destructive: false
         surfaces: [web, tui, api]
-      quality_run_search_quality:
-        label: 検索品質監査
-        destructive: false
-        surfaces: [web, tui, api]
       quality_run_backfill_metadata:
         label: メタデータ補完監査（apply=false / dry-run）
         destructive: false

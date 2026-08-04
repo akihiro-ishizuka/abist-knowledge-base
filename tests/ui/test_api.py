@@ -267,9 +267,7 @@ def test_visualization_render_endpoint_returns_worker_unavailable_without_worker
         "beats": [{"type": "metric", "label": "テスト指標", "value": "1", "source_refs": ["s1"]}],
     }
 
-    response = client.post(
-        "/api/v1/visualization/render", json={"scene_spec": scene_spec}
-    )
+    response = client.post("/api/v1/visualization/render", json={"scene_spec": scene_spec})
     assert response.status_code == 409
     assert response.json()["code"] == "WORKER_UNAVAILABLE"
 

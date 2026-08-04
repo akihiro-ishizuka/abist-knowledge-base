@@ -19,7 +19,7 @@ def render(container: ServiceContainer) -> None:
             return
 
         state: dict[str, str | None] = {"conversation_id": None}
-        log = ui.column().classes("w-full gap-2")
+        log = ui.column().classes("w-full gap-2").mark("chat-log")
 
         def _append(role: str, text: str) -> None:
             with log:
@@ -53,8 +53,8 @@ def render(container: ServiceContainer) -> None:
             _append_warnings(result["citation_warnings"])
 
         with ui.row().classes("w-full"):
-            message_input = ui.input("メッセージ").classes("flex-grow")
-            ui.button("送信", on_click=_send)
+            message_input = ui.input("メッセージ").classes("flex-grow").mark("chat-input")
+            ui.button("送信", on_click=_send).mark("chat-send")
 
 
 __all__ = ["render"]

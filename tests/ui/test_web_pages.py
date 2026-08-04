@@ -281,12 +281,8 @@ async def test_document_detail_updates_only_editable_metadata(
 async def test_document_delete_decline_preserves_document_and_audit_count(
     user: User, wired_container: ServiceContainer
 ) -> None:
-    wired_container.documents.upsert(
-        {"path": "keep.md", "source": "manual", "status": "active"}
-    )
-    audit_before = wired_container.conn.execute(
-        "SELECT COUNT(*) FROM audit_events"
-    ).fetchone()[0]
+    wired_container.documents.upsert({"path": "keep.md", "source": "manual", "status": "active"})
+    audit_before = wired_container.conn.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0]
 
     await user.open("/documents/keep.md")
     user.find("文書を削除").click()
@@ -294,9 +290,7 @@ async def test_document_delete_decline_preserves_document_and_audit_count(
     user.find("いいえ").click()
 
     assert wired_container.documents.get_or_none("keep.md") is not None
-    audit_after = wired_container.conn.execute(
-        "SELECT COUNT(*) FROM audit_events"
-    ).fetchone()[0]
+    audit_after = wired_container.conn.execute("SELECT COUNT(*) FROM audit_events").fetchone()[0]
     assert audit_after == audit_before
 
 

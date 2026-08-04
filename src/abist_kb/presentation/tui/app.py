@@ -405,7 +405,7 @@ class KbApp(App[None]):
 
     def cancel_job(self, job_id: str) -> None:
         def _do() -> dict[str, Any]:
-            return screens.job_cancel(self.container, job_id)
+            return screens.job_cancel(self.container, job_id, confirmed=True)
 
         self.run_worker(
             self.confirm_and_run(
@@ -453,9 +453,7 @@ class KbApp(App[None]):
 
     def _show_sources_batches_invalid_input(self, message: str) -> None:
         self._show_sources_batches_result(
-            self._format_action_result(
-                {"error": {"code": "INVALID_INPUT", "message": message}}
-            )
+            self._format_action_result({"error": {"code": "INVALID_INPUT", "message": message}})
         )
 
     def remove_source(self, source_id: str) -> None:
@@ -475,9 +473,7 @@ class KbApp(App[None]):
             f"ソース {source['display_name']} を削除しますか?\n"
             f"出力先: {source.get('output_dir') or '未設定'}"
         )
-        self.run_worker(
-            self.confirm_and_run(message, _do, sources_batches_result=True)
-        )
+        self.run_worker(self.confirm_and_run(message, _do, sources_batches_result=True))
 
     def test_source_connection(self, source_id: str) -> None:
         result = screens.source_test_connection(self.container, source_id)
@@ -497,12 +493,9 @@ class KbApp(App[None]):
             return outcome
 
         message = (
-            f"バッチ {batch['name']} を削除しますか?\n"
-            f"出力先: {batch.get('output_dir') or '未設定'}"
+            f"バッチ {batch['name']} を削除しますか?\n出力先: {batch.get('output_dir') or '未設定'}"
         )
-        self.run_worker(
-            self.confirm_and_run(message, _do, sources_batches_result=True)
-        )
+        self.run_worker(self.confirm_and_run(message, _do, sources_batches_result=True))
 
     def run_batch(self, batch_id: str) -> None:
         batch = self._batch(batch_id)
@@ -513,12 +506,9 @@ class KbApp(App[None]):
             return screens.batch_run(self.container, batch_id)
 
         message = (
-            f"バッチ {batch['name']} を実行しますか?\n"
-            f"出力先: {batch.get('output_dir') or '未設定'}"
+            f"バッチ {batch['name']} を実行しますか?\n出力先: {batch.get('output_dir') or '未設定'}"
         )
-        self.run_worker(
-            self.confirm_and_run(message, _do, sources_batches_result=True)
-        )
+        self.run_worker(self.confirm_and_run(message, _do, sources_batches_result=True))
 
     def action_remove_selected(self) -> None:
         if self.current_area != "sources_batches":
@@ -554,9 +544,7 @@ class KbApp(App[None]):
         if self.current_area != "sources_batches":
             return
         if self._selected_source_id is None:
-            self._show_sources_batches_invalid_input(
-                "接続テストするソースを選択してください。"
-            )
+            self._show_sources_batches_invalid_input("接続テストするソースを選択してください。")
             return
         self.test_source_connection(self._selected_source_id)
 
@@ -608,9 +596,7 @@ class KbApp(App[None]):
             ),
         )
 
-    def update_document_metadata(
-        self, path: str, *, status: str, document_type: str
-    ) -> None:
+    def update_document_metadata(self, path: str, *, status: str, document_type: str) -> None:
         outcome = screens.document_update_metadata(
             self.container,
             path,
@@ -620,9 +606,7 @@ class KbApp(App[None]):
             },
         )
         self._action_results[("document", path)] = self._format_action_result(outcome)
-        self.query_one("#document-result", Static).update(
-            self._action_results[("document", path)]
-        )
+        self.query_one("#document-result", Static).update(self._action_results[("document", path)])
 
     def delete_document(self, path: str) -> None:
         def _do() -> dict[str, Any]:
@@ -710,7 +694,8 @@ class KbApp(App[None]):
         if warnings:
             lines.append("警告:")
             lines.extend(f"  ⚠ {warning}" for warning in warnings)
-        chat_log.update("\n".join(lines))
+        previous = str(chat_log.render())
+        chat_log.update("\n".join(filter(None, (previous, "\n".join(lines)))))
 
     def _render_visualization(self) -> None:
         deps = screens.visualization_deps(self.container)
@@ -803,9 +788,7 @@ class KbApp(App[None]):
             "backfill": screens.quality_run_backfill_metadata,
         }
         result = runners[audit](self.container)
-        self.query_one("#quality-result", Static).update(
-            self._format_quality_result(result)
-        )
+        self.query_one("#quality-result", Static).update(self._format_quality_result(result))
 
     def _render_settings(self) -> None:
         data = screens.settings_diagnostics(self.container)
@@ -933,9 +916,7 @@ class _VisualizationActions(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Button("検証", id="visualization-validate")
-        yield Button(
-            "レンダリング", id="visualization-render", disabled=self._render_disabled
-        )
+        yield Button("レンダリング", id="visualization-render", disabled=self._render_disabled)
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         app = self.app

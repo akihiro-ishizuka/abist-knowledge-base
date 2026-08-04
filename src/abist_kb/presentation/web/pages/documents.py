@@ -62,9 +62,7 @@ def render_detail(container: ServiceContainer, path: str) -> None:
                     ui.label(f"{key}: {value}").classes("text-sm text-grey-8")
 
         ui.label("編集可能メタデータ").classes("text-sm font-bold")
-        status = ui.input("status", value=str(record.get("status") or "")).mark(
-            "document-status"
-        )
+        status = ui.input("status", value=str(record.get("status") or "")).mark("document-status")
         document_type = ui.input(
             "document_type", value=str(record.get("document_type") or "")
         ).mark("document-type")

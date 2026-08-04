@@ -213,7 +213,19 @@ def job_detail(container: ServiceContainer, job_id: str) -> dict[str, Any]:
     return {"job": job_to_dict(job), "history": [event_to_dict(evt) for evt in history]}
 
 
-def job_cancel(container: ServiceContainer, job_id: str) -> dict[str, Any]:
+def job_cancel(
+    container: ServiceContainer, job_id: str, *, confirmed: bool = False
+) -> dict[str, Any]:
+    """ジョブキャンセルは破壊的操作(§ui-action-matrix)。`source_remove` 等と同じく
+    `confirmed=True` が無ければ実行前に `INVALID_INPUT` で止める(Web/TUI はモーダル
+    確認後に `confirmed=True` を渡す、§12)。"""
+    if not confirmed:
+        return _err(
+            AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message="ジョブをキャンセルするには確認が必要です。",
+            )
+        )
     try:
         container.jobs.cancel(job_id)
     except AppError as exc:

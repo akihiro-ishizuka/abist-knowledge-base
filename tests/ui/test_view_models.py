@@ -75,8 +75,20 @@ def test_job_cancel_and_retry(container: ServiceContainer) -> None:
     assert retried["job"]["retry_of"] == job.id
     assert retried["job"]["state"] == str(JobState.QUEUED)
 
-    cancel_outcome = screens.job_cancel(container, retried["job"]["id"])
+    cancel_outcome = screens.job_cancel(container, retried["job"]["id"], confirmed=True)
     assert cancel_outcome["job"]["state"] == str(JobState.CANCELLED)
+
+
+def test_job_cancel_without_confirmation_returns_invalid_input(
+    container: ServiceContainer,
+) -> None:
+    """§ui-action-matrix: `job_cancel` は破壊的操作であり、確認なしには実行しない。"""
+    repo = JobRepository(container.conn)
+    job = repo.submit("noop", {})
+
+    outcome = screens.job_cancel(container, job.id)
+    assert outcome["error"]["code"] == "INVALID_INPUT"
+    assert container.jobs.get(job.id).state == JobState.QUEUED
 
 
 def test_sources_and_batches_list_are_empty_by_default(container: ServiceContainer) -> None:

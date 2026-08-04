@@ -34,6 +34,10 @@ dev = [
     "pytest-asyncio>=1.4,<2",
     "hypothesis>=6.165,<7",
     "ruff>=0.16,<0.17",
+    # `tests/ui/test_ui_actions_contract.py` が正本 `design/ui-action-matrix.yaml`
+    # を直接読む(Task 8)。実行環境には既に推移的依存で入っているが、テストが
+    # 直接 import するため明示する。
+    "pyyaml>=6.0,<7",
     # `nicegui.testing.plugin`(tests/ui/test_web_pages.py)は import 時に
     # 無条件で `selenium` を要求する(スクリーンショット系フィクスチャ用、
     # 本タスクでは使わないが import エラーになるため必要)。

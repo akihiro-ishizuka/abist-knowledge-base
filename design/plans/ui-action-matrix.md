@@ -32,7 +32,6 @@
 | 品質 | `quality_run_integrity` | 整合性監査 | いいえ | ✓ | ✓ | ✓ |
 | 品質 | `quality_run_duplicates` | 重複監査 | いいえ | ✓ | ✓ | ✓ |
 | 品質 | `quality_run_contradictions` | 矛盾候補監査 | いいえ | ✓ | ✓ | ✓ |
-| 品質 | `quality_run_search_quality` | 検索品質監査 | いいえ | ✓ | ✓ | ✓ |
 | 品質 | `quality_run_backfill_metadata` | メタデータ補完監査（`apply=false` / dry-run） | いいえ | ✓ | ✓ | ✓ |
 | 設定・診断 | — | 参照のみ | — | — | — | — |
 

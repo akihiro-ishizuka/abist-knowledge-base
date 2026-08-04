@@ -30,6 +30,7 @@ dev = [
     { name = "hypothesis" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
+    { name = "pyyaml" },
     { name = "ruff" },
     { name = "selenium" },
 ]
@@ -59,6 +60,7 @@ dev = [
     { name = "hypothesis", specifier = ">=6.165,<7" },
     { name = "pytest", specifier = ">=9.1,<10" },
     { name = "pytest-asyncio", specifier = ">=1.4,<2" },
+    { name = "pyyaml", specifier = ">=6.0,<7" },
     { name = "ruff", specifier = ">=0.16,<0.17" },
     { name = "selenium", specifier = ">=4.20,<5" },
 ]
