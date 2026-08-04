@@ -72,6 +72,8 @@ class Manifest:
     to_root: str
     steps: dict[str, StepRecord] = field(default_factory=dict)
     swapped_in: bool = False
+    swap_backup_dir: str | None = None
+    """swap で既存の移行先内容を退避した先(衝突が無ければ `None`)。"""
 
     def record_step(self, step: StepRecord) -> None:
         self.steps[step.name] = step
@@ -94,6 +96,7 @@ class Manifest:
             "from_root": self.from_root,
             "to_root": self.to_root,
             "swapped_in": self.swapped_in,
+            "swap_backup_dir": self.swap_backup_dir,
             "steps": {name: step.to_dict() for name, step in self.steps.items()},
         }
 
@@ -106,6 +109,7 @@ class Manifest:
                 name: StepRecord.from_dict(step) for name, step in data.get("steps", {}).items()
             },
             swapped_in=bool(data.get("swapped_in", False)),
+            swap_backup_dir=data.get("swap_backup_dir"),
         )
 
 

@@ -24,7 +24,9 @@ def _migrate(old_repo: Path, tmp_path: Path) -> tuple[Path, Path]:
     from abist_kb.migration.manifest import save_manifest
 
     save_manifest(manifest, manifest_path)
-    swap_into_place(build_dir, to_root)
+    swap_into_place(build_dir, to_root, manifest)
+    manifest.swapped_in = True
+    save_manifest(manifest, manifest_path)
     return manifest_path, to_root
 
 

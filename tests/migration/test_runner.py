@@ -182,7 +182,65 @@ def test_run_never_modifies_source(old_repo: Path, tmp_path: Path) -> None:
 
 
 def test_swap_into_place_moves_build_dir(old_repo: Path, tmp_path: Path) -> None:
-    build_dir, _manifest_path, to_root = _run_once(old_repo, tmp_path)
-    swap_into_place(build_dir, to_root)
-    assert not build_dir.exists()
+    build_dir, manifest_path, to_root = _run_once(old_repo, tmp_path)
+    manifest = load_manifest(manifest_path)
+    assert manifest is not None
+    swap_into_place(build_dir, to_root, manifest)
     assert (to_root / "docs" / "a.md").exists()
+
+
+def test_swap_into_place_preserves_unrelated_existing_destination_files(
+    old_repo: Path, tmp_path: Path
+) -> None:
+    """swap は移行先の既存内容を丸ごと削除してはならない(§11.1 の回帰テスト)。
+
+    移行先ディレクトリが既に空でない状態(無関係なファイルを含む)でも、
+    それらのファイルは失われず、退避先に残ること・build の内容も正しく
+    組み込まれることを確認する。旧実装は `rmtree(to_root)` してから
+    `move(build_dir, to_root)` していたため、移行先が空でない場合は
+    (このリポジトリ自身の `.git` を含む)全てを削除してから置き換えていた。
+    """
+    build_dir, manifest_path, to_root = _run_once(old_repo, tmp_path)
+    manifest = load_manifest(manifest_path)
+    assert manifest is not None
+
+    # 移行先には既に無関係なファイル・ディレクトリが存在する
+    # (例: 自リポジトリのソースツリー、swap が全く触れないパス)。
+    to_root.mkdir(parents=True, exist_ok=True)
+    unrelated = to_root / "src" / "keep_me.py"
+    unrelated.parent.mkdir(parents=True, exist_ok=True)
+    unrelated.write_text("# unrelated application source, must survive swap\n", encoding="utf-8")
+
+    # 移行先には build と同じ相対パスに衝突する既存ファイルもある
+    # (旧実装ならこの衝突チェックが無く、to_root 丸ごと rmtree されていた)。
+    existing_docs_a = to_root / "docs" / "a.md"
+    existing_docs_a.parent.mkdir(parents=True, exist_ok=True)
+    existing_docs_a.write_text("pre-existing unrelated docs/a.md content\n", encoding="utf-8")
+    # 衝突しない既存ファイルも同じディレクトリ内に置く(ディレクトリごと
+    # 消されていないことの確認)。
+    existing_docs_other = to_root / "docs" / "keep-this-too.md"
+    existing_docs_other.write_text("must not be deleted\n", encoding="utf-8")
+
+    result = swap_into_place(build_dir, to_root, manifest)
+
+    # swap が触れないパスは無事。
+    assert unrelated.exists()
+    assert (
+        unrelated.read_text(encoding="utf-8")
+        == "# unrelated application source, must survive swap\n"
+    )
+    assert existing_docs_other.exists()
+    assert existing_docs_other.read_text(encoding="utf-8") == "must not be deleted\n"
+
+    # 衝突した docs/a.md は退避され、build 側の内容に置き換わる。
+    assert result.backup_dir is not None
+    assert "docs/a.md" in result.displaced_paths
+    backup_a = Path(result.backup_dir) / "docs" / "a.md"
+    assert backup_a.exists()
+    assert backup_a.read_text(encoding="utf-8") == "pre-existing unrelated docs/a.md content\n"
+
+    # build 側の docs/a.md が実際に組み込まれている(移行元のバイト保持コピー)。
+    assert (
+        to_root.joinpath("docs", "a.md").read_text(encoding="utf-8")
+        == "---\ntitle: A\n---\n本文A\n"
+    )

@@ -16,6 +16,7 @@ import shutil
 import sqlite3
 import subprocess
 import uuid
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -612,15 +613,111 @@ def run_migration(
     return manifest
 
 
-def swap_into_place(build_dir: Path, to_root: Path) -> None:
-    """検証成功後にだけ呼ぶ。`to_root` が既に存在する場合は拒否する。"""
-    if to_root.exists() and any(to_root.iterdir()):
+_SWAP_EXCLUDED_TOP_LEVEL = frozenset({"logs"})
+"""swap ではビルド成果物のうち diagnostic 用途のもの(埋め込み進捗ログ)は
+移行先へ持ち込まない。「移行が実際に生成した公式データ」ではないため。
+"""
+
+
+@dataclass(frozen=True, slots=True)
+class SwapResult:
+    """`swap_into_place` が実際に何をしたかの記録(manifest/レポート用)。"""
+
+    to_root: str
+    backup_dir: str | None
+    """既存の移行先と衝突したため退避した先。衝突が無ければ `None`。"""
+    displaced_paths: tuple[str, ...]
+    """`backup_dir` 配下へ退避した相対パス(= 移行先で上書きされる予定だった
+    既存ファイル)。"""
+    moved_top_level: tuple[str, ...]
+    """`build_dir` 直下からswapされたエントリ名。"""
+
+
+def _merge_into(build_path: Path, dest_path: Path, backup_root: Path, rel: Path) -> list[str]:
+    """`build_path` を `dest_path` へ極力サブツリー単位でmoveする。
+
+    衝突が無ければディレクトリごと1回の move で済ませる(高速)。衝突する
+    場合だけ再帰して個々のファイル単位まで掘り下げ、上書き対象を
+    `backup_root` へ退避してから移動する。移行元(旧システム)にも
+    ビルドディレクトリにも書き込まない(既存の移行先だけを退避対象にする)。
+    """
+    if not dest_path.exists():
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(build_path), str(dest_path))
+        return []
+
+    if build_path.is_file() or dest_path.is_file():
+        # どちらかがファイルなら、これ以上は掘り下げられない: 既存を退避して置き換える。
+        backup_path = backup_root / rel
+        backup_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(dest_path), str(backup_path))
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(build_path), str(dest_path))
+        return [rel.as_posix()]
+
+    displaced: list[str] = []
+    for child in sorted(build_path.iterdir()):
+        displaced.extend(_merge_into(child, dest_path / child.name, backup_root, rel / child.name))
+    return displaced
+
+
+def swap_into_place(build_dir: Path, to_root: Path, manifest: Manifest) -> SwapResult:
+    """検証成功後にだけ呼ぶ。
+
+    §11.1 の設計どおり「移行が実際に生成したディレクトリ・ファイルの粒度」で
+    `to_root` へ組み込む(`to_root` を丸ごと `rmtree` して置き換えることは
+    しない — `to_root` の既定値はこのリポジトリ自身のルートであり、丸ごと
+    置換は `.git` を含むリポジトリ全体の消失を意味する。この関数はその事故を
+    起こした旧実装の修正版)。
+
+    `build_dir` 直下の各エントリ(`logs/` を除く)について、`to_root` の同名
+    パスが既に存在しなければ丸ごと move、存在すれば衝突分だけファイル単位まで
+    掘り下げて **退避してから** 上書きする。退避先は `to_root` の兄弟ディレクトリ
+    `<to_root>.pre-swap-backup-<timestamp>/` で、相対パス構造を保ったまま
+    復元可能な形で残す(壊すのではなく退避 = 誤りがあれば戻せる)。
+
+    manifest に未完了/失敗の工程が残っている場合、または既に `swapped_in`
+    済みの場合は swap せず拒否する(中途半端な移行を正式データディレクトリへ
+    組み込ませない)。
+    """
+    if manifest.swapped_in:
         raise AppError(
             ErrorCode.MIGRATION_FAILED,
-            f"移行先 {to_root} は既に空でない状態で存在します。",
-            hint="別のディレクトリを指定するか、既存内容を確認してから空にしてください。",
+            "この manifest は既に swap 済みです(swapped_in=true)。",
+            hint="再swapが必要なら新しい manifest/build から実行してください。",
         )
-    to_root.parent.mkdir(parents=True, exist_ok=True)
-    if to_root.exists():
-        shutil.rmtree(to_root)
-    shutil.move(str(build_dir), str(to_root))
+    gaps = manifest.unexplained_gap()
+    if gaps:
+        raise AppError(
+            ErrorCode.MIGRATION_FAILED,
+            f"未完了/失敗の工程があるため swap できません: {gaps}",
+            hint="`migrate run` を再実行して全工程を completed にしてから swap してください。",
+        )
+    if not build_dir.is_dir():
+        raise AppError(
+            ErrorCode.MIGRATION_FAILED,
+            f"ビルドディレクトリが見つかりません: {build_dir}",
+        )
+
+    top_level = sorted(p for p in build_dir.iterdir() if p.name not in _SWAP_EXCLUDED_TOP_LEVEL)
+    if not top_level:
+        raise AppError(
+            ErrorCode.MIGRATION_FAILED,
+            f"ビルドディレクトリ {build_dir} に移行先へ組み込む内容がありません。",
+        )
+
+    to_root.mkdir(parents=True, exist_ok=True)
+    backup_root = to_root.parent / f"{to_root.name}.pre-swap-backup-{now_iso().replace(':', '-')}"
+
+    displaced: list[str] = []
+    moved_names: list[str] = []
+    for entry in top_level:
+        displaced.extend(_merge_into(entry, to_root / entry.name, backup_root, Path(entry.name)))
+        moved_names.append(entry.name)
+
+    return SwapResult(
+        to_root=str(to_root),
+        backup_dir=str(backup_root) if displaced else None,
+        displaced_paths=tuple(displaced),
+        moved_top_level=tuple(moved_names),
+    )

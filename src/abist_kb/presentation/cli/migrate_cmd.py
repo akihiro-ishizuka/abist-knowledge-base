@@ -161,8 +161,9 @@ def migrate_run(
                 "未完了の工程があるため swap できません。",
                 details={"gaps": manifest.unexplained_gap()},
             )
-        swap_into_place(effective_build_dir, to_root)
+        swap_result = swap_into_place(effective_build_dir, to_root, manifest)
         manifest.swapped_in = True
+        manifest.swap_backup_dir = swap_result.backup_dir
         save_manifest(manifest, manifest_path)
 
     if cli_ctx.presenter.is_json:
