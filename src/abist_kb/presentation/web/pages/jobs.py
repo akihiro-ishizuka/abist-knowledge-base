@@ -9,6 +9,7 @@ from abist_kb.presentation.web.theme import badge_label, token_color
 from abist_kb.presentation.web.viewmodels import screens
 from abist_kb.presentation.web.viewmodels.container import ServiceContainer
 
+from ._confirm import confirm_dialog
 from .layout import page_shell
 
 
@@ -35,18 +36,37 @@ def render_detail(container: ServiceContainer, job_id: str) -> None:
             ui.badge(badge_label(token, job["state"]), color=token_color(token))
             ui.label(job["kind"])
 
-        result_label = ui.label("")
+        result_area = ui.column().classes("w-full")
 
-        def do_cancel() -> None:
+        def show_result(outcome: dict, *, success: str) -> None:
+            result_area.clear()
+            with result_area:
+                if "error" in outcome:
+                    error = outcome["error"]
+                    ui.label(f"エラー: {error['code']}").classes("text-danger")
+                    ui.label(error["message"]).classes("text-danger")
+                else:
+                    ui.label(success)
+
+        async def do_cancel() -> None:
+            if not await confirm_dialog(
+                "キャンセルしますか?",
+                detail=f"対象: ジョブ {job_id}",
+            ):
+                return
             outcome = screens.job_cancel(container, job_id)
-            result_label.text = f"キャンセル要求: {outcome.get('job', {}).get('state')}"
+            state = outcome.get("job", {}).get("state")
+            show_result(outcome, success=f"キャンセル要求: {state}")
 
-        def do_retry() -> None:
+        async def do_retry() -> None:
+            if not await confirm_dialog(
+                "再実行しますか?",
+                detail=f"対象: ジョブ {job_id}",
+            ):
+                return
             outcome = screens.job_retry(container, job_id)
-            if "error" in outcome:
-                result_label.text = f"再実行失敗: {outcome['error']['message']}"
-            else:
-                result_label.text = f"再実行ジョブ: {outcome['job']['id']}"
+            retry_id = outcome.get("job", {}).get("id")
+            show_result(outcome, success=f"再実行ジョブ: {retry_id}")
 
         with ui.row():
             ui.button("キャンセル", on_click=do_cancel)

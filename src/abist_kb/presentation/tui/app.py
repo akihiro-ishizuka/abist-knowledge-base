@@ -101,6 +101,7 @@ class KbApp(App[None]):
         self._supervisor_thread: threading.Thread | None = None
         self.current_area = "dashboard"
         self.detail: tuple[str, str] | None = None  # (kind, id) e.g. ("job", "...")
+        self._last_action_result: str | None = None
 
     # -- ライフサイクル --------------------------------------------------
 
@@ -289,32 +290,44 @@ class KbApp(App[None]):
             f"state: {badge(job['state_token'], job['state'])}",
             f"error: {job['error']}",
             f"progress: {job['progress']}",
-            "",
-            "履歴:",
         ]
+        if self._last_action_result:
+            lines.extend(["", self._last_action_result])
+        lines.extend(["", "履歴:"])
         for evt in data["history"]:
             lines.append(f"  [{evt['severity']}] {evt['phase']}: {evt['message']}")
         self._set_body(Static("\n".join(lines)), _JobActions(job_id))
+
+    @staticmethod
+    def _format_action_result(result: Any) -> str:
+        if isinstance(result, dict) and "error" in result:
+            error = result["error"]
+            return f"操作結果: エラー: {error['code']} - {error['message']}"
+        if isinstance(result, dict) and "job" in result:
+            job = result["job"]
+            return f"操作結果: 成功: ジョブ {job['id']} state={job['state']}"
+        return "操作結果: 成功"
 
     async def confirm_and_run(self, message: str, action: Any) -> None:
         """破壊的操作(cancel/retry)をモーダル確認してから実行する。"""
 
         def _after(confirmed: bool | None) -> None:
             if confirmed:
-                action()
+                result = action()
+                self._last_action_result = self._format_action_result(result)
                 self.render_area(self.current_area)
 
         self.push_screen(ConfirmModal(message), _after)
 
     def cancel_job(self, job_id: str) -> None:
-        def _do() -> None:
-            screens.job_cancel(self.container, job_id)
+        def _do() -> dict[str, Any]:
+            return screens.job_cancel(self.container, job_id)
 
         self.run_worker(self.confirm_and_run(f"ジョブ {job_id} をキャンセルしますか?", _do))
 
     def retry_job(self, job_id: str) -> None:
-        def _do() -> None:
-            screens.job_retry(self.container, job_id)
+        def _do() -> dict[str, Any]:
+            return screens.job_retry(self.container, job_id)
 
         self.run_worker(self.confirm_and_run(f"ジョブ {job_id} を再投入しますか?", _do))
 

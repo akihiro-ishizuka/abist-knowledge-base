@@ -7,6 +7,8 @@ import logging
 import sqlite3
 from pathlib import Path
 
+from textual.widgets import Static
+
 from abist_kb.config import Settings
 from abist_kb.domain.job import JobState
 from abist_kb.infrastructure.jobs.repository import JobRepository
@@ -138,6 +140,31 @@ async def test_cancel_job_confirmed_actually_cancels(container: ServiceContainer
         refreshed = repo.get(job.id)
         assert refreshed is not None
         assert refreshed.state == JobState.CANCELLED
+        body = str(app.query_one("#content > Static", Static).render())
+        assert "成功:" in body
+
+
+async def test_retry_job_error_displays_code_and_message(container: ServiceContainer) -> None:
+    repo = JobRepository(container.conn)
+    job = repo.submit("noop", {})
+
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.detail = ("job", job.id)
+        app.current_area = "jobs"
+        app.render_area("jobs")
+        await pilot.pause()
+
+        app.retry_job(job.id)
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause()
+        await pilot.pause()
+
+        body = str(app.query_one("#content > Static", Static).render())
+        assert "INVALID_INPUT" in body
+        assert "再試行できません" in body
 
 
 async def test_narrow_layout_collapses_nav_to_single_pane(container: ServiceContainer) -> None:

@@ -7,6 +7,7 @@ from nicegui import ui
 from abist_kb.presentation.web.viewmodels import screens
 from abist_kb.presentation.web.viewmodels.container import ServiceContainer
 
+from ._confirm import confirm_dialog
 from .layout import page_shell
 
 
@@ -29,22 +30,32 @@ def render(container: ServiceContainer) -> None:
             {"name": "enabled", "label": "有効", "field": "enabled"},
         ]
 
-        result_label = ui.label("")
+        result_area = ui.column().classes("w-full")
 
-        def make_run_handler(batch_id: str):
-            def handler() -> None:
-                outcome = screens.batch_run(container, batch_id)
-                if "error" in outcome:
-                    result_label.text = f"失敗: {outcome['error']['message']}"
-                else:
-                    job = outcome["job"]
-                    result_label.text = f"実行完了: state={job['state']}"
+        def make_run_handler(batch: dict):
+            async def handler() -> None:
+                detail_lines = [f"対象: バッチ {batch['name']}"]
+                if batch.get("output_dir"):
+                    detail_lines.append(f"出力先: {batch['output_dir']}")
+                if not await confirm_dialog("実行しますか?", detail="\n".join(detail_lines)):
+                    return
+
+                outcome = screens.batch_run(container, batch["id"])
+                result_area.clear()
+                with result_area:
+                    if "error" in outcome:
+                        error = outcome["error"]
+                        ui.label(f"エラー: {error['code']}").classes("text-danger")
+                        ui.label(error["message"]).classes("text-danger")
+                    else:
+                        job = outcome["job"]
+                        ui.label(f"実行完了: state={job['state']}")
 
             return handler
 
         ui.table(columns=batch_columns, rows=batches, row_key="id")
         for batch in batches:
-            ui.button(f"{batch['name']} を実行", on_click=make_run_handler(batch["id"]))
+            ui.button(f"{batch['name']} を実行", on_click=make_run_handler(batch))
 
 
 __all__ = ["render"]

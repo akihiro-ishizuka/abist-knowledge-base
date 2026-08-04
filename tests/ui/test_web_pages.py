@@ -12,6 +12,8 @@ import pytest
 from nicegui.testing import User
 
 from abist_kb.config import Settings
+from abist_kb.domain.job import JobState
+from abist_kb.infrastructure.jobs.repository import JobRepository
 from abist_kb.presentation.web.app import register_pages
 from abist_kb.presentation.web.viewmodels.container import ServiceContainer
 
@@ -40,6 +42,75 @@ async def test_sources_page_renders(user: User, wired_container: ServiceContaine
 
 async def test_jobs_page_renders(user: User, wired_container: ServiceContainer) -> None:
     await user.open("/jobs")
+
+
+async def test_job_cancel_decline_has_no_side_effect(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    repo = JobRepository(wired_container.conn)
+    job = repo.submit("noop", {})
+
+    await user.open(f"/jobs/{job.id}")
+    user.find("キャンセル").click()
+    await user.should_see(f"対象: ジョブ {job.id}")
+    await user.should_see("キャンセルしますか?")
+
+    user.find("いいえ").click()
+    unchanged = repo.get(job.id)
+    assert unchanged is not None
+    assert unchanged.state == JobState.QUEUED
+
+
+async def test_job_retry_decline_has_no_side_effect(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    repo = JobRepository(wired_container.conn)
+    job = repo.submit("noop", {})
+
+    await user.open(f"/jobs/{job.id}")
+    user.find("再実行").click()
+    await user.should_see(f"対象: ジョブ {job.id}")
+    await user.should_see("再実行しますか?")
+
+    user.find("いいえ").click()
+    assert len(repo.list()) == 1
+
+
+async def test_job_retry_error_shows_code_and_message(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    repo = JobRepository(wired_container.conn)
+    job = repo.submit("noop", {})
+
+    await user.open(f"/jobs/{job.id}")
+    user.find("再実行").click()
+    await user.should_see("再実行しますか?")
+    user.find("はい").click()
+
+    await user.should_see("INVALID_INPUT")
+    await user.should_see("再試行できません")
+
+
+async def test_batch_run_decline_shows_target_and_output_without_running(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    batch = wired_container.batches.add(
+        name="定例取り込み",
+        type="web",
+        output_dir="docs/weekly",
+        items=[],
+    )
+    repo = JobRepository(wired_container.conn)
+
+    await user.open("/sources")
+    user.find("定例取り込み を実行").click()
+    await user.should_see("対象: バッチ 定例取り込み")
+    await user.should_see("出力先: docs/weekly")
+    await user.should_see("実行しますか?")
+
+    user.find("いいえ").click()
+    assert repo.list() == []
+    assert batch["id"]
 
 
 async def test_documents_page_renders(user: User, wired_container: ServiceContainer) -> None:
