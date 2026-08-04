@@ -37,6 +37,7 @@ from abist_kb.presentation.cli.document_cmd import document_app
 from abist_kb.presentation.cli.index_cmd import index_app
 from abist_kb.presentation.cli.jobs_cmd import jobs_app
 from abist_kb.presentation.cli.mcp_cmd import mcp_app
+from abist_kb.presentation.cli.migrate_cmd import migrate_app
 from abist_kb.presentation.cli.search_cmd import search
 from abist_kb.presentation.cli.source_cmd import source_app
 from abist_kb.presentation.cli.sync_cmd import sync_app
@@ -73,6 +74,7 @@ app.add_typer(index_app, name="index")
 app.add_typer(audit_app, name="audit")
 app.add_typer(curate_app, name="curate")
 app.add_typer(mcp_app, name="mcp")
+app.add_typer(migrate_app, name="migrate")
 app.add_typer(ui_app, name="ui")
 app.command("search")(search)
 app.command("doctor")(doctor)
