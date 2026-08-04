@@ -73,7 +73,18 @@ markers = [
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
-extend-exclude = ["design", "tools/visualize"]
+extend-exclude = [
+    "design",
+    "tools/visualize",
+    # M9カットオーバーで migrate swap により組み込まれた旧システムの
+    # コンテンツ(ナレッジベースのデータそのものであり、このプロジェクトの
+    # ソースコードではない)。
+    "docs",
+    "data",
+    "bk",
+    "scripts",
+    "work",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "PTH", "T20"]

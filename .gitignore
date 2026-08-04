@@ -36,6 +36,18 @@ reports/
 *.sqlite-wal
 *.sqlite-shm
 
+# M9カットオーバー: migrate swap で組み込まれた旧システムのコンテンツ。
+# docs/ 同様、これはナレッジベースのデータであってこのプロジェクトの
+# ソースコードではない(§4: 旧システムには docs/ の外にも実データがあった)。
+# tools/ は tools/visualize/(このプロジェクトのソース)と旧システムの
+# コンテンツが混在するため、旧コンテンツのパスだけを個別に無視する。
+bk/
+scripts/
+work/
+tools/*.md
+tools/issue_bodies/
+tools/knowledge-curator/
+
 # Caches and models
 .cache/
 __model_cache__/

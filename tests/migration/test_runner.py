@@ -187,6 +187,11 @@ def test_swap_into_place_moves_build_dir(old_repo: Path, tmp_path: Path) -> None
     assert manifest is not None
     swap_into_place(build_dir, to_root, manifest)
     assert (to_root / "docs" / "a.md").exists()
+    # app.sqlite は build_dir 直下に生成されるが、Settings が実際に読む場所は
+    # to_root/data/ 配下(config.py::_derive_paths)なので、そこへ配置される
+    # ことを確認する(直下に置き残すと MCP サーバーがDBを見つけられない)。
+    assert (to_root / "data" / "app.sqlite").exists()
+    assert not (to_root / "app.sqlite").exists()
 
 
 def test_swap_into_place_preserves_unrelated_existing_destination_files(

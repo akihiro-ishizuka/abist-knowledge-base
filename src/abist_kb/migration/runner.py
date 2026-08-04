@@ -618,6 +618,18 @@ _SWAP_EXCLUDED_TOP_LEVEL = frozenset({"logs"})
 移行先へ持ち込まない。「移行が実際に生成した公式データ」ではないため。
 """
 
+_SWAP_DATA_FILE_PREFIXES = ("app.sqlite", "work-index.sqlite", "reference-index.sqlite")
+"""`build_dir` 直下に生成される DB ファイル(本体 + `-wal`/`-shm`)。
+
+`_import_batch_config_step`/`_import_sync_state_step`/`_embed_step` は
+ビルドの都合上これらを `build_dir` の**直下**に置くが、`Settings`
+(`config.py::_derive_paths`)が実際に読みに行く先は `root_dir/data/` 配下
+(`data_dir / "app.sqlite"` 等)である。ここでビルド直下 → `data/` へ
+経路をマッピングしないと、swap後にMCPサーバーが `data/work-index.sqlite`
+を探しに行って見つからず「索引が空」に見える(実測で確認済みの事故: 経路の
+食い違いにより検索結果が空集合になった)。
+"""
+
 
 @dataclass(frozen=True, slots=True)
 class SwapResult:
@@ -671,7 +683,8 @@ def swap_into_place(build_dir: Path, to_root: Path, manifest: Manifest) -> SwapR
     起こした旧実装の修正版)。
 
     `build_dir` 直下の各エントリ(`logs/` を除く)について、`to_root` の同名
-    パスが既に存在しなければ丸ごと move、存在すれば衝突分だけファイル単位まで
+    パス(DB ファイルは `_SWAP_DATA_FILE_PREFIXES` の変換により `to_root/data/`
+    配下)が既に存在しなければ丸ごと move、存在すれば衝突分だけファイル単位まで
     掘り下げて **退避してから** 上書きする。退避先は `to_root` の兄弟ディレクトリ
     `<to_root>.pre-swap-backup-<timestamp>/` で、相対パス構造を保ったまま
     復元可能な形で残す(壊すのではなく退避 = 誤りがあれば戻せる)。
@@ -712,7 +725,11 @@ def swap_into_place(build_dir: Path, to_root: Path, manifest: Manifest) -> SwapR
     displaced: list[str] = []
     moved_names: list[str] = []
     for entry in top_level:
-        displaced.extend(_merge_into(entry, to_root / entry.name, backup_root, Path(entry.name)))
+        if entry.name.startswith(_SWAP_DATA_FILE_PREFIXES):
+            rel = Path("data") / entry.name
+        else:
+            rel = Path(entry.name)
+        displaced.extend(_merge_into(entry, to_root / rel, backup_root, rel))
         moved_names.append(entry.name)
 
     return SwapResult(

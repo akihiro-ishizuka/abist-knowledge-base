@@ -98,34 +98,53 @@ abist-kb audit parallel-compare --output json
 対象は旧リポジトリの `.mcp.json`(`C:/Temp/multi-source-knowledge-base/.mcp.json`)。
 既存の3キー: `kb-download` / `kb-search` / `kb-visualize`。
 
-### 3.1 切り替え後の値
+### 3.1 切り替え後の値(2026-08-04 実施・実測で確定)
+
+**下書き段階の本節は誤りだった。** `--root` は移行元(旧リポジトリ)ではなく
+**移行先**(このリポジトリ、`C:/Temp/abist-knowledge-base`)を指す必要がある
+——`Settings`(`config.py::_derive_paths`)は `root_dir` から `docs_dir`/
+`data_dir` を導出し、swap 後の実データ(`docs/`・`data/app.sqlite`・
+`data/work-index.sqlite`)はそちらにある。`--root` に旧リポジトリを渡すと
+`search_kb` が常に空集合を返す(旧リポジトリには `docs/`/`data/*.sqlite` が
+存在しないか、存在しても無関係のため)。**実際にこの誤りを踏んで検証し、
+空集合になることを確認した上で本節を訂正した。**
+
+また `command: "abist-kb"` は、MCP クライアントが旧リポジトリを cwd として
+起動する際 `PATH` 上で解決できない(`abist-kb` はこのリポジトリの
+`.venv/Scripts/` にのみ存在し、システム全体の `PATH` には無い)。絶対パスで
+指定する。
 
 ```json
 {
   "mcpServers": {
     "kb-download": {
-      "command": "abist-kb",
-      "args": ["--root", "C:/Temp/multi-source-knowledge-base", "mcp", "serve", "kb-download"]
+      "command": "C:/Temp/abist-knowledge-base/.venv/Scripts/abist-kb.exe",
+      "args": ["--root", "C:/Temp/abist-knowledge-base", "mcp", "serve", "kb-download"]
     },
     "kb-search": {
-      "command": "abist-kb",
-      "args": ["--root", "C:/Temp/multi-source-knowledge-base", "mcp", "serve", "kb-search"]
+      "command": "C:/Temp/abist-knowledge-base/.venv/Scripts/abist-kb.exe",
+      "args": ["--root", "C:/Temp/abist-knowledge-base", "mcp", "serve", "kb-search"]
     },
     "kb-visualize": {
-      "command": "abist-kb",
-      "args": ["--root", "C:/Temp/multi-source-knowledge-base", "mcp", "serve", "kb-visualize"]
+      "command": "C:/Temp/abist-knowledge-base/.venv/Scripts/abist-kb.exe",
+      "args": ["--root", "C:/Temp/abist-knowledge-base", "mcp", "serve", "kb-visualize"]
     }
   }
 }
 ```
 
-`command` が `PATH` 上で解決できない環境では、`abist-kb` を絶対パス
-(`uv run --project <python repo> abist-kb` 形式、または `pip install -e` 済み
-インタプリタの絶対パス)に置き換える。
+上記は `C:/Temp/multi-source-knowledge-base` を cwd として実際に3サーバーとも
+起動を確認済み(`tools/list` 応答・`search_kb`/`list_batches`/`index_status`
+などの読み取り系ツールが移行済みデータに対して実値を返すことを実測)。
 
-**推奨: 1キーずつ切り替える。** 3キー同時ではなく `kb-search`(読み取りのみ、
-最も安全)→ `kb-download`(書き込み系ツールを含む)→ `kb-visualize` の順で
-1つずつ切り替え、各段で§3.2の検証を行ってから次のキーへ進む。
+`.venv` を伴わない環境(`pip install -e` 済みの別インタプリタ等)では、
+`abist-kb.exe` の絶対パスをそのインタプリタの `Scripts/`(または
+`bin/`)配下の絶対パスに置き換える。
+
+**3キー同時に切り替えた。** 3つとも読み取り専用ツールでの検証(§3.2)を
+先に済ませてから本番導入したため、1キーずつの切り替えは行わなかった
+(下書き段階の推奨と異なる判断。理由: 3サーバーとも同一の `--root` 誤りを
+共有しており、1つずつ試しても同じ修正が要ることが分かっていたため)。
 
 ### 3.2 切り替え直後の検証(キーごと)
 
@@ -156,10 +175,19 @@ abist-kb audit parallel-compare --output json
   (`docs/` は両実装が触れる互換フォーマットの前提だが、想定外の差分が
   出ていないかは運用中も見ておく)。
 
-## 5. 切り戻し手順
+## 5. 切り戻し手順(確認済み)
 
-対象キーの `.mcp.json` エントリを、§3.1 冒頭(または元の値)の
-`node` + 対応する `.js` に戻し、MCP クライアントを再起動するだけでよい。
+`C:/Temp/multi-source-knowledge-base/.mcp.json.pre-python-cutover.bak` を
+`.mcp.json` へ上書きコピーし、MCP クライアントを再起動するだけでよい。
+
+```
+copy /Y ".mcp.json.pre-python-cutover.bak" ".mcp.json"
+```
+
+2026-08-04 実施時に `diff` で `.bak` が切り替え前の3キー(`node` +
+対応する `.js`、書き換えなし)と一致することを確認済み。切り戻しは
+単純な上書きで足り、追加の変換・パス調整は不要(バックアップは既に
+最終形の `.mcp.json` として使える)。
 
 Python 側は旧リポジトリのファイルを一切書き換えない設計
 (`app.sqlite`/索引DB は Python 側管理下の別ファイル)。`docs/` への書き込みは
