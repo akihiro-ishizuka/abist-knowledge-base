@@ -1,0 +1,61 @@
+{
+  "case": "call_2",
+  "deviation_from_brief": null,
+  "execution_environment": "sandbox_copy (data/*.sqlite はコピー、docs/・node_modules/ はジャンクション経由の読み取り専用参照。理由はこのファイル冒頭のインシデント注記を参照)",
+  "is_error_present": false,
+  "is_error_value": null,
+  "nondeterministic_fields": [],
+  "notes": "引数を取らないため、呼び出し間の冪等性確認を兼ねた2件目。",
+  "request": {
+    "id": 27,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {},
+      "name": "index_status"
+    }
+  },
+  "response": {
+    "id": 27,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": true,\n  \"defaultCorpus\": \"work\",\n  \"corpora\": {\n    \"work\": {\n      \"available\": true,\n      \"label\": \"実務資料\",\n      \"documents\": 3469,\n      \"chunks\": 51391,\n      \"embeddedChunks\": 51411,\n      \"tokenizers\": [\n        \"unicode61\",\n        \"trigram\"\n      ],\n      \"lastIndexedAt\": \"2026-07-30T00:30:25.098Z\",\n      \"chunkOptions\": {},\n      \"embeddingModel\": \"Xenova/multilingual-e5-small\",\n      \"indexSizeMb\": 281.2,\n      \"vectorSearchAvailable\": true\n    },\n    \"reference\": {\n      \"available\": true,\n      \"label\": \"CATIA原本（B32doc）\",\n      \"documents\": 7563,\n      \"chunks\": 35398,\n      \"embeddedChunks\": 0,\n      \"tokenizers\": [\n        \"unicode61\",\n        \"trigram\"\n      ],\n      \"lastIndexedAt\": null,\n      \"chunkOptions\": {},\n      \"embeddingModel\": null,\n      \"indexSizeMb\": 207.2,\n      \"vectorSearchAvailable\": false\n    }\n  }\n}",
+          "type": "text"
+        }
+      ]
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"defaultCorpus\\\": \\\"work\\\",\\n  \\\"corpora\\\": {\\n    \\\"work\\\": {\\n      \\\"available\\\": true,\\n      \\\"label\\\": \\\"実務資料\\\",\\n      \\\"documents\\\": 3469,\\n      \\\"chunks\\\": 51391,\\n      \\\"embeddedChunks\\\": 51411,\\n      \\\"tokenizers\\\": [\\n        \\\"unicode61\\\",\\n        \\\"trigram\\\"\\n      ],\\n      \\\"lastIndexedAt\\\": \\\"2026-07-30T00:30:25.098Z\\\",\\n      \\\"chunkOptions\\\": {},\\n      \\\"embeddingModel\\\": \\\"Xenova/multilingual-e5-small\\\",\\n      \\\"indexSizeMb\\\": 281.2,\\n      \\\"vectorSearchAvailable\\\": true\\n    },\\n    \\\"reference\\\": {\\n      \\\"available\\\": true,\\n      \\\"label\\\": \\\"CATIA原本（B32doc）\\\",\\n      \\\"documents\\\": 7563,\\n      \\\"chunks\\\": 35398,\\n      \\\"embeddedChunks\\\": 0,\\n      \\\"tokenizers\\\": [\\n        \\\"unicode61\\\",\\n        \\\"trigram\\\"\\n      ],\\n      \\\"lastIndexedAt\\\": null,\\n      \\\"chunkOptions\\\": {},\\n      \\\"embeddingModel\\\": null,\\n      \\\"indexSizeMb\\\": 207.2,\\n      \\\"vectorSearchAvailable\\\": false\\n    }\\n  }\\n}\"}]},\"jsonrpc\":\"2.0\",\"id\":27}",
+  "run2": {
+    "request": {
+      "id": 28,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {},
+        "name": "index_status"
+      }
+    },
+    "response": {
+      "id": 28,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": true,\n  \"defaultCorpus\": \"work\",\n  \"corpora\": {\n    \"work\": {\n      \"available\": true,\n      \"label\": \"実務資料\",\n      \"documents\": 3469,\n      \"chunks\": 51391,\n      \"embeddedChunks\": 51411,\n      \"tokenizers\": [\n        \"unicode61\",\n        \"trigram\"\n      ],\n      \"lastIndexedAt\": \"2026-07-30T00:30:25.098Z\",\n      \"chunkOptions\": {},\n      \"embeddingModel\": \"Xenova/multilingual-e5-small\",\n      \"indexSizeMb\": 281.2,\n      \"vectorSearchAvailable\": true\n    },\n    \"reference\": {\n      \"available\": true,\n      \"label\": \"CATIA原本（B32doc）\",\n      \"documents\": 7563,\n      \"chunks\": 35398,\n      \"embeddedChunks\": 0,\n      \"tokenizers\": [\n        \"unicode61\",\n        \"trigram\"\n      ],\n      \"lastIndexedAt\": null,\n      \"chunkOptions\": {},\n      \"embeddingModel\": null,\n      \"indexSizeMb\": 207.2,\n      \"vectorSearchAvailable\": false\n    }\n  }\n}",
+            "type": "text"
+          }
+        ]
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"defaultCorpus\\\": \\\"work\\\",\\n  \\\"corpora\\\": {\\n    \\\"work\\\": {\\n      \\\"available\\\": true,\\n      \\\"label\\\": \\\"実務資料\\\",\\n      \\\"documents\\\": 3469,\\n      \\\"chunks\\\": 51391,\\n      \\\"embeddedChunks\\\": 51411,\\n      \\\"tokenizers\\\": [\\n        \\\"unicode61\\\",\\n        \\\"trigram\\\"\\n      ],\\n      \\\"lastIndexedAt\\\": \\\"2026-07-30T00:30:25.098Z\\\",\\n      \\\"chunkOptions\\\": {},\\n      \\\"embeddingModel\\\": \\\"Xenova/multilingual-e5-small\\\",\\n      \\\"indexSizeMb\\\": 281.2,\\n      \\\"vectorSearchAvailable\\\": true\\n    },\\n    \\\"reference\\\": {\\n      \\\"available\\\": true,\\n      \\\"label\\\": \\\"CATIA原本（B32doc）\\\",\\n      \\\"documents\\\": 7563,\\n      \\\"chunks\\\": 35398,\\n      \\\"embeddedChunks\\\": 0,\\n      \\\"tokenizers\\\": [\\n        \\\"unicode61\\\",\\n        \\\"trigram\\\"\\n      ],\\n      \\\"lastIndexedAt\\\": null,\\n      \\\"chunkOptions\\\": {},\\n      \\\"embeddingModel\\\": null,\\n      \\\"indexSizeMb\\\": 207.2,\\n      \\\"vectorSearchAvailable\\\": false\\n    }\\n  }\\n}\"}]},\"jsonrpc\":\"2.0\",\"id\":28}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-search",
+  "stderr_tail": "",
+  "tool": "index_status"
+}

@@ -1,0 +1,67 @@
+{
+  "case": "invalid_post_number_negative",
+  "deviation_from_brief": null,
+  "execution_environment": "live_old_repo",
+  "is_error_present": true,
+  "is_error_value": true,
+  "nondeterministic_fields": [],
+  "notes": "post は z.number().int().positive() のため -1 は zod 検証で弾かれ、ハンドラ(=子プロセスspawn)には到達しない。",
+  "request": {
+    "id": 9,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "post": -1
+      },
+      "name": "download_esa_post"
+    }
+  },
+  "response": {
+    "id": 9,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "MCP error -32602: Input validation error: Invalid arguments for tool download_esa_post: [\n  {\n    \"code\": \"too_small\",\n    \"minimum\": 0,\n    \"type\": \"number\",\n    \"inclusive\": false,\n    \"exact\": false,\n    \"message\": \"Number must be greater than 0\",\n    \"path\": [\n      \"post\"\n    ]\n  }\n]",
+          "type": "text"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "response_kind": "sdk_validation_error",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"MCP error -32602: Input validation error: Invalid arguments for tool download_esa_post: [\\n  {\\n    \\\"code\\\": \\\"too_small\\\",\\n    \\\"minimum\\\": 0,\\n    \\\"type\\\": \\\"number\\\",\\n    \\\"inclusive\\\": false,\\n    \\\"exact\\\": false,\\n    \\\"message\\\": \\\"Number must be greater than 0\\\",\\n    \\\"path\\\": [\\n      \\\"post\\\"\\n    ]\\n  }\\n]\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":9}",
+  "run2": {
+    "request": {
+      "id": 10,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "post": -1
+        },
+        "name": "download_esa_post"
+      }
+    },
+    "response": {
+      "id": 10,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "MCP error -32602: Input validation error: Invalid arguments for tool download_esa_post: [\n  {\n    \"code\": \"too_small\",\n    \"minimum\": 0,\n    \"type\": \"number\",\n    \"inclusive\": false,\n    \"exact\": false,\n    \"message\": \"Number must be greater than 0\",\n    \"path\": [\n      \"post\"\n    ]\n  }\n]",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"MCP error -32602: Input validation error: Invalid arguments for tool download_esa_post: [\\n  {\\n    \\\"code\\\": \\\"too_small\\\",\\n    \\\"minimum\\\": 0,\\n    \\\"type\\\": \\\"number\\\",\\n    \\\"inclusive\\\": false,\\n    \\\"exact\\\": false,\\n    \\\"message\\\": \\\"Number must be greater than 0\\\",\\n    \\\"path\\\": [\\n      \\\"post\\\"\\n    ]\\n  }\\n]\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":10}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-download",
+  "stderr_tail": "",
+  "tool": "download_esa_post"
+}

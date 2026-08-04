@@ -1,0 +1,69 @@
+{
+  "case": "with_line_range",
+  "deviation_from_brief": null,
+  "execution_environment": "sandbox_copy (data/*.sqlite はコピー、docs/・node_modules/ はジャンクション経由の読み取り専用参照。理由はこのファイル冒頭のインシデント注記を参照)",
+  "is_error_present": false,
+  "is_error_value": null,
+  "nondeterministic_fields": [],
+  "notes": "行範囲指定あり。range_hash が付与されることを確認する。",
+  "request": {
+    "id": 15,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "end_line": 5,
+        "path": "設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md",
+        "start_line": 1
+      },
+      "name": "get_document"
+    }
+  },
+  "response": {
+    "id": 15,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": true,\n  \"path\": \"設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md\",\n  \"title\": \"Factory系オブジェクト仕様\",\n  \"url\": \"https://abist.esa.io/posts/4181\",\n  \"status\": \"active\",\n  \"source\": \"esa\",\n  \"updated_at\": \"2025-11-12\",\n  \"post_number\": 4181,\n  \"total_lines\": 1436,\n  \"range\": {\n    \"from\": 1,\n    \"to\": 5\n  },\n  \"range_hash\": \"4bb8c80efe956ef65c067a66345bc18e625ff253f2c217a7ad8584601a6833e6\",\n  \"index_stale\": false,\n  \"indexed_at\": \"2026-07-29T08:45:47.802Z\",\n  \"content\": \"    1 | ---\\n    2 | title: \\\"Factory系オブジェクト仕様\\\"\\n    3 | date: \\\"2025-11-12\\\"\\n    4 | updated_at: \\\"2025-11-12\\\"\\n    5 | author: \\\"abist_ishizuka\\\"\"\n}",
+          "type": "text"
+        }
+      ]
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"path\\\": \\\"設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md\\\",\\n  \\\"title\\\": \\\"Factory系オブジェクト仕様\\\",\\n  \\\"url\\\": \\\"https://abist.esa.io/posts/4181\\\",\\n  \\\"status\\\": \\\"active\\\",\\n  \\\"source\\\": \\\"esa\\\",\\n  \\\"updated_at\\\": \\\"2025-11-12\\\",\\n  \\\"post_number\\\": 4181,\\n  \\\"total_lines\\\": 1436,\\n  \\\"range\\\": {\\n    \\\"from\\\": 1,\\n    \\\"to\\\": 5\\n  },\\n  \\\"range_hash\\\": \\\"4bb8c80efe956ef65c067a66345bc18e625ff253f2c217a7ad8584601a6833e6\\\",\\n  \\\"index_stale\\\": false,\\n  \\\"indexed_at\\\": \\\"2026-07-29T08:45:47.802Z\\\",\\n  \\\"content\\\": \\\"    1 | ---\\\\n    2 | title: \\\\\\\"Factory系オブジェクト仕様\\\\\\\"\\\\n    3 | date: \\\\\\\"2025-11-12\\\\\\\"\\\\n    4 | updated_at: \\\\\\\"2025-11-12\\\\\\\"\\\\n    5 | author: \\\\\\\"abist_ishizuka\\\\\\\"\\\"\\n}\"}]},\"jsonrpc\":\"2.0\",\"id\":15}",
+  "run2": {
+    "request": {
+      "id": 16,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "end_line": 5,
+          "path": "設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md",
+          "start_line": 1
+        },
+        "name": "get_document"
+      }
+    },
+    "response": {
+      "id": 16,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": true,\n  \"path\": \"設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md\",\n  \"title\": \"Factory系オブジェクト仕様\",\n  \"url\": \"https://abist.esa.io/posts/4181\",\n  \"status\": \"active\",\n  \"source\": \"esa\",\n  \"updated_at\": \"2025-11-12\",\n  \"post_number\": 4181,\n  \"total_lines\": 1436,\n  \"range\": {\n    \"from\": 1,\n    \"to\": 5\n  },\n  \"range_hash\": \"4bb8c80efe956ef65c067a66345bc18e625ff253f2c217a7ad8584601a6833e6\",\n  \"index_stale\": false,\n  \"indexed_at\": \"2026-07-29T08:45:47.802Z\",\n  \"content\": \"    1 | ---\\n    2 | title: \\\"Factory系オブジェクト仕様\\\"\\n    3 | date: \\\"2025-11-12\\\"\\n    4 | updated_at: \\\"2025-11-12\\\"\\n    5 | author: \\\"abist_ishizuka\\\"\"\n}",
+            "type": "text"
+          }
+        ]
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"path\\\": \\\"設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md\\\",\\n  \\\"title\\\": \\\"Factory系オブジェクト仕様\\\",\\n  \\\"url\\\": \\\"https://abist.esa.io/posts/4181\\\",\\n  \\\"status\\\": \\\"active\\\",\\n  \\\"source\\\": \\\"esa\\\",\\n  \\\"updated_at\\\": \\\"2025-11-12\\\",\\n  \\\"post_number\\\": 4181,\\n  \\\"total_lines\\\": 1436,\\n  \\\"range\\\": {\\n    \\\"from\\\": 1,\\n    \\\"to\\\": 5\\n  },\\n  \\\"range_hash\\\": \\\"4bb8c80efe956ef65c067a66345bc18e625ff253f2c217a7ad8584601a6833e6\\\",\\n  \\\"index_stale\\\": false,\\n  \\\"indexed_at\\\": \\\"2026-07-29T08:45:47.802Z\\\",\\n  \\\"content\\\": \\\"    1 | ---\\\\n    2 | title: \\\\\\\"Factory系オブジェクト仕様\\\\\\\"\\\\n    3 | date: \\\\\\\"2025-11-12\\\\\\\"\\\\n    4 | updated_at: \\\\\\\"2025-11-12\\\\\\\"\\\\n    5 | author: \\\\\\\"abist_ishizuka\\\\\\\"\\\"\\n}\"}]},\"jsonrpc\":\"2.0\",\"id\":16}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-search",
+  "stderr_tail": "",
+  "tool": "get_document"
+}

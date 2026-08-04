@@ -1,0 +1,67 @@
+{
+  "case": "nonexistent_chunk_id",
+  "deviation_from_brief": null,
+  "execution_environment": "sandbox_copy (data/*.sqlite はコピー、docs/・node_modules/ はジャンクション経由の読み取り専用参照。理由はこのファイル冒頭のインシデント注記を参照)",
+  "is_error_present": true,
+  "is_error_value": true,
+  "nondeterministic_fields": [],
+  "notes": "存在しない chunk_id。",
+  "request": {
+    "id": 23,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "chunk_id": 999999999
+      },
+      "name": "get_chunk"
+    }
+  },
+  "response": {
+    "id": 23,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": false,\n  \"error\": \"chunk_id 999999999 は存在しません\"\n}",
+          "type": "text"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"error\\\": \\\"chunk_id 999999999 は存在しません\\\"\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":23}",
+  "run2": {
+    "request": {
+      "id": 24,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "chunk_id": 999999999
+        },
+        "name": "get_chunk"
+      }
+    },
+    "response": {
+      "id": 24,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": false,\n  \"error\": \"chunk_id 999999999 は存在しません\"\n}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"error\\\": \\\"chunk_id 999999999 は存在しません\\\"\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":24}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-search",
+  "stderr_tail": "",
+  "tool": "get_chunk"
+}

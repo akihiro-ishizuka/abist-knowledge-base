@@ -1,0 +1,168 @@
+"""アプリケーション共通のエラー型と終了コード(設計書 §8)。
+
+外部API例外やSQLite例外をUIへ直接露出させず、必ず AppError へ正規化する。
+"""
+
+from __future__ import annotations
+
+from enum import IntEnum, StrEnum
+from typing import Any
+
+
+class ExitCode(IntEnum):
+    """プロセス終了コード(設計書 §8)。"""
+
+    SUCCESS = 0
+    FAILURE = 1
+    INVALID_INPUT = 2
+    CONFIG_ERROR = 3
+    EXTERNAL_SERVICE = 4
+    CONFLICT = 5
+    CANCELLED = 130
+
+
+class ErrorCode(StrEnum):
+    """安定したエラーコード。UIとMCP応答で同じ値を使う。
+
+    値は名前と一致させる(StrEnum の auto は小文字になるため明示指定)。
+    """
+
+    FAILURE = "FAILURE"
+    INVALID_INPUT = "INVALID_INPUT"
+    CONFIG_ERROR = "CONFIG_ERROR"
+    EXTERNAL_SERVICE = "EXTERNAL_SERVICE"
+    CONFLICT = "CONFLICT"
+    CANCELLED = "CANCELLED"
+    NOT_FOUND = "NOT_FOUND"
+    FTS5_TRIGRAM_UNAVAILABLE = "FTS5_TRIGRAM_UNAVAILABLE"
+    SQLITE_TOO_OLD = "SQLITE_TOO_OLD"
+    MIGRATION_FAILED = "MIGRATION_FAILED"
+    UNSUPPORTED_BATCH_CONFIG = "UNSUPPORTED_BATCH_CONFIG"
+    WORKER_UNAVAILABLE = "WORKER_UNAVAILABLE"
+
+
+_DEBUG_ONLY_DETAIL_KEYS = frozenset({"cause_message"})
+"""to_dict() から除外する details キー。
+
+cause_message は元例外の生メッセージをそのまま保持するため、URL の認証情報や
+トークンなど秘密情報を含み得る。`--output json` / MCP 応答などの機械可読出力に
+そのまま混ぜない。値自体は details に残すので `--debug` 時にはプログラムから
+参照できる(自由文字列のマスキングはログ層の mask_secrets が担当する)。
+"""
+
+
+_EXIT_CODE_BY_ERROR: dict[ErrorCode, ExitCode] = {
+    ErrorCode.INVALID_INPUT: ExitCode.INVALID_INPUT,
+    ErrorCode.CONFIG_ERROR: ExitCode.CONFIG_ERROR,
+    ErrorCode.EXTERNAL_SERVICE: ExitCode.EXTERNAL_SERVICE,
+    ErrorCode.CONFLICT: ExitCode.CONFLICT,
+    ErrorCode.CANCELLED: ExitCode.CANCELLED,
+    ErrorCode.WORKER_UNAVAILABLE: ExitCode.CONFLICT,
+}
+
+
+#: `ErrorCode` -> HTTP ステータスの単一のソース。以前は
+#: `presentation/api/app.py` にだけ `_ERROR_STATUS` 表があり、
+#: `screens.py` が返す `{"error": ...}` 規約(NiceGUI/TUI 向け)と FastAPI の
+#: 例外ハンドラが同じ表を別々に参照していた。表自体は同じ辞書オブジェクトだった
+#: ため2箇所とも更新されるコード経路は一致していたが、新しい `ErrorCode` を
+#: 追加した実装者が HTTP マッピングの存在に気付けるとは限らない
+#: (`ErrorCode` を定義する場所と `_ERROR_STATUS` を編集する場所が別ファイル
+#: だった)。ここへ移設し `http_status_for()` として公開することで、
+#: 新しいエラーコードを追加する場所そのものに「HTTP ステータスも決めろ」という
+#: 制約を埋め込む。CLI/MCP など HTTP を持たない消費者はこの表を参照しない
+#: (=既存の非HTTP経路に影響しない)。既定は 500(未知のコードは内部エラー扱い)。
+HTTP_STATUS_BY_ERROR: dict[ErrorCode, int] = {
+    ErrorCode.NOT_FOUND: 404,
+    ErrorCode.INVALID_INPUT: 400,
+    ErrorCode.CONFLICT: 409,
+    ErrorCode.WORKER_UNAVAILABLE: 409,
+    ErrorCode.CONFIG_ERROR: 500,
+    ErrorCode.EXTERNAL_SERVICE: 502,
+    ErrorCode.CANCELLED: 409,
+    ErrorCode.UNSUPPORTED_BATCH_CONFIG: 400,
+    ErrorCode.FTS5_TRIGRAM_UNAVAILABLE: 500,
+    ErrorCode.SQLITE_TOO_OLD: 500,
+    ErrorCode.MIGRATION_FAILED: 500,
+    ErrorCode.FAILURE: 500,
+}
+
+
+def http_status_for(code: ErrorCode) -> int:
+    """`ErrorCode` に対応する HTTP ステータス(既定 500)。"""
+    return HTTP_STATUS_BY_ERROR.get(code, 500)
+
+
+class AppError(Exception):
+    """UIへ提示できる正規化済みエラー。"""
+
+    def __init__(
+        self,
+        code: ErrorCode,
+        message: str,
+        *,
+        hint: str | None = None,
+        details: dict[str, Any] | None = None,
+        retryable: bool = False,
+        exit_code: ExitCode | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.hint = hint
+        self.details: dict[str, Any] = dict(details) if details else {}
+        self.retryable = retryable
+        self.exit_code = exit_code if exit_code is not None else ExitCode.FAILURE
+
+    def to_dict(self) -> dict[str, Any]:
+        """`--output json` と MCP 応答で使う辞書表現。
+
+        `details` のうち `_DEBUG_ONLY_DETAIL_KEYS` に列挙したキー(cause_message)は
+        秘密情報を含み得るため除外する。cause_type はクラス名でしかなく
+        秘密情報を含まないため、診断に有用な情報としてそのまま残す。
+        """
+        safe_details = {
+            key: value for key, value in self.details.items() if key not in _DEBUG_ONLY_DETAIL_KEYS
+        }
+        return {
+            "code": str(self.code),
+            "message": self.message,
+            "hint": self.hint,
+            "details": safe_details,
+            "retryable": self.retryable,
+        }
+
+
+def default_exit_code(code: ErrorCode) -> ExitCode:
+    """エラーコードに対応する既定の終了コード。"""
+    return _EXIT_CODE_BY_ERROR.get(code, ExitCode.FAILURE)
+
+
+def wrap(
+    exc: BaseException,
+    *,
+    code: ErrorCode,
+    message: str,
+    hint: str | None = None,
+    details: dict[str, Any] | None = None,
+    retryable: bool = False,
+    exit_code: ExitCode | None = None,
+) -> AppError:
+    """外部例外を AppError へ包む。元例外は __cause__ と details に保持する。
+
+    例外の生メッセージは message へ混ぜない(利用者向け文言を壊さないため)。
+    詳細は --debug 時に details と traceback から辿る。
+    """
+    merged: dict[str, Any] = dict(details) if details else {}
+    merged.setdefault("cause_type", type(exc).__name__)
+    merged.setdefault("cause_message", str(exc))
+    err = AppError(
+        code=code,
+        message=message,
+        hint=hint,
+        details=merged,
+        retryable=retryable,
+        exit_code=exit_code if exit_code is not None else default_exit_code(code),
+    )
+    err.__cause__ = exc
+    return err

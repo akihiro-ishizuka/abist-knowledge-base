@@ -1,0 +1,63 @@
+{
+  "case": "call_2",
+  "deviation_from_brief": null,
+  "execution_environment": "live_old_repo",
+  "is_error_present": true,
+  "is_error_value": false,
+  "nondeterministic_fields": [],
+  "notes": "呼び出し間の冪等性確認を兼ねた2件目。",
+  "request": {
+    "id": 9,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {},
+      "name": "check_visualize_deps"
+    }
+  },
+  "response": {
+    "id": 9,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": true,\n  \"ready\": true,\n  \"python\": {\n    \"found\": true,\n    \"version\": \"3.11.9\",\n    \"path\": \"C:\\\\Temp\\\\multi-source-knowledge-base\\\\.venv-visualize\\\\Scripts\\\\python.exe\"\n  },\n  \"manim\": {\n    \"found\": true,\n    \"version\": \"0.19.0\"\n  },\n  \"ffmpeg\": {\n    \"found\": true,\n    \"version\": \"ffmpeg version 8.0.1-essentials_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers\",\n    \"path\": \"C:\\\\Users\\\\a1199118\\\\AppData\\\\Local\\\\Microsoft\\\\WinGet\\\\Packages\\\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\\\ffmpeg-8.0.1-essentials_build\\\\bin\\\\ffmpeg.EXE\"\n  },\n  \"fonts\": {\n    \"requested\": \"Yu Gothic UI\",\n    \"available\": true\n  },\n  \"messages\": []\n}",
+          "type": "text"
+        }
+      ],
+      "isError": false
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"ready\\\": true,\\n  \\\"python\\\": {\\n    \\\"found\\\": true,\\n    \\\"version\\\": \\\"3.11.9\\\",\\n    \\\"path\\\": \\\"C:\\\\\\\\Temp\\\\\\\\multi-source-knowledge-base\\\\\\\\.venv-visualize\\\\\\\\Scripts\\\\\\\\python.exe\\\"\\n  },\\n  \\\"manim\\\": {\\n    \\\"found\\\": true,\\n    \\\"version\\\": \\\"0.19.0\\\"\\n  },\\n  \\\"ffmpeg\\\": {\\n    \\\"found\\\": true,\\n    \\\"version\\\": \\\"ffmpeg version 8.0.1-essentials_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers\\\",\\n    \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\a1199118\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Microsoft\\\\\\\\WinGet\\\\\\\\Packages\\\\\\\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\\\\\\\ffmpeg-8.0.1-essentials_build\\\\\\\\bin\\\\\\\\ffmpeg.EXE\\\"\\n  },\\n  \\\"fonts\\\": {\\n    \\\"requested\\\": \\\"Yu Gothic UI\\\",\\n    \\\"available\\\": true\\n  },\\n  \\\"messages\\\": []\\n}\"}],\"isError\":false},\"jsonrpc\":\"2.0\",\"id\":9}",
+  "run2": {
+    "request": {
+      "id": 10,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {},
+        "name": "check_visualize_deps"
+      }
+    },
+    "response": {
+      "id": 10,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": true,\n  \"ready\": true,\n  \"python\": {\n    \"found\": true,\n    \"version\": \"3.11.9\",\n    \"path\": \"C:\\\\Temp\\\\multi-source-knowledge-base\\\\.venv-visualize\\\\Scripts\\\\python.exe\"\n  },\n  \"manim\": {\n    \"found\": true,\n    \"version\": \"0.19.0\"\n  },\n  \"ffmpeg\": {\n    \"found\": true,\n    \"version\": \"ffmpeg version 8.0.1-essentials_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers\",\n    \"path\": \"C:\\\\Users\\\\a1199118\\\\AppData\\\\Local\\\\Microsoft\\\\WinGet\\\\Packages\\\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\\\ffmpeg-8.0.1-essentials_build\\\\bin\\\\ffmpeg.EXE\"\n  },\n  \"fonts\": {\n    \"requested\": \"Yu Gothic UI\",\n    \"available\": true\n  },\n  \"messages\": []\n}",
+            "type": "text"
+          }
+        ],
+        "isError": false
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"ready\\\": true,\\n  \\\"python\\\": {\\n    \\\"found\\\": true,\\n    \\\"version\\\": \\\"3.11.9\\\",\\n    \\\"path\\\": \\\"C:\\\\\\\\Temp\\\\\\\\multi-source-knowledge-base\\\\\\\\.venv-visualize\\\\\\\\Scripts\\\\\\\\python.exe\\\"\\n  },\\n  \\\"manim\\\": {\\n    \\\"found\\\": true,\\n    \\\"version\\\": \\\"0.19.0\\\"\\n  },\\n  \\\"ffmpeg\\\": {\\n    \\\"found\\\": true,\\n    \\\"version\\\": \\\"ffmpeg version 8.0.1-essentials_build-www.gyan.dev Copyright (c) 2000-2025 the FFmpeg developers\\\",\\n    \\\"path\\\": \\\"C:\\\\\\\\Users\\\\\\\\a1199118\\\\\\\\AppData\\\\\\\\Local\\\\\\\\Microsoft\\\\\\\\WinGet\\\\\\\\Packages\\\\\\\\Gyan.FFmpeg.Essentials_Microsoft.Winget.Source_8wekyb3d8bbwe\\\\\\\\ffmpeg-8.0.1-essentials_build\\\\\\\\bin\\\\\\\\ffmpeg.EXE\\\"\\n  },\\n  \\\"fonts\\\": {\\n    \\\"requested\\\": \\\"Yu Gothic UI\\\",\\n    \\\"available\\\": true\\n  },\\n  \\\"messages\\\": []\\n}\"}],\"isError\":false},\"jsonrpc\":\"2.0\",\"id\":10}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-visualize",
+  "stderr_tail": "",
+  "tool": "check_visualize_deps"
+}

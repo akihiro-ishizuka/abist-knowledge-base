@@ -1,0 +1,501 @@
+{
+  "cases": [
+    {
+      "expected": {
+        "value": [
+          "create",
+          "update",
+          "unchanged",
+          "local_modified",
+          "conflict",
+          "conflict_overwritten",
+          "adopt",
+          "unknown_local",
+          "missing",
+          "orphan",
+          "error"
+        ]
+      },
+      "id": "sync_actions_enum",
+      "input": null
+    },
+    {
+      "expected": {
+        "action": "unchanged",
+        "localModified": false,
+        "reason": "取得元・ローカルとも変化なし",
+        "remoteChanged": false,
+        "write": false
+      },
+      "id": "decide_unchanged",
+      "input": {
+        "_citation": "test/sync-planner.test.js:33-37",
+        "local": {
+          "bodyHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "exists": true
+        },
+        "record": {
+          "local_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_updated_at": "2026-07-01T00:00:00+09:00"
+        },
+        "remote": {
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "updatedAt": "2026-07-01T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "action": "create",
+        "localModified": null,
+        "reason": "ローカルにファイルがありません",
+        "remoteChanged": null,
+        "write": true
+      },
+      "id": "decide_create_no_local_file",
+      "input": {
+        "_citation": "test/sync-planner.test.js:39-43",
+        "local": {
+          "exists": false
+        },
+        "record": {
+          "local_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_updated_at": "2026-07-01T00:00:00+09:00"
+        },
+        "remote": {
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "updatedAt": "2026-07-01T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "action": "adopt",
+        "localModified": null,
+        "reason": "sync-state に記録がないため、ローカル編集の有無を判断できません。記録のみ作成し上書きしません",
+        "remoteChanged": null,
+        "write": false
+      },
+      "id": "decide_adopt_no_record",
+      "input": {
+        "_citation": "test/sync-planner.test.js:45-50",
+        "local": {
+          "bodyHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "exists": true
+        },
+        "record": null,
+        "remote": {
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "updatedAt": "2026-07-01T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "action": "update",
+        "localModified": false,
+        "reason": "取得元が更新されています",
+        "remoteChanged": true,
+        "write": true
+      },
+      "id": "decide_update_content_changed",
+      "input": {
+        "_citation": "test/sync-planner.test.js:56-60",
+        "local": {
+          "bodyHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "exists": true
+        },
+        "record": {
+          "local_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_updated_at": "2026-07-01T00:00:00+09:00"
+        },
+        "remote": {
+          "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "updatedAt": "2026-07-25T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "action": "unchanged",
+        "localModified": false,
+        "reason": "取得元・ローカルとも変化なし",
+        "remoteChanged": false,
+        "write": false
+      },
+      "id": "decide_unchanged_updated_at_only_hash_wins",
+      "input": {
+        "_citation": "test/sync-planner.test.js:62-66",
+        "local": {
+          "bodyHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "exists": true
+        },
+        "record": {
+          "local_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_updated_at": "2026-07-01T00:00:00+09:00"
+        },
+        "remote": {
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "updatedAt": "2026-07-25T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "action": "update",
+        "localModified": false,
+        "reason": "取得元が更新されています",
+        "remoteChanged": true,
+        "write": true
+      },
+      "id": "decide_update_via_updated_at_fallback_older",
+      "input": {
+        "_citation": "test/sync-planner.test.js:69-74",
+        "local": {
+          "bodyHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "exists": true
+        },
+        "record": {
+          "local_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_content_hash": null,
+          "source_updated_at": "2026-07-01T00:00:00+09:00"
+        },
+        "remote": {
+          "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "updatedAt": "2026-07-25T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "action": "unchanged",
+        "localModified": false,
+        "reason": "取得元・ローカルとも変化なし",
+        "remoteChanged": false,
+        "write": false
+      },
+      "id": "decide_unchanged_via_updated_at_fallback_same",
+      "input": {
+        "_citation": "test/sync-planner.test.js:75-79",
+        "local": {
+          "bodyHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "exists": true
+        },
+        "record": {
+          "local_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_content_hash": null,
+          "source_updated_at": "2026-07-25T00:00:00+09:00"
+        },
+        "remote": {
+          "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "updatedAt": "2026-07-25T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "action": "local_modified",
+        "localModified": true,
+        "reason": "ローカルのみ編集されています。上書きしません",
+        "remoteChanged": false,
+        "write": false
+      },
+      "id": "decide_local_modified",
+      "input": {
+        "_citation": "test/sync-planner.test.js:86-90",
+        "local": {
+          "bodyHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "exists": true
+        },
+        "record": {
+          "local_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_updated_at": "2026-07-01T00:00:00+09:00"
+        },
+        "remote": {
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "updatedAt": "2026-07-01T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "action": "conflict",
+        "localModified": true,
+        "reason": "取得元が更新され、かつローカルも編集されています。自動上書きしません",
+        "remoteChanged": true,
+        "write": false
+      },
+      "id": "decide_conflict",
+      "input": {
+        "_citation": "test/sync-planner.test.js:92-100",
+        "local": {
+          "bodyHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "exists": true
+        },
+        "record": {
+          "local_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_updated_at": "2026-07-01T00:00:00+09:00"
+        },
+        "remote": {
+          "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "updatedAt": "2026-07-25T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "action": "conflict_overwritten",
+        "localModified": true,
+        "reason": "--force 指定のため取得元の内容で上書きしました",
+        "remoteChanged": true,
+        "write": true
+      },
+      "id": "decide_conflict_overwritten_force",
+      "input": {
+        "_citation": "test/sync-planner.test.js:102-111",
+        "force": true,
+        "local": {
+          "bodyHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "exists": true
+        },
+        "record": {
+          "local_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "source_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_updated_at": "2026-07-01T00:00:00+09:00"
+        },
+        "remote": {
+          "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "updatedAt": "2026-07-25T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "action": "unknown_local",
+        "localModified": null,
+        "reason": "local_content_hash が未記録のためローカル編集の有無を判断できません",
+        "remoteChanged": false,
+        "write": false
+      },
+      "id": "decide_unknown_local_no_recorded_hash",
+      "input": {
+        "_citation": "test/sync-planner.test.js:113-121",
+        "local": {
+          "bodyHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "exists": true
+        },
+        "record": {
+          "local_content_hash": null,
+          "source_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "source_updated_at": "2026-07-01T00:00:00+09:00"
+        },
+        "remote": {
+          "contentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "updatedAt": "2026-07-01T00:00:00+09:00"
+        }
+      }
+    },
+    {
+      "expected": {
+        "first": {
+          "action": "update",
+          "localModified": false,
+          "reason": "取得元が更新されています",
+          "remoteChanged": true,
+          "write": true
+        },
+        "second": {
+          "action": "unchanged",
+          "localModified": false,
+          "reason": "取得元・ローカルとも変化なし",
+          "remoteChanged": false,
+          "write": false
+        }
+      },
+      "id": "decide_rerun_stability_update_then_unchanged",
+      "input": {
+        "first": {
+          "local": {
+            "bodyHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "exists": true
+          },
+          "record": {
+            "local_content_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "source_content_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "source_updated_at": "2026-07-01T00:00:00+09:00"
+          },
+          "remote": {
+            "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "updatedAt": "2026-07-25T00:00:00+09:00"
+          }
+        },
+        "second": {
+          "local": {
+            "bodyHash": "written-body-hash",
+            "exists": true
+          },
+          "record": {
+            "local_content_hash": "written-body-hash",
+            "source_content_hash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "source_updated_at": "2026-07-25T00:00:00+09:00"
+          },
+          "remote": {
+            "contentHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+            "updatedAt": "2026-07-25T00:00:00+09:00"
+          }
+        }
+      }
+    },
+    {
+      "expected": {
+        "changeStatus": false,
+        "reason": "全件同期が正常終了していないため欠落と判定しません（API失敗・ページネーション漏れの可能性）",
+        "sourceMissing": false
+      },
+      "id": "missing_candidate_full_sync_failed",
+      "input": {
+        "_citation": "test/sync-planner.test.js:127-136",
+        "fullSyncSucceeded": false,
+        "individualFetchFailed": true,
+        "missingCount": 5,
+        "threshold": 3
+      }
+    },
+    {
+      "expected": {
+        "changeStatus": false,
+        "reason": "連続不在 2 回で閾値 3 に達していません（カテゴリ移動・WIP変化の可能性）",
+        "sourceMissing": false
+      },
+      "id": "missing_candidate_below_threshold",
+      "input": {
+        "_citation": "test/sync-planner.test.js:138-147",
+        "fullSyncSucceeded": true,
+        "individualFetchFailed": true,
+        "missingCount": 2,
+        "threshold": 3
+      }
+    },
+    {
+      "expected": {
+        "changeStatus": false,
+        "reason": "記事ID個別取得では取得できたため欠落ではありません（一覧に出ないだけ）",
+        "sourceMissing": false
+      },
+      "id": "missing_candidate_individual_fetch_succeeded",
+      "input": {
+        "_citation": "test/sync-planner.test.js:149-158",
+        "fullSyncSucceeded": true,
+        "individualFetchFailed": false,
+        "missingCount": 9,
+        "threshold": 3
+      }
+    },
+    {
+      "expected": {
+        "changeStatus": false,
+        "reason": "全件同期成功 + 連続不在 3 回 + 個別取得も失敗",
+        "sourceMissing": true
+      },
+      "id": "missing_candidate_all_conditions_met",
+      "input": {
+        "_citation": "test/sync-planner.test.js:160-168",
+        "fullSyncSucceeded": true,
+        "individualFetchFailed": true,
+        "missingCount": 3,
+        "threshold": 3
+      }
+    },
+    {
+      "expected": {
+        "actionCounts": {
+          "conflict": 1,
+          "create": 1,
+          "error": 1,
+          "local_modified": 1,
+          "unchanged": 1,
+          "update": 1
+        },
+        "items": [
+          {
+            "action": "create",
+            "path": "a.md"
+          },
+          {
+            "action": "update",
+            "path": "b.md"
+          },
+          {
+            "action": "unchanged",
+            "path": "c.md"
+          },
+          {
+            "action": "local_modified",
+            "path": "d.md"
+          },
+          {
+            "action": "conflict",
+            "path": "e.md"
+          },
+          {
+            "action": "error",
+            "error": "boom",
+            "path": "f.md"
+          }
+        ],
+        "totals": {
+          "added": 1,
+          "conflict": 1,
+          "error": 1,
+          "missing": 0,
+          "skipped": 2,
+          "updated": 1
+        }
+      },
+      "id": "record_sync_result_totals",
+      "input": null
+    },
+    {
+      "expected": {
+        "actionsCovered": [
+          "adopt",
+          "conflict",
+          "conflict_overwritten",
+          "create",
+          "error",
+          "local_modified",
+          "missing",
+          "orphan",
+          "unchanged",
+          "unknown_local",
+          "update"
+        ],
+        "mapping": {
+          "adopt": "skipped",
+          "conflict": "conflict",
+          "conflict_overwritten": "updated",
+          "create": "added",
+          "error": "error",
+          "local_modified": "skipped",
+          "missing": "missing",
+          "orphan": "missing",
+          "unchanged": "skipped",
+          "unknown_local": "skipped",
+          "update": "updated"
+        }
+      },
+      "id": "action_bucket_derived",
+      "input": {
+        "note": "ACTION_BUCKET は非公開のため recordSyncResult の観測結果から導出"
+      }
+    }
+  ],
+  "schema": 1,
+  "source": "tools/lib/sync-planner.js"
+}

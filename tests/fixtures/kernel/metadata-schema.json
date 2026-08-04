@@ -1,0 +1,1279 @@
+{
+  "additional_sources": [
+    "download-article.js"
+  ],
+  "cases": [
+    {
+      "expected": {
+        "value": [
+          "esa",
+          "web",
+          "git",
+          "manual"
+        ]
+      },
+      "id": "sources_enum",
+      "input": null
+    },
+    {
+      "expected": {
+        "value": [
+          "esa-sync",
+          "web-sync",
+          "git-sync",
+          "human"
+        ]
+      },
+      "id": "managed_by_enum",
+      "input": null
+    },
+    {
+      "expected": {
+        "value": [
+          "meeting",
+          "specification",
+          "knowledge",
+          "memo",
+          "reference"
+        ]
+      },
+      "id": "document_types_enum",
+      "input": null
+    },
+    {
+      "expected": {
+        "value": [
+          "active",
+          "deprecated",
+          "archived"
+        ]
+      },
+      "id": "statuses_enum",
+      "input": null
+    },
+    {
+      "expected": {
+        "value": [
+          "synced",
+          "modified_local",
+          "conflict",
+          "source_missing",
+          "error"
+        ]
+      },
+      "id": "sync_statuses_enum",
+      "input": null
+    },
+    {
+      "expected": {
+        "value": [
+          "title",
+          "date",
+          "updated_at",
+          "author",
+          "updated_by",
+          "category",
+          "tags",
+          "post_number",
+          "url",
+          "source",
+          "managed_by",
+          "document_type",
+          "status"
+        ]
+      },
+      "id": "frontmatter_key_order",
+      "input": null
+    },
+    {
+      "expected": {
+        "value": {
+          "esa": "esa-sync",
+          "git": "git-sync",
+          "manual": "human",
+          "web": "web-sync"
+        }
+      },
+      "id": "managed_by_for_source",
+      "input": null
+    },
+    {
+      "expected": {
+        "value": [
+          "source",
+          "managed_by",
+          "document_type",
+          "status"
+        ]
+      },
+      "id": "backfill_keys",
+      "input": null
+    },
+    {
+      "expected": {
+        "value": [
+          "knowledge/B32doc",
+          "knowledge/catiadoc",
+          "knowledge/generated"
+        ]
+      },
+      "id": "reference_corpus_prefixes",
+      "input": null
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=4744 → esa",
+          "document_type=meeting（パスに議事録/定例を含む）",
+          "status=active（既定値）"
+        ],
+        "source": "esa",
+        "status": "active"
+      },
+      "id": "classify_post_number_esa",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:27-32",
+        "frontmatter": {
+          "post_number": 4744,
+          "title": "x"
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "チーム内定例/議事録/2026_07_23.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "reference",
+        "managed_by": "web-sync",
+        "reasons": [
+          "frontmatter の source: web → web",
+          "document_type=reference（参照コーパス配下）",
+          "status=active（既定値）"
+        ],
+        "source": "web",
+        "status": "active"
+      },
+      "id": "classify_source_web",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:34-39",
+        "frontmatter": {
+          "source": "web",
+          "url": "http://x"
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "knowledge/catiadoc/online/x.htm.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "knowledge",
+        "managed_by": "git-sync",
+        "reasons": [
+          "git バッチ出力先配下 → git",
+          "document_type=knowledge（既定値）",
+          "status=active（既定値）"
+        ],
+        "source": "git",
+        "status": "active"
+      },
+      "id": "classify_git_dir",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:41-46",
+        "frontmatter": {},
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "catia-macro-generator/README.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "meeting",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=meeting（パスに議事録/定例を含む）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_manual_default",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:48-52",
+        "frontmatter": {},
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "議事録/手書きメモ.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "knowledge",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=knowledge（既定値）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_manual_handwritten_0",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:54-64",
+        "frontmatter": {},
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "superpowers/plans/2026-07-01-x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "knowledge",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=knowledge（既定値）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_manual_handwritten_1",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:54-64",
+        "frontmatter": {},
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "2026-07-01.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "meeting",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=meeting（パスに議事録/定例を含む）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_manual_handwritten_2",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:54-64",
+        "frontmatter": {},
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "議事録/設計効率化/三桜工業様定例/2026_07_23_三桜工業様定例.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "memo",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=memo（パスにメモを含む）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_post_number_non_numeric_0",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:66-71",
+        "frontmatter": {
+          "post_number": ""
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "メモ.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "memo",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=memo（パスにメモを含む）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_post_number_non_numeric_1",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:66-71",
+        "frontmatter": {
+          "post_number": null
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "メモ.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "memo",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=memo（パスにメモを含む）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_post_number_non_numeric_2",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:66-71",
+        "frontmatter": {
+          "post_number": "なし"
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "メモ.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "memo",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=memo（パスにメモを含む）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_post_number_non_numeric_3",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:66-71",
+        "frontmatter": {
+          "post_number": "#398 の話"
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "メモ.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "memo",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=memo（パスにメモを含む）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_post_number_non_numeric_4",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:66-71",
+        "frontmatter": {
+          "post_number": false
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "メモ.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "memo",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=memo（パスにメモを含む）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_post_number_non_numeric_5",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:66-71",
+        "frontmatter": {
+          "post_number": {}
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "メモ.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "knowledge",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=knowledge（既定値）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_source_website_not_web",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:73-76",
+        "frontmatter": {
+          "source": "website"
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "knowledge",
+        "managed_by": "web-sync",
+        "reasons": [
+          "frontmatter の source: web → web",
+          "document_type=knowledge（既定値）",
+          "status=active（既定値）"
+        ],
+        "source": "web",
+        "status": "active"
+      },
+      "id": "classify_source_web_case_insensitive",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:73-76",
+        "frontmatter": {
+          "source": "Web"
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": true,
+        "document_type": "meeting",
+        "managed_by": "human",
+        "reasons": [
+          "post_number=4744 → esa",
+          "既存の source: manual を優先（推定は esa）",
+          "document_type=meeting（パスに議事録/定例を含む）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_existing_source_conflict",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:78-83",
+        "frontmatter": {
+          "post_number": 4744,
+          "source": "manual"
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "チーム内定例/x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=1 → esa",
+          "document_type=meeting（パスに議事録/定例を含む）",
+          "status=active（既定値）"
+        ],
+        "source": "esa",
+        "status": "active"
+      },
+      "id": "classify_meeting_path_1",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:89-92",
+        "frontmatter": {
+          "post_number": 1
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "議事録/設計効率化/三桜工業様定例/2026_07_23.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=1 → esa",
+          "document_type=meeting（パスに議事録/定例を含む）",
+          "status=active（既定値）"
+        ],
+        "source": "esa",
+        "status": "active"
+      },
+      "id": "classify_meeting_path_2",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:89-92",
+        "frontmatter": {
+          "post_number": 1
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "チーム内定例/設計効率化/x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "memo",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=1 → esa",
+          "document_type=memo（パスにメモを含む）",
+          "status=active（既定値）"
+        ],
+        "source": "esa",
+        "status": "active"
+      },
+      "id": "classify_memo_path_1",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:94-97",
+        "frontmatter": {
+          "post_number": 1
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "設計効率化メモ/CATIAマクロ/x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "memo",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=1 → esa",
+          "document_type=memo（パスにメモを含む）",
+          "status=active（既定値）"
+        ],
+        "source": "esa",
+        "status": "active"
+      },
+      "id": "classify_memo_path_2",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:94-97",
+        "frontmatter": {
+          "post_number": 1
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "knowledge/memo/x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "specification",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=1 → esa",
+          "document_type=specification（パスに要件/仕様を含む）",
+          "status=active（既定値）"
+        ],
+        "source": "esa",
+        "status": "active"
+      },
+      "id": "classify_specification_path_1",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:99-102",
+        "frontmatter": {
+          "post_number": 1
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "蛇腹形状の自動設計/要件/REQ-001.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "specification",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=1 → esa",
+          "document_type=specification（パスに要件/仕様を含む）",
+          "status=active（既定値）"
+        ],
+        "source": "esa",
+        "status": "active"
+      },
+      "id": "classify_specification_path_2",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:99-102",
+        "frontmatter": {
+          "post_number": 1
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "x/仕様書/y.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "reference",
+        "managed_by": "human",
+        "reasons": [
+          "esa/web/git のいずれの条件にも該当せず → manual",
+          "document_type=reference（参照コーパス配下）",
+          "status=active（既定値）"
+        ],
+        "source": "manual",
+        "status": "active"
+      },
+      "id": "classify_reference_path_1",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:104-107",
+        "frontmatter": {},
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "knowledge/B32doc/md_out/x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "reference",
+        "managed_by": "web-sync",
+        "reasons": [
+          "frontmatter の source: web → web",
+          "document_type=reference（参照コーパス配下）",
+          "status=active（既定値）"
+        ],
+        "source": "web",
+        "status": "active"
+      },
+      "id": "classify_reference_path_2",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:104-107",
+        "frontmatter": {
+          "source": "web"
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "knowledge/catiadoc/x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "knowledge",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=1 → esa",
+          "document_type=knowledge（既定値）",
+          "status=active（既定値）"
+        ],
+        "source": "esa",
+        "status": "active"
+      },
+      "id": "classify_knowledge_default",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:109-111",
+        "frontmatter": {
+          "post_number": 1
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "蛇腹形状の自動設計/設計効率化/x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=1 → esa",
+          "document_type=meeting（パスに議事録/定例を含む）",
+          "status=active（既定値）"
+        ],
+        "source": "esa",
+        "status": "active"
+      },
+      "id": "classify_status_active_default",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:113-118",
+        "frontmatter": {
+          "post_number": 1
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "チーム内定例/設計効率化/x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=1 → esa",
+          "document_type=meeting（パスに議事録/定例を含む）",
+          "パスに Archived を含む → archived"
+        ],
+        "source": "esa",
+        "status": "archived"
+      },
+      "id": "classify_status_archived_path",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:113-118",
+        "frontmatter": {
+          "post_number": 1
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "チーム内定例/Archived/設計効率化/x.md"
+      }
+    },
+    {
+      "expected": {
+        "conflict": false,
+        "document_type": "meeting",
+        "managed_by": "esa-sync",
+        "reasons": [
+          "post_number=1 → esa",
+          "document_type=meeting（パスに議事録/定例を含む）",
+          "既存の status: active を維持"
+        ],
+        "source": "esa",
+        "status": "active"
+      },
+      "id": "classify_status_preserved",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:120-123",
+        "frontmatter": {
+          "post_number": 1,
+          "status": "active"
+        },
+        "gitOutputDirs": [
+          "docs/catia-macro-generator",
+          "docs/catia-flotherm-prep"
+        ],
+        "relativePath": "チーム内定例/Archived/x.md"
+      }
+    },
+    {
+      "expected": {
+        "value": true
+      },
+      "id": "is_reference_corpus_0",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:129-135",
+        "_expectedNote": true,
+        "relativePath": "knowledge/B32doc/md_out/x.md"
+      }
+    },
+    {
+      "expected": {
+        "value": true
+      },
+      "id": "is_reference_corpus_1",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:129-135",
+        "_expectedNote": true,
+        "relativePath": "knowledge/catiadoc/x.md"
+      }
+    },
+    {
+      "expected": {
+        "value": true
+      },
+      "id": "is_reference_corpus_2",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:129-135",
+        "_expectedNote": true,
+        "relativePath": "knowledge/generated/b32doc/x.md"
+      }
+    },
+    {
+      "expected": {
+        "value": false
+      },
+      "id": "is_reference_corpus_3",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:129-135",
+        "_expectedNote": false,
+        "relativePath": "knowledge/memo/x.md"
+      }
+    },
+    {
+      "expected": {
+        "value": false
+      },
+      "id": "is_reference_corpus_4",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:129-135",
+        "_expectedNote": false,
+        "relativePath": "チーム内定例/x.md"
+      }
+    },
+    {
+      "expected": {
+        "value": "docs/チーム内定例/x.md"
+      },
+      "id": "to_posix_path_0",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:137-140",
+        "raw": "docs\\チーム内定例\\x.md"
+      }
+    },
+    {
+      "expected": {
+        "value": "docs/チーム内定例/x.md"
+      },
+      "id": "to_posix_path_1",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:137-140",
+        "raw": "docs/チーム内定例/x.md"
+      }
+    },
+    {
+      "expected": {
+        "errors": [],
+        "ok": true
+      },
+      "id": "validate_metadata_ok",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:159",
+        "meta": {
+          "managed_by": "esa-sync",
+          "source": "esa",
+          "status": "active"
+        }
+      }
+    },
+    {
+      "expected": {
+        "errors": [
+          "source: \"esa2\" は不正（許可値: esa | web | git | manual）",
+          "document_type: \"note\" は不正（許可値: meeting | specification | knowledge | memo | reference）",
+          "status: \"ACTIVE\" は不正（許可値: active | deprecated | archived）"
+        ],
+        "ok": false
+      },
+      "id": "validate_metadata_bad_enums",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:160-164",
+        "meta": {
+          "document_type": "note",
+          "source": "esa2",
+          "status": "ACTIVE"
+        }
+      }
+    },
+    {
+      "expected": {
+        "errors": [
+          "managed_by: source=esa には esa-sync が対応（指定は human）"
+        ],
+        "ok": false
+      },
+      "id": "validate_metadata_managed_by_mismatch",
+      "input": {
+        "_citation": "test/metadata-schema.test.js:166-169",
+        "meta": {
+          "managed_by": "human",
+          "source": "esa"
+        }
+      }
+    },
+    {
+      "expected": {
+        "value": "a-b-c-d"
+      },
+      "id": "sanitize_filename_special_chars",
+      "input": {
+        "_citation": "test/downloaders.test.js:96",
+        "name_b64": "YS9iOmMqZA=="
+      }
+    },
+    {
+      "expected": {
+        "value": "空白-区切り"
+      },
+      "id": "sanitize_filename_whitespace",
+      "input": {
+        "_citation": "test/downloaders.test.js:97",
+        "name_b64": "ICDnqbrnmb0gIOWMuuWIh+OCiiA="
+      }
+    },
+    {
+      "expected": {
+        "value": "file-CON"
+      },
+      "id": "sanitize_filename_reserved_con",
+      "input": {
+        "_citation": "test/downloaders.test.js:98",
+        "name_b64": "Q09O"
+      }
+    },
+    {
+      "expected": {
+        "value": "untitled"
+      },
+      "id": "sanitize_filename_empty",
+      "input": {
+        "_citation": "test/downloaders.test.js:99",
+        "name_b64": ""
+      }
+    },
+    {
+      "expected": {
+        "value": "file-con"
+      },
+      "id": "sanitize_filename_reserved_or_edge_con",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "Y29u"
+      }
+    },
+    {
+      "expected": {
+        "value": "file-con.txt"
+      },
+      "id": "sanitize_filename_reserved_or_edge_con_txt",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "Y29uLnR4dA=="
+      }
+    },
+    {
+      "expected": {
+        "value": "file-PRN"
+      },
+      "id": "sanitize_filename_reserved_or_edge_PRN",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "UFJO"
+      }
+    },
+    {
+      "expected": {
+        "value": "file-AUX"
+      },
+      "id": "sanitize_filename_reserved_or_edge_AUX",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "QVVY"
+      }
+    },
+    {
+      "expected": {
+        "value": "file-NUL"
+      },
+      "id": "sanitize_filename_reserved_or_edge_NUL",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "TlVM"
+      }
+    },
+    {
+      "expected": {
+        "value": "file-COM1"
+      },
+      "id": "sanitize_filename_reserved_or_edge_COM1",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "Q09NMQ=="
+      }
+    },
+    {
+      "expected": {
+        "value": "file-COM9"
+      },
+      "id": "sanitize_filename_reserved_or_edge_COM9",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "Q09NOQ=="
+      }
+    },
+    {
+      "expected": {
+        "value": "file-LPT1"
+      },
+      "id": "sanitize_filename_reserved_or_edge_LPT1",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "TFBUMQ=="
+      }
+    },
+    {
+      "expected": {
+        "value": "file-LPT9"
+      },
+      "id": "sanitize_filename_reserved_or_edge_LPT9",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "TFBUOQ=="
+      }
+    },
+    {
+      "expected": {
+        "value": "CONFERENCE"
+      },
+      "id": "sanitize_filename_reserved_or_edge_CONFERENCE",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "Q09ORkVSRU5DRQ=="
+      }
+    },
+    {
+      "expected": {
+        "value": "untitled"
+      },
+      "id": "sanitize_filename_reserved_or_edge____",
+      "input": {
+        "_citation": "追加ケース（旧テストに無し。255バイト切詰・予約名の網羅のため実行して記録）",
+        "name_b64": "Kioq"
+      }
+    },
+    {
+      "expected": {
+        "value": "ああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああああ..."
+      },
+      "id": "sanitize_filename_255byte_truncation_japanese",
+      "input": {
+        "_citation": "追加ケース（255バイト切詰の境界を確認するため実行して記録）",
+        "name_b64": "44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC44GC"
+      }
+    },
+    {
+      "expected": {
+        "value": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa..."
+      },
+      "id": "sanitize_filename_255byte_truncation_ascii",
+      "input": {
+        "_citation": "追加ケース（255バイト切詰の境界を確認するため実行して記録）",
+        "name_b64": "YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFh"
+      }
+    },
+    {
+      "expected": {
+        "value": "議事録/設計効率化/TS様"
+      },
+      "id": "sanitize_category_path_japanese",
+      "input": {
+        "_citation": "test/downloaders.test.js:100",
+        "categoryPath_b64": "6K2w5LqL6YyyL+ioreioiOWKueeOh+WMli9UU+anmA=="
+      }
+    },
+    {
+      "expected": {
+        "value": ""
+      },
+      "id": "sanitize_category_path_empty",
+      "input": {
+        "_citation": "test/downloaders.test.js:101",
+        "categoryPath_b64": ""
+      }
+    },
+    {
+      "expected": {
+        "value": "a/file-CON/b"
+      },
+      "id": "sanitize_category_path_reserved_segment",
+      "input": {
+        "_citation": "追加ケース（セグメント単位で予約名処理が効くことの確認）",
+        "categoryPath_b64": "YS9DT04vYg=="
+      }
+    },
+    {
+      "expected": {
+        "gitOutputDirs": [
+          "docs/g/out",
+          "docs/bar-repo",
+          "docs/ssh-repo"
+        ],
+        "resolved": [
+          {
+            "dir": "docs/CON",
+            "name": "CON",
+            "type": "esa"
+          },
+          {
+            "dir": "docs/spaced-name",
+            "name": "  spaced  name  ",
+            "type": "esa"
+          },
+          {
+            "dir": "docs/a-b-c-d",
+            "name": "a/b:c*d",
+            "type": "esa"
+          },
+          {
+            "dir": "docs/長い名前ばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばば",
+            "name": "長い名前ばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばば",
+            "type": "esa"
+          },
+          {
+            "dir": "docs/custom/out",
+            "name": "web-with-outputdir",
+            "type": "web"
+          },
+          {
+            "dir": "docs/web-without-outputdir",
+            "name": "web-without-outputdir",
+            "type": "web"
+          },
+          {
+            "dir": "docs/g/out",
+            "name": "git-with-outputdir",
+            "type": "git"
+          },
+          {
+            "dir": "docs/bar-repo",
+            "name": "git-without-outputdir",
+            "type": "git"
+          },
+          {
+            "dir": "docs/ssh-repo",
+            "name": "git-ssh-form",
+            "type": "git"
+          }
+        ]
+      },
+      "id": "resolve_batch_output_dirs",
+      "input": {
+        "_note": "safeBatchName / withDocsPrefix / extractRepoName を resolveBatchOutputDirs 経由で間接検証",
+        "batchConfig": {
+          "  spaced  name  ": [],
+          "CON": [],
+          "a/b:c*d": [],
+          "git-ssh-form": {
+            "repository": "git@github.com:foo/ssh-repo.git",
+            "type": "git"
+          },
+          "git-with-outputdir": {
+            "outputDir": "g/out",
+            "repository": "https://github.com/foo/bar.git",
+            "type": "git"
+          },
+          "git-without-outputdir": {
+            "repository": "https://github.com/foo/bar-repo.git",
+            "type": "git"
+          },
+          "unknown-type-excluded": {
+            "type": "other"
+          },
+          "web-with-outputdir": {
+            "delay": 1,
+            "maxDepth": 1,
+            "outputDir": "custom/out",
+            "type": "web",
+            "url": "http://x"
+          },
+          "web-without-outputdir": {
+            "delay": 1,
+            "maxDepth": 1,
+            "type": "web",
+            "url": "http://x"
+          },
+          "長い名前ばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばば": []
+        },
+        "batchConfigKeys": [
+          "CON",
+          "  spaced  name  ",
+          "a/b:c*d",
+          "長い名前ばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばばば",
+          "web-with-outputdir",
+          "web-without-outputdir",
+          "git-with-outputdir",
+          "git-without-outputdir",
+          "git-ssh-form",
+          "unknown-type-excluded"
+        ]
+      }
+    }
+  ],
+  "schema": 1,
+  "source": "tools/lib/metadata-schema.js"
+}

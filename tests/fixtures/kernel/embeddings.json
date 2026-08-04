@@ -1,0 +1,236 @@
+{
+  "cases": [
+    {
+      "expected": {
+        "value": {
+          "Xenova/multilingual-e5-base": {
+            "dimensions": 768,
+            "maxInputChars": 512,
+            "passagePrefix": "passage: ",
+            "provider": "local",
+            "queryPrefix": "query: "
+          },
+          "Xenova/multilingual-e5-small": {
+            "dimensions": 384,
+            "maxInputChars": 512,
+            "passagePrefix": "passage: ",
+            "provider": "local",
+            "queryPrefix": "query: "
+          },
+          "text-embedding-3-large": {
+            "dimensions": 3072,
+            "maxInputChars": 16000,
+            "passagePrefix": "",
+            "provider": "openai",
+            "queryPrefix": ""
+          },
+          "text-embedding-3-small": {
+            "dimensions": 1536,
+            "maxInputChars": 16000,
+            "passagePrefix": "",
+            "provider": "openai",
+            "queryPrefix": ""
+          }
+        }
+      },
+      "id": "embedding_models_table",
+      "input": null
+    },
+    {
+      "expected": {
+        "value": {
+          "dimensions": 384,
+          "maxInputChars": 512,
+          "passagePrefix": "passage: ",
+          "provider": "local",
+          "queryPrefix": "query: "
+        }
+      },
+      "id": "model_config_Xenova_multilingual_e5_small",
+      "input": "Xenova/multilingual-e5-small"
+    },
+    {
+      "expected": {
+        "value": {
+          "dimensions": 768,
+          "maxInputChars": 512,
+          "passagePrefix": "passage: ",
+          "provider": "local",
+          "queryPrefix": "query: "
+        }
+      },
+      "id": "model_config_Xenova_multilingual_e5_base",
+      "input": "Xenova/multilingual-e5-base"
+    },
+    {
+      "expected": {
+        "value": {
+          "dimensions": 1536,
+          "maxInputChars": 16000,
+          "passagePrefix": "",
+          "provider": "openai",
+          "queryPrefix": ""
+        }
+      },
+      "id": "model_config_text_embedding_3_small",
+      "input": "text-embedding-3-small"
+    },
+    {
+      "expected": {
+        "value": {
+          "dimensions": null,
+          "maxInputChars": 2000,
+          "passagePrefix": "",
+          "provider": "openai",
+          "queryPrefix": ""
+        }
+      },
+      "id": "model_config_text_embedding_unknown_variant",
+      "input": "text-embedding-unknown-variant"
+    },
+    {
+      "expected": {
+        "value": {
+          "dimensions": null,
+          "maxInputChars": 2000,
+          "passagePrefix": "",
+          "provider": "local",
+          "queryPrefix": ""
+        }
+      },
+      "id": "model_config_some_unknown_local_model",
+      "input": "some-unknown-local-model"
+    },
+    {
+      "expected": {
+        "embeddingInputHash": "daf3dbafd25efa2cc032408482adde1a31460a45deae4ef2bc32edb231e4475f",
+        "embeddingInput_b64": "cGFzc2FnZTog5LuV5qeY5pu4CueroDEK55+t44GE5pys5paH44Gn44GZ44CC",
+        "inputLength": 23
+      },
+      "id": "short_no_truncation",
+      "input": {
+        "chunk": {
+          "heading_path": "章1",
+          "text_b64": "55+t44GE5pys5paH44Gn44GZ44CC",
+          "title": "仕様書"
+        },
+        "model": "Xenova/multilingual-e5-small"
+      }
+    },
+    {
+      "expected": {
+        "embeddingInputHash": "11a23f95d9c6dbc036cf64dbabca7b2a2e72121e494e4f02319919c71a03f22d",
+        "embeddingInput_b64": "cGFzc2FnZTog5LuV5qeY5pu444K/44Kk44OI44OrCueroDEgPiDnr4AxLTEK5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH",
+        "inputLength": 521
+      },
+      "id": "boundary_straddle_512",
+      "input": {
+        "chunk": {
+          "heading_path": "章1 > 節1-1",
+          "text_b64": "5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH",
+          "title": "仕様書タイトル"
+        },
+        "model": "Xenova/multilingual-e5-small"
+      }
+    },
+    {
+      "expected": {
+        "embeddingInputHash": "ddd80c12e581392577edc47d3925bfff5db1579060505846e67e06f7722d309e",
+        "embeddingInput_b64": "cGFzc2FnZTogeHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg=",
+        "inputLength": 521
+      },
+      "id": "boundary_exact_512",
+      "input": {
+        "chunk": {
+          "heading_path": "",
+          "text_b64": "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg=",
+          "title": ""
+        },
+        "model": "Xenova/multilingual-e5-small"
+      }
+    },
+    {
+      "expected": {
+        "embeddingInputHash": "ddd80c12e581392577edc47d3925bfff5db1579060505846e67e06f7722d309e",
+        "embeddingInput_b64": "cGFzc2FnZTogeHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg=",
+        "inputLength": 521
+      },
+      "id": "boundary_513_one_over",
+      "input": {
+        "chunk": {
+          "heading_path": "",
+          "text_b64": "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4",
+          "title": ""
+        },
+        "model": "Xenova/multilingual-e5-small"
+      }
+    },
+    {
+      "expected": {
+        "embeddingInputHash": "7bdf8e125b9143508bd4f5cac2e6d215415ffa4794fd7ec5a24ed12b8343b4e4",
+        "embeddingInput_b64": "5LuV5qeY5pu4CueroDEgPiDnr4AxCuacrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWh+acrOaWhw==",
+        "inputLength": 1412
+      },
+      "id": "openai_model_no_prefix_no_truncation",
+      "input": {
+        "chunk": {
+          "heading_path": "章1 > 節1",
+          "text_b64": "5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH5pys5paH",
+          "title": "仕様書"
+        },
+        "model": "text-embedding-3-small"
+      }
+    },
+    {
+      "expected": {
+        "embeddingInputHash": "b5711d69e90d7a4c198e6a8a59dc13e8aa8c8b56b2d823e72ef9064c948c14cc",
+        "embeddingInput_b64": "cGFzc2FnZTog5pys5paH44Gu44G/44Gu44OB44Oj44Oz44Kv",
+        "inputLength": 18
+      },
+      "id": "no_title_no_heading_path",
+      "input": {
+        "chunk": {
+          "heading_path": null,
+          "text_b64": "5pys5paH44Gu44G/44Gu44OB44Oj44Oz44Kv",
+          "title": null
+        },
+        "model": "Xenova/multilingual-e5-small"
+      }
+    },
+    {
+      "expected": {
+        "length": 12,
+        "queryInput_b64": "cXVlcnk6IOaknOe0ouOCr+OCqOODqg=="
+      },
+      "id": "query_short_e5",
+      "input": {
+        "model": "Xenova/multilingual-e5-small",
+        "query_b64": "5qSc57Si44Kv44Ko44Oq"
+      }
+    },
+    {
+      "expected": {
+        "length": 519,
+        "queryInput_b64": "cXVlcnk6IHFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFx"
+      },
+      "id": "query_boundary_513_e5",
+      "input": {
+        "model": "Xenova/multilingual-e5-small",
+        "query_b64": "cXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFx"
+      }
+    },
+    {
+      "expected": {
+        "length": 600,
+        "queryInput_b64": "cXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFx"
+      },
+      "id": "query_long_openai",
+      "input": {
+        "model": "text-embedding-3-small",
+        "query_b64": "cXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFxcXFx"
+      }
+    }
+  ],
+  "schema": 1,
+  "source": "tools/lib/embeddings.js"
+}

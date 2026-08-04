@@ -1,0 +1,509 @@
+{
+  "capture_dates": {
+    "capture": {
+      "commit": "6b6a3acf091c0490a19040dcb7560265bd32acfa",
+      "date": "2026-08-04T05:34:50+09:00",
+      "subject": "fix(m4): reference コーパスの source を実測値 manual に修正(b32doc は誤り)"
+    },
+    "capture-manifest.json (this file)": {
+      "commit": "d8cbc5fd29e9dd70e99818d21368ecb2a181e3ce",
+      "date": "2026-08-04T10:30:46+09:00",
+      "subject": "fix(m5): kb-search のツール説明文の全角括弧差異を修正し検証を揃える"
+    },
+    "embedding": {
+      "commit": "51b87ee09a292df7633fca6fd07df665cca622e9",
+      "date": "2026-08-04T00:47:12+09:00",
+      "subject": "fix(m1): 埋め込みゲート入力材料を追加採取し100/100カバレッジを達成"
+    },
+    "eval": {
+      "commit": "0d9088fbe553dde10c47c8051a64669876da7282",
+      "date": "2026-08-03T21:42:19+09:00",
+      "subject": "feat(m1): 検索評価ベースラインをbm25_raw/hybridの2方式で採取"
+    },
+    "html": {
+      "commit": "9dac5d9682e66cfbb9ad911db51e844fd5b74458",
+      "date": "2026-08-03T22:09:37+09:00",
+      "subject": "feat(m1): 埋め込みゲート素材・HTML変換ゴールデン・capture-manifestを採取"
+    },
+    "kernel": {
+      "commit": "7eeda228db760c80cb03d2ebae2e4ee5c074a1f4",
+      "date": "2026-08-03T23:28:22+09:00",
+      "subject": "fix(m1): sync_status_for を実行結果として採取し、b32doc accept実文書ギャップを解消"
+    },
+    "mcp": {
+      "commit": "c49036566aba4243f96e6775a5b63c887bffe001",
+      "date": "2026-08-03T21:23:46+09:00",
+      "subject": "feat(m1): MCP契約fixtureをkb-download/kb-search/kb-visualizeから採取"
+    },
+    "real-docs": {
+      "commit": "d4764f1aad7c48509983b7636a1c19cb885d4dc9",
+      "date": "2026-08-03T20:54:02+09:00",
+      "subject": "feat(m1): 実データ層化サンプルを旧sync-state.sqliteから採取"
+    },
+    "reference-index": {
+      "commit": "6b6a3acf091c0490a19040dcb7560265bd32acfa",
+      "date": "2026-08-04T05:34:50+09:00",
+      "subject": "fix(m4): reference コーパスの source を実測値 manual に修正(b32doc は誤り)"
+    },
+    "root": {
+      "commit": "d8cbc5fd29e9dd70e99818d21368ecb2a181e3ce",
+      "date": "2026-08-04T10:30:46+09:00",
+      "subject": "fix(m5): kb-search のツール説明文の全角括弧差異を修正し検証を揃える"
+    }
+  },
+  "categories": {
+    "capture": {
+      "file_count": 13,
+      "files": [
+        {
+          "bytes": 19671,
+          "path": "capture/README.md",
+          "sha256": "e974d313e45c2eda4d7cfddd914ed9ea667abae34c8f9a4383b2025005b7ad7a"
+        },
+        {
+          "bytes": 9546,
+          "path": "capture/_shared.mjs",
+          "sha256": "7d461909ae3d8f44d4e1d0f1e73a32a0e225bd709cffc921fd66fe611663ec7b"
+        },
+        {
+          "bytes": 17973,
+          "path": "capture/build-manifest.mjs",
+          "sha256": "6ca0ab9cd7d4ebf1a0cadcfd0b7fb954773e334f6bf372a02df700384479d221"
+        },
+        {
+          "bytes": 28859,
+          "path": "capture/capture-b32doc-filter.mjs",
+          "sha256": "930f44488fcfb52df5c2c60c1ab8efa17c98478f5042e8aadd4e6a18b5177510"
+        },
+        {
+          "bytes": 9217,
+          "path": "capture/capture-batch-config.mjs",
+          "sha256": "c4a0d1f25598488b805e18490483604818750cab2168517af0a25f624198737b"
+        },
+        {
+          "bytes": 17115,
+          "path": "capture/capture-embeddings.mjs",
+          "sha256": "e26a9dbbd0c7145bf42b9c432afc16afbee22691d4c628a8e52bc0b52e98e4e4"
+        },
+        {
+          "bytes": 16686,
+          "path": "capture/capture-eval.mjs",
+          "sha256": "3e59cc91f6b7af6eeca6cbc5fd399907bcfc5f6020c06c4d1173a413d079fd83"
+        },
+        {
+          "bytes": 11914,
+          "path": "capture/capture-html.mjs",
+          "sha256": "8e2996785d9fae9bb38f519c4b97cb32219f79e6ecf99e39c317d12a5b5d2232"
+        },
+        {
+          "bytes": 47661,
+          "path": "capture/capture-kernel.mjs",
+          "sha256": "957da51d1ce4b5f1da2470556e01f43e6af1be245ae96a6b1cccfe3884cc793e"
+        },
+        {
+          "bytes": 31243,
+          "path": "capture/capture-mcp.mjs",
+          "sha256": "8638cb958306dc8c4a060d714b79368d9307de9b9ef863cf63e22a51b700836c"
+        },
+        {
+          "bytes": 11267,
+          "path": "capture/capture-real-docs.mjs",
+          "sha256": "0e93d29880902ed6bf4853f753b8ab63c5f018dd1ac97d22ff68684fbe18eb36"
+        },
+        {
+          "bytes": 7038,
+          "path": "capture/capture-reference-index-columns.mjs",
+          "sha256": "48e2775c69c0209e8d38acc38a6a28f8492b322b56d6ab38c92584b31f211a5e"
+        },
+        {
+          "bytes": 28344,
+          "path": "capture/capture-sync-status.mjs",
+          "sha256": "a092b8c8ea84fec98f472cc7d901ebe2714ed35bcaae35e5812b7fbed078dc35"
+        }
+      ],
+      "total_bytes": 256534
+    },
+    "embedding": {
+      "file_count": 1,
+      "files": [
+        {
+          "bytes": 490786,
+          "path": "embedding/gate-samples.json",
+          "sha256": "583ab00ad75679e8ad81b24507e9ec5ecfa97c3bc9582eb764c1e6c850c01d66"
+        }
+      ],
+      "total_bytes": 490786
+    },
+    "eval": {
+      "file_count": 2,
+      "files": [
+        {
+          "bytes": 863817,
+          "path": "eval/baseline.json",
+          "sha256": "08db7ece2ac973515cd3aa77c77a0abe2dc6e68a77614e99560d604b2aabd851"
+        },
+        {
+          "bytes": 11290,
+          "path": "eval/queries.jsonl",
+          "sha256": "40d60c75e5a3e6461be1fd8e7bcc59efdfd50320f6124e7a1e5d5e6c5271dc6d"
+        }
+      ],
+      "total_bytes": 875107
+    },
+    "html": {
+      "file_count": 1,
+      "files": [
+        {
+          "bytes": 12057,
+          "path": "html/turndown-goldens.json",
+          "sha256": "b1003de1d8362ee7d204cd1c338af927a61411f39f130cce40eba1eb75cd75ba"
+        }
+      ],
+      "total_bytes": 12057
+    },
+    "kernel": {
+      "file_count": 9,
+      "files": [
+        {
+          "bytes": 212807,
+          "path": "kernel/b32doc-filter.json",
+          "sha256": "2d87aad87f299ffeda33672e5a1d5cadd209b065405f24a07c901b8f77654302"
+        },
+        {
+          "bytes": 25495,
+          "path": "kernel/batch-config.json",
+          "sha256": "4c77a10e42b8cd5c0374f8d81858c91021134b02b3ba7260501f999985d9c25e"
+        },
+        {
+          "bytes": 124677,
+          "path": "kernel/chunker.json",
+          "sha256": "cd8987c7e2c811bac07f17b7d9bdcc223b3e1094cabb92a9d523c49f6d531bba"
+        },
+        {
+          "bytes": 27637,
+          "path": "kernel/embeddings.json",
+          "sha256": "49e7bb9e2e9644c8f000c834fa03001f81a1919c4a8afe0caf662d825c135103"
+        },
+        {
+          "bytes": 19496,
+          "path": "kernel/frontmatter.json",
+          "sha256": "3becbb1f807dd04f4785d2fdc842ce2797bf8495a0da80269ff573db0403b073"
+        },
+        {
+          "bytes": 9198,
+          "path": "kernel/line-range.json",
+          "sha256": "9c66f300f43206d439cf4ce5233c09e3c8b15b5642c2b433d0902a965d3ea61d"
+        },
+        {
+          "bytes": 38537,
+          "path": "kernel/metadata-schema.json",
+          "sha256": "33725e117d293db2b195402a1e005becc6f9e24aec45dad27d07c5a433823c39"
+        },
+        {
+          "bytes": 16412,
+          "path": "kernel/sync-planner.json",
+          "sha256": "07e38f8c598ebea241e9ed1563abfaf9924b7f7f7c311205f1af3b232f57a826"
+        },
+        {
+          "bytes": 14660,
+          "path": "kernel/sync-status-for.json",
+          "sha256": "77b70558e40af27dfe3ad3f7795574477195d3bdb84234c9dcca504ce260c92d"
+        }
+      ],
+      "total_bytes": 488919
+    },
+    "mcp": {
+      "file_count": 29,
+      "files": [
+        {
+          "bytes": 2022,
+          "path": "mcp/kb-download/add_web_batch/schema_only.json",
+          "sha256": "90b1a472b922d684e20988427cb99f8dd3cd181efe05fbbdb153b6251fe349d0"
+        },
+        {
+          "bytes": 3099,
+          "path": "mcp/kb-download/download_esa_category/empty_category.json",
+          "sha256": "3b2f9abbbb157fe0e06917199851876c01da1b601cab59193b8af784b2e8a0fe"
+        },
+        {
+          "bytes": 3030,
+          "path": "mcp/kb-download/download_esa_post/invalid_post_number_negative.json",
+          "sha256": "143eee33a748912a5d3cc478c131902298a0b4430937a276cd68a692d6889b3c"
+        },
+        {
+          "bytes": 3061,
+          "path": "mcp/kb-download/download_esa_search/empty_query.json",
+          "sha256": "a355a7c1cafe77818b22092c5d3c49b7086b846dd224ba4b325cbf31a5d9da88"
+        },
+        {
+          "bytes": 3835,
+          "path": "mcp/kb-download/download_git/empty_repository_schema_validation.json",
+          "sha256": "98e4d0f44ec23287f0c7492863b100181e811778f1fd85b58b41b3134c4458d5"
+        },
+        {
+          "bytes": 2667,
+          "path": "mcp/kb-download/download_web/invalid_url_format.json",
+          "sha256": "9b575552584a757b4c617e0754dcb6490bc177c742c84cd4adaa20f690247463"
+        },
+        {
+          "bytes": 26359,
+          "path": "mcp/kb-download/list_batches/all_batches.json",
+          "sha256": "1bc7d9bf184c1a79fc4bc98e4659d7f743a3032a0b3895bd0d55889ca8305409"
+        },
+        {
+          "bytes": 26425,
+          "path": "mcp/kb-download/list_batches/all_batches_repeat.json",
+          "sha256": "aab4b4573f7526c26cd65bdb57f970c394561e1bf17d588944b6091dbc2b5b7a"
+        },
+        {
+          "bytes": 5015,
+          "path": "mcp/kb-download/run_batch/unknown_batch_name.json",
+          "sha256": "c26104777d0a11ec88ab586f72a54fd86d105621a125ce788780155544177a88"
+        },
+        {
+          "bytes": 2038,
+          "path": "mcp/kb-search/get_chunk/nonexistent_chunk_id.json",
+          "sha256": "4243c17daf34478f7d457b07fa0dc1be8c47758b3f49152c2b4040f951c9bbb3"
+        },
+        {
+          "bytes": 7714,
+          "path": "mcp/kb-search/get_chunk/normal.json",
+          "sha256": "8fcbc3bb0de22ccf3f616243e78805daf03e9e01c552620db09c5aafc9592cad"
+        },
+        {
+          "bytes": 2724,
+          "path": "mcp/kb-search/get_document/nonexistent_path.json",
+          "sha256": "a3a586dd93cef4c2511643874a0e5467b1a0411b71bfbde4759ddfdf11aeb991"
+        },
+        {
+          "bytes": 252051,
+          "path": "mcp/kb-search/get_document/normal.json",
+          "sha256": "61b4f179108e44812e1930ccebdce5e1c336949a1541adf4d43d40fbb4798571"
+        },
+        {
+          "bytes": 2141,
+          "path": "mcp/kb-search/get_document/path_traversal_attempt.json",
+          "sha256": "cbafba817dcd993d1fc9b08f68c201aba6e5a64f2842b818cf903ccf0389419c"
+        },
+        {
+          "bytes": 5473,
+          "path": "mcp/kb-search/get_document/with_line_range.json",
+          "sha256": "0e8139e822176653ceeeb41fc8c4e175ba3f43e550c62af8b98131078b66e8a0"
+        },
+        {
+          "bytes": 5810,
+          "path": "mcp/kb-search/index_status/call_1.json",
+          "sha256": "2b2ae82256716d084d24333d94546589c0a1c025867734b6f57a8b99753d45fc"
+        },
+        {
+          "bytes": 5868,
+          "path": "mcp/kb-search/index_status/call_2.json",
+          "sha256": "11e055a65c7cbfa79e397c5cb22b6a7b2ab9444a6b818b199ec730d25e771b85"
+        },
+        {
+          "bytes": 4384,
+          "path": "mcp/kb-search/search_kb/corpus_reference.json",
+          "sha256": "194f6115ade3c5fb130f10dc69cd261979a949989015f7cc0e2a82d3abecf486"
+        },
+        {
+          "bytes": 32258,
+          "path": "mcp/kb-search/search_kb/filtered_by_source_status_document_type.json",
+          "sha256": "ce4de857d63bb4dbd520caca55e47700547eca7310c4d47046fe9ea733bcd567"
+        },
+        {
+          "bytes": 39741,
+          "path": "mcp/kb-search/search_kb/identifier_query.json",
+          "sha256": "1dd55a20a081aca3cbc8f5dad4a1d438025be9f81128b4270e49e2513e369910"
+        },
+        {
+          "bytes": 34804,
+          "path": "mcp/kb-search/search_kb/japanese_natural_query.json",
+          "sha256": "c86899db2dbd90766688c3211ab980064a3fc91dd606cb5f1f67ec41f38742ac"
+        },
+        {
+          "bytes": 4497,
+          "path": "mcp/kb-search/search_kb/zero_hit_query.json",
+          "sha256": "279bf72419691b2be302ed2e5649d783bd98dd25c8372b3e01041cda87226c61"
+        },
+        {
+          "bytes": 4994,
+          "path": "mcp/kb-visualize/check_visualize_deps/call_1.json",
+          "sha256": "0c395aa94ce9b01130729c8082aeee05eb445f9068ab03dc57599b82a5ed9dbe"
+        },
+        {
+          "bytes": 4952,
+          "path": "mcp/kb-visualize/check_visualize_deps/call_2.json",
+          "sha256": "6bc325fb754abf9a7bd17c5755ef8b8e99a075755917b7c2fe760515f9f05c13"
+        },
+        {
+          "bytes": 6229,
+          "path": "mcp/kb-visualize/list_scene_kinds/call_1.json",
+          "sha256": "fcbdb60fd7e4eedb805aa750264d83a622261ea467215fab84444f3ccf045887"
+        },
+        {
+          "bytes": 6287,
+          "path": "mcp/kb-visualize/list_scene_kinds/call_2.json",
+          "sha256": "dd3afa0188658f1a98a1569e9437da4b298b22dee317cb0ddc61782832384a78"
+        },
+        {
+          "bytes": 5737,
+          "path": "mcp/kb-visualize/render_scene/invalid_scene_spec.json",
+          "sha256": "438f146bc9f122fc4fd8dc58f46db2a01b6db411b4b66c027d1ede953bfb7f21"
+        },
+        {
+          "bytes": 5545,
+          "path": "mcp/kb-visualize/render_scene/source_hash_mismatch.json",
+          "sha256": "66b45d7481292e87d675568dca2ab72e5b4daa288d5148cfadb9e39cc265a824"
+        },
+        {
+          "bytes": 19409,
+          "path": "mcp/tools-list.json",
+          "sha256": "c22a24658800f96d3f8150854507efac522a87b435f4b4c3e47b818a1e1639c9"
+        }
+      ],
+      "total_bytes": 528169
+    },
+    "real-docs": {
+      "file_count": 1,
+      "files": [
+        {
+          "bytes": 1859439,
+          "path": "real-docs/samples.json",
+          "sha256": "c7f5996212aa47ab67a30dfc1c2627de128c1f94775f3797fcd50c020228a70f"
+        }
+      ],
+      "total_bytes": 1859439
+    },
+    "reference-index": {
+      "file_count": 1,
+      "files": [
+        {
+          "bytes": 3300,
+          "path": "reference-index/columns.json",
+          "sha256": "65164e63531e85f23085cda31502067a168633f43c607c3a911a5ef33f5a3b5d"
+        }
+      ],
+      "total_bytes": 3300
+    },
+    "root": {
+      "file_count": 2,
+      "files": [
+        {
+          "bytes": 21,
+          "path": ".gitattributes",
+          "sha256": "11dce4ae76a450fa325a88133d4282cff549f31fe82312927b1e16b74be90ef0"
+        },
+        {
+          "bytes": 51591,
+          "path": "PROVENANCE.md",
+          "sha256": "6d2dd32bfd8b2afcdceaf1e235632ee16aeeb3479c9cfaecb98cb184b5fd5868"
+        }
+      ],
+      "total_bytes": 51612
+    }
+  },
+  "exclusions_registry": [
+    {
+      "category": "real-docs",
+      "description": "esa層の候補 'knowledge/memo/設計効率化/CATIAマクロ(Python)/Element-Type取得(VBS経由).md' がsecret_pattern:key_value に一致し除外された。実際の秘密情報ではなく、Pythonコード中の変数名`script_key = f\"...\"` が *_KEY 接尾辞パターンに偶然一致した偽陽性。brief通り「1件でも一致したサンプルは全体を除外する」規定に忠実に従った結果。",
+      "excluded_count": 1,
+      "id": "real_docs_secret_pattern_key_value",
+      "reference": ".superpowers/sdd/M1-fixture-capture/task-2-report.md §3",
+      "source_task": "Task 2 (capture-real-docs.mjs)"
+    },
+    {
+      "category": "real-docs",
+      "description": "母集団3,523件中46件が64KB超だが、層化選定で実際に候補として遭遇したのは0件(各層が64KB超に到達する前に目標件数を充足した)。除外ロジック自体は実装・テスト済みで、64KB超のファイルが存在すること自体は確認済み。「除外候補まで到達しなかった」だけであり、除外の仕組みが機能していないわけではない。",
+      "excluded_count": 0,
+      "id": "real_docs_64kb_oversize",
+      "population_over_64kb": 46,
+      "reference": ".superpowers/sdd/M1-fixture-capture/task-2-report.md §4",
+      "source_task": "Task 2 (capture-real-docs.mjs)"
+    },
+    {
+      "category": "mcp",
+      "description": "kb-download の add_web_batch は batch-config.js を書き換える副作用があるため呼び出さず、tools/list のスキーマのみを skipped_reason 付きで記録した(brief指定の除外)。",
+      "excluded_count": 1,
+      "id": "mcp_add_web_batch_skipped",
+      "reference": "tests/fixtures/mcp/kb-download/add_web_batch/schema_only.json",
+      "source_task": "Task 3 (capture-mcp.mjs)"
+    },
+    {
+      "category": "mcp",
+      "description": "brief は「不正リポジトリURLエラー」ケースを指定していたが、download_git のハンドラにはURL形式の事前チェックが無く、非空文字列を渡すと実際に git clone が spawn される。旧リポジトリ絶対不変の制約に対するリスクを避けるため、空文字列(zodのmin(1)でspawn前に確実に拒否される)を採用した。各ケースファイルの deviation_from_brief フィールドに明記済み。",
+      "excluded_count": 0,
+      "id": "mcp_download_git_deviation",
+      "reference": "tests/fixtures/mcp/kb-download/download_git/empty_repository_schema_validation.json",
+      "source_task": "Task 3 (capture-mcp.mjs)"
+    },
+    {
+      "affected_cases": 4,
+      "category": "mcp",
+      "description": "download_esa_post/download_esa_category/download_esa_search/download_git のzodスキーマ検証エラー4件は content[0].text が「MCP error -32602: ...」という非JSONのプレーン文字列になる(response_kind: 'sdk_validation_error')。この文言は旧リポジトリの zod +@modelcontextprotocol/sdk バージョン固有の生成物であり、Python版(pydantic + MCP Python SDK)は必然的に異なる文言を返す。M5の比較器は response_kind + isError + JSON-RPCエラーコード'-32602' の一致で判定し、content[0].text の文字列一致で比較してはならない。",
+      "excluded_count": 0,
+      "id": "mcp_sdk_validation_error_caveat",
+      "reference": ".superpowers/sdd/M1-fixture-capture/task-3-report.md §2",
+      "source_task": "Task 3 (capture-mcp.mjs)"
+    },
+    {
+      "category": "mcp, eval, embedding",
+      "description": "better-sqlite3 で data/kb-index.sqlite・data/reference-index.sqlite を開くだけで mtime が変化する(内容・サイズは不変)ことが Task 3 で実測判明した。このため kb-search の MCP ケース(Task 3)・検索評価ベースライン(Task 4)・埋め込みゲート素材(Task 5)はいずれも旧リポジトリ外の使い捨てサンドボックスへ両DBを『コピー』し、コピーだけを開く方式を採る。旧リポジトリの実DBファイルは一度も直接開いていない。",
+      "excluded_count": 0,
+      "id": "kb_search_sandbox_copy_execution_environment",
+      "reference": ".superpowers/sdd/M1-fixture-capture/task-3-report.md §0, task-4-report.md §1, capture-embeddings.mjs",
+      "source_task": "Task 3 / Task 4 / Task 5"
+    },
+    {
+      "category": "eval",
+      "description": "kernel/real-docs/mcp の各フィクスチャは BOM・CRLF を保持する必要がある生テキストを扱うため*_b64 で格納するが、baseline.json は検索結果の構造化データ(パス・スコア・行番号等)のみでBOM/CRLF を保持すべき生テキストを含まないため、base64化せず素のJSON文字列で記録した。",
+      "excluded_count": 0,
+      "id": "eval_baseline_plain_json_deviation",
+      "reference": ".superpowers/sdd/M1-fixture-capture/task-4-report.md §7",
+      "source_task": "Task 4 (capture-eval.mjs)"
+    },
+    {
+      "category": "real-docs",
+      "description": "real-docs の層化サンプルで web層・reference層が0件になったのは層化クエリの不具合ではない。data/sync-state.sqlite は backfill-metadata.js が直近に作った1回限りのバックフィルスナップショットであり、明示的include指定が無い場合の defaultExclude が['knowledge/B32doc','knowledge/catiadoc','knowledge/generated',...gitOutputDirs] をハードコードしているため、reference文書もweb由来の履歴コンテンツもこのDBには最初から登録されない。data/reference-index.sqlite は knowledge/B32doc のみをカバー(b32doc-filter.js)し、docs/knowledge/catiadoc(1,313ファイル、frontmatterはsource:web・2026年1月クロール)と docs/knowledge/generated(4ファイル)はどちらのDBにも登録されないメタデータ孤児である。現行 batch-config.js の type:web バッチ(catiadoc/C#ATIA)はどちらも出力先ディレクトリがディスク上に存在せず、現行設定の下ではweb バッチは一度も実行されていない。M8移行は docs/ を実ファイルベースで棚卸しする必要がある。",
+      "excluded_count": 0,
+      "id": "web_and_reference_layers_empty_corrected",
+      "reference": ".superpowers/sdd/M1-fixture-capture/progress.md 'CORRECTED BY REVIEWER' セクション, task-2-report.md §2",
+      "source_task": "Task 2 (レビューにより訂正)"
+    },
+    {
+      "category": "reference-index",
+      "description": "M4 Task1 の select_reference_targets は brief 未指定・fixture 未採取のままreference コーパスの source 列を 'b32doc' と決め打ちしていた。data/reference-index.sqlite をサンドボックスコピー経由で実測した結果、documents 7,563行全件は source='manual'(b32doc という値はどの列にも存在しない)・document_type='reference'・status='active'・post_number=NULL・url=NULL・category='html' であることが判明し、実装を source='manual' に修正した。",
+      "excluded_count": 0,
+      "id": "reference_index_source_guess_corrected",
+      "reference": "tests/fixtures/PROVENANCE.md §4, tests/fixtures/reference-index/columns.json",
+      "source_task": "M4 Task1b (capture-reference-index-columns.mjs)"
+    }
+  ],
+  "generated_by": "tests/fixtures/capture/build-manifest.mjs (再実行可能・決定的。再実行手順はcapture/README.md参照)",
+  "node_version": "v22.18.0",
+  "nondeterministic_items": [
+    {
+      "affected_cases": 5,
+      "field": "mcp kb-search/search_kb content[0].text.diagnostics.elapsedMs",
+      "note": "実測経過時間(ミリ秒)。run1/run2で値が変わることを確認済みで、各ケースファイルのnondeterministic_fields に明示的に宣言されている。他23ケースは完全に決定的。",
+      "reference": ".superpowers/sdd/M1-fixture-capture/task-3-report.md §3"
+    },
+    {
+      "affected_cases": null,
+      "field": "eval capture response timings (embedding model load ms, per-query embed ms, search timings)",
+      "note": "capture-eval.mjs実行ログ(console.error)にのみ出力し、fixture(baseline.json)自体には含めていない(意図的に除外)。3回の採取実行で値は変動したが、決定的であるべきスコア・ランキング・Recall@5/MRR/nDCG@10の数値は3回ともSHA-256完全一致を確認済み。",
+      "reference": ".superpowers/sdd/M1-fixture-capture/task-4-report.md §4"
+    },
+    {
+      "affected_cases": null,
+      "field": "kb-index.sqlite / reference-index.sqlite の mtime(better-sqlite3で開くだけで変化)",
+      "note": "既知の非決定的副作用(内容・サイズは不変)。このため kb_search_sandbox_copy_execution_environment(上記exclusions_registry参照)の通り、サンドボックスコピー方式を一貫して採用している。",
+      "reference": ".superpowers/sdd/M1-fixture-capture/task-3-report.md §0"
+    }
+  ],
+  "old_repo": {
+    "git_head": "66dbfe371a7c5c8caa05821f3e9e9f0375bc9cea",
+    "git_head_error": null,
+    "path": "C:\\Temp\\multi-source-knowledge-base"
+  },
+  "schema": 1
+}

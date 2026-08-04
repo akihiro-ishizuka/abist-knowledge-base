@@ -1,0 +1,117 @@
+{
+  "case": "source_hash_mismatch",
+  "deviation_from_brief": null,
+  "execution_environment": "live_old_repo",
+  "is_error_present": true,
+  "is_error_value": true,
+  "nondeterministic_fields": [],
+  "notes": "verifySources() は docs/ 配下の実ファイルを読み取るのみ(fs書き込み無し、実装で確認済み)。content_hash をわざと不一致にすることで SOURCE_HASH_MISMATCH を発生させ、Python 実行(render_scene.py)には到達しない。",
+  "request": {
+    "id": 13,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "sceneSpec": {
+          "beats": [
+            {
+              "label": "テスト指標",
+              "source_refs": [
+                "s1"
+              ],
+              "type": "metric",
+              "value": "1"
+            }
+          ],
+          "output_format": "mp4",
+          "scene_kind": "explain",
+          "schema_version": "1.0",
+          "sources": [
+            {
+              "content_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+              "end_line": 5,
+              "id": "s1",
+              "path": "設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md",
+              "start_line": 1
+            }
+          ],
+          "template": "step_explanation",
+          "title": "テスト用シーン(fixture採取用、実レンダリングはしない)"
+        }
+      },
+      "name": "render_scene"
+    }
+  },
+  "response": {
+    "id": 13,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": false,\n  \"code\": \"SOURCE_HASH_MISMATCH\",\n  \"errors\": [\n    {\n      \"path\": \"beats[0].source_refs\",\n      \"code\": \"hash_mismatch\",\n      \"message\": \"metric「テスト指標」の出典 \\\"s1\\\"（設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md:1-5）の内容が変わっています（content_hash 不一致）。kb-search で再取得してください\"\n    }\n  ],\n  \"warnings\": []\n}",
+          "type": "text"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"code\\\": \\\"SOURCE_HASH_MISMATCH\\\",\\n  \\\"errors\\\": [\\n    {\\n      \\\"path\\\": \\\"beats[0].source_refs\\\",\\n      \\\"code\\\": \\\"hash_mismatch\\\",\\n      \\\"message\\\": \\\"metric「テスト指標」の出典 \\\\\\\"s1\\\\\\\"（設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md:1-5）の内容が変わっています（content_hash 不一致）。kb-search で再取得してください\\\"\\n    }\\n  ],\\n  \\\"warnings\\\": []\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":13}",
+  "run2": {
+    "request": {
+      "id": 14,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "sceneSpec": {
+            "beats": [
+              {
+                "label": "テスト指標",
+                "source_refs": [
+                  "s1"
+                ],
+                "type": "metric",
+                "value": "1"
+              }
+            ],
+            "output_format": "mp4",
+            "scene_kind": "explain",
+            "schema_version": "1.0",
+            "sources": [
+              {
+                "content_hash": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+                "end_line": 5,
+                "id": "s1",
+                "path": "設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md",
+                "start_line": 1
+              }
+            ],
+            "template": "step_explanation",
+            "title": "テスト用シーン(fixture採取用、実レンダリングはしない)"
+          }
+        },
+        "name": "render_scene"
+      }
+    },
+    "response": {
+      "id": 14,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": false,\n  \"code\": \"SOURCE_HASH_MISMATCH\",\n  \"errors\": [\n    {\n      \"path\": \"beats[0].source_refs\",\n      \"code\": \"hash_mismatch\",\n      \"message\": \"metric「テスト指標」の出典 \\\"s1\\\"（設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md:1-5）の内容が変わっています（content_hash 不一致）。kb-search で再取得してください\"\n    }\n  ],\n  \"warnings\": []\n}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"code\\\": \\\"SOURCE_HASH_MISMATCH\\\",\\n  \\\"errors\\\": [\\n    {\\n      \\\"path\\\": \\\"beats[0].source_refs\\\",\\n      \\\"code\\\": \\\"hash_mismatch\\\",\\n      \\\"message\\\": \\\"metric「テスト指標」の出典 \\\\\\\"s1\\\\\\\"（設計効率化メモ/設計効率化/メモ/CATIAマクロ/Factory系オブジェクト仕様.md:1-5）の内容が変わっています（content_hash 不一致）。kb-search で再取得してください\\\"\\n    }\\n  ],\\n  \\\"warnings\\\": []\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":14}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-visualize",
+  "stderr_tail": "",
+  "tool": "render_scene"
+}

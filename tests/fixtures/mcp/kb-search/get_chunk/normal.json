@@ -1,0 +1,65 @@
+{
+  "case": "normal",
+  "deviation_from_brief": null,
+  "execution_environment": "sandbox_copy (data/*.sqlite はコピー、docs/・node_modules/ はジャンクション経由の読み取り専用参照。理由はこのファイル冒頭のインシデント注記を参照)",
+  "is_error_present": false,
+  "is_error_value": null,
+  "nondeterministic_fields": [],
+  "notes": "search_kb の identifier_query 等で観測された実在 chunk_id。",
+  "request": {
+    "id": 21,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "chunk_id": 19985
+      },
+      "name": "get_chunk"
+    }
+  },
+  "response": {
+    "id": 21,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": true,\n  \"chunk_id\": 19985,\n  \"path\": \"チーム内定例/設計効率化/三桜工業様/蛇腹形状の自動設計/納品/202605納品/次期/進捗/2026_05_14.md\",\n  \"title\": \"2026_05_14\",\n  \"heading_path\": \"Python GUI（パターンエディタ）と `docs/蛇腹形状の自動設計/要件` の充足度突合せ > 6. Unity 代替の表示要件（「要件一覧」第6章を PySide6 でどこまで満たすか）\",\n  \"start_line\": 116,\n  \"end_line\": 126,\n  \"url\": \"https://abist.esa.io/posts/4797\",\n  \"status\": \"active\",\n  \"source\": \"esa\",\n  \"post_number\": 4797,\n  \"indexed_at\": \"2026-07-29T08:45:39.429Z\",\n  \"index_stale\": false,\n  \"text\": \"## 6. Unity 代替の表示要件（「要件一覧」第6章を PySide6 でどこまで満たすか）\\n\\n| 要件の要約 | 充足 | 根拠 |\\n|------------|------|------|\\n| 3 パターン切替 | ✅ | タブ／ランク切替（`main_window.py`） |\\n| Undo / Redo | ✅ | `_undo_btn` / `_redo_btn` |\\n| ブロック色分け・クランプ表示 | ✅（2D 主） | `straight_view.py`、表示トグル |\\n| 寸法線・スケール | ⚠️ | スケールフッタ等（`straight_view.py` / `ui_strings.py`）。Unity `Control.cs` 相当の全機能一致は非保証 |\\n| export.csv（Unity 由来） | ⚠️ | GUI は `run_export` 等 **別形式**。Unity 互換ファイル名は要件の「移行」文脈 |\\n\\n---\"\n}",
+          "type": "text"
+        }
+      ]
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"chunk_id\\\": 19985,\\n  \\\"path\\\": \\\"チーム内定例/設計効率化/三桜工業様/蛇腹形状の自動設計/納品/202605納品/次期/進捗/2026_05_14.md\\\",\\n  \\\"title\\\": \\\"2026_05_14\\\",\\n  \\\"heading_path\\\": \\\"Python GUI（パターンエディタ）と `docs/蛇腹形状の自動設計/要件` の充足度突合せ > 6. Unity 代替の表示要件（「要件一覧」第6章を PySide6 でどこまで満たすか）\\\",\\n  \\\"start_line\\\": 116,\\n  \\\"end_line\\\": 126,\\n  \\\"url\\\": \\\"https://abist.esa.io/posts/4797\\\",\\n  \\\"status\\\": \\\"active\\\",\\n  \\\"source\\\": \\\"esa\\\",\\n  \\\"post_number\\\": 4797,\\n  \\\"indexed_at\\\": \\\"2026-07-29T08:45:39.429Z\\\",\\n  \\\"index_stale\\\": false,\\n  \\\"text\\\": \\\"## 6. Unity 代替の表示要件（「要件一覧」第6章を PySide6 でどこまで満たすか）\\\\n\\\\n| 要件の要約 | 充足 | 根拠 |\\\\n|------------|------|------|\\\\n| 3 パターン切替 | ✅ | タブ／ランク切替（`main_window.py`） |\\\\n| Undo / Redo | ✅ | `_undo_btn` / `_redo_btn` |\\\\n| ブロック色分け・クランプ表示 | ✅（2D 主） | `straight_view.py`、表示トグル |\\\\n| 寸法線・スケール | ⚠️ | スケールフッタ等（`straight_view.py` / `ui_strings.py`）。Unity `Control.cs` 相当の全機能一致は非保証 |\\\\n| export.csv（Unity 由来） | ⚠️ | GUI は `run_export` 等 **別形式**。Unity 互換ファイル名は要件の「移行」文脈 |\\\\n\\\\n---\\\"\\n}\"}]},\"jsonrpc\":\"2.0\",\"id\":21}",
+  "run2": {
+    "request": {
+      "id": 22,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "chunk_id": 19985
+        },
+        "name": "get_chunk"
+      }
+    },
+    "response": {
+      "id": 22,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": true,\n  \"chunk_id\": 19985,\n  \"path\": \"チーム内定例/設計効率化/三桜工業様/蛇腹形状の自動設計/納品/202605納品/次期/進捗/2026_05_14.md\",\n  \"title\": \"2026_05_14\",\n  \"heading_path\": \"Python GUI（パターンエディタ）と `docs/蛇腹形状の自動設計/要件` の充足度突合せ > 6. Unity 代替の表示要件（「要件一覧」第6章を PySide6 でどこまで満たすか）\",\n  \"start_line\": 116,\n  \"end_line\": 126,\n  \"url\": \"https://abist.esa.io/posts/4797\",\n  \"status\": \"active\",\n  \"source\": \"esa\",\n  \"post_number\": 4797,\n  \"indexed_at\": \"2026-07-29T08:45:39.429Z\",\n  \"index_stale\": false,\n  \"text\": \"## 6. Unity 代替の表示要件（「要件一覧」第6章を PySide6 でどこまで満たすか）\\n\\n| 要件の要約 | 充足 | 根拠 |\\n|------------|------|------|\\n| 3 パターン切替 | ✅ | タブ／ランク切替（`main_window.py`） |\\n| Undo / Redo | ✅ | `_undo_btn` / `_redo_btn` |\\n| ブロック色分け・クランプ表示 | ✅（2D 主） | `straight_view.py`、表示トグル |\\n| 寸法線・スケール | ⚠️ | スケールフッタ等（`straight_view.py` / `ui_strings.py`）。Unity `Control.cs` 相当の全機能一致は非保証 |\\n| export.csv（Unity 由来） | ⚠️ | GUI は `run_export` 等 **別形式**。Unity 互換ファイル名は要件の「移行」文脈 |\\n\\n---\"\n}",
+            "type": "text"
+          }
+        ]
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"chunk_id\\\": 19985,\\n  \\\"path\\\": \\\"チーム内定例/設計効率化/三桜工業様/蛇腹形状の自動設計/納品/202605納品/次期/進捗/2026_05_14.md\\\",\\n  \\\"title\\\": \\\"2026_05_14\\\",\\n  \\\"heading_path\\\": \\\"Python GUI（パターンエディタ）と `docs/蛇腹形状の自動設計/要件` の充足度突合せ > 6. Unity 代替の表示要件（「要件一覧」第6章を PySide6 でどこまで満たすか）\\\",\\n  \\\"start_line\\\": 116,\\n  \\\"end_line\\\": 126,\\n  \\\"url\\\": \\\"https://abist.esa.io/posts/4797\\\",\\n  \\\"status\\\": \\\"active\\\",\\n  \\\"source\\\": \\\"esa\\\",\\n  \\\"post_number\\\": 4797,\\n  \\\"indexed_at\\\": \\\"2026-07-29T08:45:39.429Z\\\",\\n  \\\"index_stale\\\": false,\\n  \\\"text\\\": \\\"## 6. Unity 代替の表示要件（「要件一覧」第6章を PySide6 でどこまで満たすか）\\\\n\\\\n| 要件の要約 | 充足 | 根拠 |\\\\n|------------|------|------|\\\\n| 3 パターン切替 | ✅ | タブ／ランク切替（`main_window.py`） |\\\\n| Undo / Redo | ✅ | `_undo_btn` / `_redo_btn` |\\\\n| ブロック色分け・クランプ表示 | ✅（2D 主） | `straight_view.py`、表示トグル |\\\\n| 寸法線・スケール | ⚠️ | スケールフッタ等（`straight_view.py` / `ui_strings.py`）。Unity `Control.cs` 相当の全機能一致は非保証 |\\\\n| export.csv（Unity 由来） | ⚠️ | GUI は `run_export` 等 **別形式**。Unity 互換ファイル名は要件の「移行」文脈 |\\\\n\\\\n---\\\"\\n}\"}]},\"jsonrpc\":\"2.0\",\"id\":22}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-search",
+  "stderr_tail": "",
+  "tool": "get_chunk"
+}

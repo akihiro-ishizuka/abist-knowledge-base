@@ -1,0 +1,67 @@
+{
+  "case": "empty_repository_schema_validation",
+  "deviation_from_brief": "brief は「不正リポジトリURLエラー」を指定しているが、download_git のハンドラには download_web のような URL 形式チェックが無く、非空文字列を渡すと withLock 内で即座に updateGitCache() → git clone が data/git-cache/ 配下へ spawn される(実装を読んで確認済み)。不正だが非空の URL(例: 'not-a-repo') を渡した場合、git コマンドの挙動(clone失敗時に 空ディレクトリを残すか等)がgitのバージョン・状況に依存し、旧リポジトリ絶対不変の制約に対して 検証しきれないリスクがあると判断した。空文字列は zod の min(1) でハンドラ実行前(spawn前)に 確実に拒否されるため、副作用ゼロを保証できるこちらを採用した。",
+  "execution_environment": "live_old_repo",
+  "is_error_present": true,
+  "is_error_value": true,
+  "nondeterministic_fields": [],
+  "notes": "repository は z.string().min(1) のため空文字は zod 検証で弾かれる。",
+  "request": {
+    "id": 17,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "repository": ""
+      },
+      "name": "download_git"
+    }
+  },
+  "response": {
+    "id": 17,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "MCP error -32602: Input validation error: Invalid arguments for tool download_git: [\n  {\n    \"code\": \"too_small\",\n    \"minimum\": 1,\n    \"type\": \"string\",\n    \"inclusive\": true,\n    \"exact\": false,\n    \"message\": \"String must contain at least 1 character(s)\",\n    \"path\": [\n      \"repository\"\n    ]\n  }\n]",
+          "type": "text"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "response_kind": "sdk_validation_error",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"MCP error -32602: Input validation error: Invalid arguments for tool download_git: [\\n  {\\n    \\\"code\\\": \\\"too_small\\\",\\n    \\\"minimum\\\": 1,\\n    \\\"type\\\": \\\"string\\\",\\n    \\\"inclusive\\\": true,\\n    \\\"exact\\\": false,\\n    \\\"message\\\": \\\"String must contain at least 1 character(s)\\\",\\n    \\\"path\\\": [\\n      \\\"repository\\\"\\n    ]\\n  }\\n]\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":17}",
+  "run2": {
+    "request": {
+      "id": 18,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "repository": ""
+        },
+        "name": "download_git"
+      }
+    },
+    "response": {
+      "id": 18,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "MCP error -32602: Input validation error: Invalid arguments for tool download_git: [\n  {\n    \"code\": \"too_small\",\n    \"minimum\": 1,\n    \"type\": \"string\",\n    \"inclusive\": true,\n    \"exact\": false,\n    \"message\": \"String must contain at least 1 character(s)\",\n    \"path\": [\n      \"repository\"\n    ]\n  }\n]",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"MCP error -32602: Input validation error: Invalid arguments for tool download_git: [\\n  {\\n    \\\"code\\\": \\\"too_small\\\",\\n    \\\"minimum\\\": 1,\\n    \\\"type\\\": \\\"string\\\",\\n    \\\"inclusive\\\": true,\\n    \\\"exact\\\": false,\\n    \\\"message\\\": \\\"String must contain at least 1 character(s)\\\",\\n    \\\"path\\\": [\\n      \\\"repository\\\"\\n    ]\\n  }\\n]\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":18}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-download",
+  "stderr_tail": "",
+  "tool": "download_git"
+}

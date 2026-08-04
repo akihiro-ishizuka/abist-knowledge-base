@@ -1,0 +1,67 @@
+{
+  "case": "invalid_url_format",
+  "deviation_from_brief": null,
+  "execution_environment": "live_old_repo",
+  "is_error_present": true,
+  "is_error_value": true,
+  "nondeterministic_fields": [],
+  "notes": "url は z.string().min(1) を通過するが、ハンドラ冒頭の /^https?:\\/\\//i チェックでspawn 前に errorResult() を返す(実装を読んで確認済み)。tool_result_json 形式のエラー。",
+  "request": {
+    "id": 15,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "url": "not-a-valid-url"
+      },
+      "name": "download_web"
+    }
+  },
+  "response": {
+    "id": 15,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": false,\n  \"exitCode\": null,\n  \"command\": [],\n  \"stdoutTail\": \"\",\n  \"stderrTail\": \"\",\n  \"error\": \"URL が不正です（http/https で始まる必要があります）: not-a-valid-url\"\n}",
+          "type": "text"
+        }
+      ],
+      "isError": true
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"exitCode\\\": null,\\n  \\\"command\\\": [],\\n  \\\"stdoutTail\\\": \\\"\\\",\\n  \\\"stderrTail\\\": \\\"\\\",\\n  \\\"error\\\": \\\"URL が不正です（http/https で始まる必要があります）: not-a-valid-url\\\"\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":15}",
+  "run2": {
+    "request": {
+      "id": 16,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "url": "not-a-valid-url"
+        },
+        "name": "download_web"
+      }
+    },
+    "response": {
+      "id": 16,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": false,\n  \"exitCode\": null,\n  \"command\": [],\n  \"stdoutTail\": \"\",\n  \"stderrTail\": \"\",\n  \"error\": \"URL が不正です（http/https で始まる必要があります）: not-a-valid-url\"\n}",
+            "type": "text"
+          }
+        ],
+        "isError": true
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": false,\\n  \\\"exitCode\\\": null,\\n  \\\"command\\\": [],\\n  \\\"stdoutTail\\\": \\\"\\\",\\n  \\\"stderrTail\\\": \\\"\\\",\\n  \\\"error\\\": \\\"URL が不正です（http/https で始まる必要があります）: not-a-valid-url\\\"\\n}\"}],\"isError\":true},\"jsonrpc\":\"2.0\",\"id\":16}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-download",
+  "stderr_tail": "",
+  "tool": "download_web"
+}

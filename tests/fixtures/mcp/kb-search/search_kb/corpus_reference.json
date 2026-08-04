@@ -1,0 +1,71 @@
+{
+  "case": "corpus_reference",
+  "deviation_from_brief": null,
+  "execution_environment": "sandbox_copy (data/*.sqlite はコピー、docs/・node_modules/ はジャンクション経由の読み取り専用参照。理由はこのファイル冒頭のインシデント注記を参照)",
+  "is_error_present": false,
+  "is_error_value": null,
+  "nondeterministic_fields": [
+    "content[0].text.diagnostics.elapsedMs"
+  ],
+  "notes": "corpus=reference(CATIA原本/B32doc索引)を指定するケース。",
+  "request": {
+    "id": 11,
+    "jsonrpc": "2.0",
+    "method": "tools/call",
+    "params": {
+      "arguments": {
+        "corpus": "reference",
+        "limit": 5,
+        "query": "PySide6"
+      },
+      "name": "search_kb"
+    }
+  },
+  "response": {
+    "id": 11,
+    "jsonrpc": "2.0",
+    "result": {
+      "content": [
+        {
+          "text": "{\n  \"ok\": true,\n  \"count\": 0,\n  \"results\": [],\n  \"diagnostics\": {\n    \"query\": \"PySide6\",\n    \"terms\": [\n      \"PySide6\"\n    ],\n    \"tokenizer\": \"trigram\",\n    \"keywordCandidates\": 0,\n    \"shortTermCandidates\": 0,\n    \"vectorCandidates\": 0,\n    \"identifierOnlyQuery\": true,\n    \"vectorAvailable\": false,\n    \"elapsedMs\": \"2.0\"\n  },\n  \"note\": \"index_stale: true の結果は行番号が陳腐化しています。get_document で原文を確認してください。 埋め込みが未生成のため全文検索のみで検索しています。\"\n}",
+          "type": "text"
+        }
+      ]
+    }
+  },
+  "response_kind": "tool_result_json",
+  "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"count\\\": 0,\\n  \\\"results\\\": [],\\n  \\\"diagnostics\\\": {\\n    \\\"query\\\": \\\"PySide6\\\",\\n    \\\"terms\\\": [\\n      \\\"PySide6\\\"\\n    ],\\n    \\\"tokenizer\\\": \\\"trigram\\\",\\n    \\\"keywordCandidates\\\": 0,\\n    \\\"shortTermCandidates\\\": 0,\\n    \\\"vectorCandidates\\\": 0,\\n    \\\"identifierOnlyQuery\\\": true,\\n    \\\"vectorAvailable\\\": false,\\n    \\\"elapsedMs\\\": \\\"2.0\\\"\\n  },\\n  \\\"note\\\": \\\"index_stale: true の結果は行番号が陳腐化しています。get_document で原文を確認してください。 埋め込みが未生成のため全文検索のみで検索しています。\\\"\\n}\"}]},\"jsonrpc\":\"2.0\",\"id\":11}",
+  "run2": {
+    "request": {
+      "id": 12,
+      "jsonrpc": "2.0",
+      "method": "tools/call",
+      "params": {
+        "arguments": {
+          "corpus": "reference",
+          "limit": 5,
+          "query": "PySide6"
+        },
+        "name": "search_kb"
+      }
+    },
+    "response": {
+      "id": 12,
+      "jsonrpc": "2.0",
+      "result": {
+        "content": [
+          {
+            "text": "{\n  \"ok\": true,\n  \"count\": 0,\n  \"results\": [],\n  \"diagnostics\": {\n    \"query\": \"PySide6\",\n    \"terms\": [\n      \"PySide6\"\n    ],\n    \"tokenizer\": \"trigram\",\n    \"keywordCandidates\": 0,\n    \"shortTermCandidates\": 0,\n    \"vectorCandidates\": 0,\n    \"identifierOnlyQuery\": true,\n    \"vectorAvailable\": false,\n    \"elapsedMs\": \"0.7\"\n  },\n  \"note\": \"index_stale: true の結果は行番号が陳腐化しています。get_document で原文を確認してください。 埋め込みが未生成のため全文検索のみで検索しています。\"\n}",
+            "type": "text"
+          }
+        ]
+      }
+    },
+    "response_raw_line": "{\"result\":{\"content\":[{\"type\":\"text\",\"text\":\"{\\n  \\\"ok\\\": true,\\n  \\\"count\\\": 0,\\n  \\\"results\\\": [],\\n  \\\"diagnostics\\\": {\\n    \\\"query\\\": \\\"PySide6\\\",\\n    \\\"terms\\\": [\\n      \\\"PySide6\\\"\\n    ],\\n    \\\"tokenizer\\\": \\\"trigram\\\",\\n    \\\"keywordCandidates\\\": 0,\\n    \\\"shortTermCandidates\\\": 0,\\n    \\\"vectorCandidates\\\": 0,\\n    \\\"identifierOnlyQuery\\\": true,\\n    \\\"vectorAvailable\\\": false,\\n    \\\"elapsedMs\\\": \\\"0.7\\\"\\n  },\\n  \\\"note\\\": \\\"index_stale: true の結果は行番号が陳腐化しています。get_document で原文を確認してください。 埋め込みが未生成のため全文検索のみで検索しています。\\\"\\n}\"}]},\"jsonrpc\":\"2.0\",\"id\":12}",
+    "stderr_tail": ""
+  },
+  "schema": 1,
+  "server": "kb-search",
+  "stderr_tail": "",
+  "tool": "search_kb"
+}

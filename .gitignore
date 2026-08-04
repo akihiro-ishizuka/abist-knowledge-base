@@ -17,10 +17,10 @@ htmlcov/
 .nox/
 
 # Virtual environments / uv
+# .python-version is tracked on purpose: uv uses it to pin the interpreter.
 .venv/
 venv/
 .env/
-.python-version
 
 # Secrets and local config
 .env
@@ -29,10 +29,24 @@ venv/
 
 # Application data (regenerable / local)
 data/
+docs/
+reports/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal
 *.sqlite-shm
+
+# M9カットオーバー: migrate swap で組み込まれた旧システムのコンテンツ。
+# docs/ 同様、これはナレッジベースのデータであってこのプロジェクトの
+# ソースコードではない(§4: 旧システムには docs/ の外にも実データがあった)。
+# tools/ は tools/visualize/(このプロジェクトのソース)と旧システムの
+# コンテンツが混在するため、旧コンテンツのパスだけを個別に無視する。
+bk/
+scripts/
+work/
+tools/*.md
+tools/issue_bodies/
+tools/knowledge-curator/
 
 # Caches and models
 .cache/
@@ -53,5 +67,11 @@ tmp/
 temp/
 .temp/
 
-# Manim / media outputs (keep reports/ tracked selectively if needed)
+# Manim / media outputs
 media/
+
+# Agent scratch (subagent-driven-development ledger, briefs, review packages)
+.superpowers/
+
+# Agent worktrees (scratch)
+.claude/worktrees/
