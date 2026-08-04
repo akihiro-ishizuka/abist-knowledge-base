@@ -181,6 +181,15 @@ def migrate_verify(
     manifest_path: Annotated[
         Path, typer.Option("--manifest", help="migration-manifest.json のパス。")
     ],
+    build_dir: Annotated[
+        Path | None,
+        typer.Option(
+            "--build-dir",
+            help="`run` に渡した --build-dir と同じ値。省略時は既定命名規約"
+            "(<to_root>.migration-build)を検証対象とみなす。`run` で --build-dir を"
+            "明示指定した場合はここでも同じ値を渡すこと(既定命名規約では見つからない)。",
+        ),
+    ] = None,
     search_quality_baseline: Annotated[
         Path | None,
         typer.Option(
@@ -217,9 +226,12 @@ def migrate_verify(
         raise AppError(ErrorCode.MIGRATION_FAILED, f"manifest が見つかりません: {manifest_path}")
     to_root = Path(manifest.to_root)
     # swap 前は正式データディレクトリが未だ存在しないため、`run` が構築した
-    # 一時ビルドディレクトリ(既定の命名規約)を検証対象にする。
+    # 一時ビルドディレクトリを検証対象にする。`run` に --build-dir を明示指定
+    # していれば --build-dir でそれを渡す。省略時は既定の命名規約
+    # (<to_root>.migration-build)を仮定する。
     build_dir_name = f"{to_root.name}.migration-build"
-    content_dir = to_root if manifest.swapped_in else to_root.parent / build_dir_name
+    default_build_dir = to_root.parent / build_dir_name
+    content_dir = to_root if manifest.swapped_in else (build_dir or default_build_dir)
 
     search_quality_kwargs: dict[str, object] = {}
     index_conn = None
