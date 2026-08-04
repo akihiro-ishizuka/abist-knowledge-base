@@ -188,7 +188,9 @@ def render(container: ServiceContainer) -> None:
         def open_batch_dialog(batch: dict[str, Any] | None = None) -> None:
             with ui.dialog() as dialog, ui.card().classes("min-w-96"):
                 ui.label("バッチ編集" if batch else "バッチ追加").classes("text-lg font-bold")
-                name = ui.input("名前", value=str(batch.get("name", "")) if batch else "")
+                name = ui.input(
+                    "名前", value=str(batch.get("name", "")) if batch else ""
+                ).mark("batch-name")
                 batch_type = ui.select(
                     ["esa", "web", "git"],
                     label="種別",
@@ -202,7 +204,7 @@ def render(container: ServiceContainer) -> None:
                     value=json.dumps(batch.get("items") or [], ensure_ascii=False)
                     if batch
                     else "[]",
-                )
+                ).mark("batch-items")
                 enabled = ui.switch(
                     "有効", value=bool(batch.get("enabled", True)) if batch else True
                 )
@@ -212,6 +214,10 @@ def render(container: ServiceContainer) -> None:
                         parsed_items = json.loads(items.value or "[]")
                         if not isinstance(parsed_items, list):
                             raise ValueError("JSON 配列を指定してください。")
+                        if not all(isinstance(item, dict) for item in parsed_items):
+                            raise ValueError(
+                                "対象一覧の各要素は JSON オブジェクトを指定してください。"
+                            )
                     except (json.JSONDecodeError, ValueError) as exc:
                         show_result(
                             {

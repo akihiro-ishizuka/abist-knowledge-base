@@ -263,6 +263,27 @@ async def test_batch_run_confirm_after_row_selection_creates_job(
         assert jobs[0].kind == "batch"
 
 
+async def test_sources_batches_actions_show_invalid_input_without_selection(
+    container: ServiceContainer,
+) -> None:
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.action_goto_area("sources_batches")
+        await pilot.pause()
+
+        for key, expected_message in (
+            ("x", "削除するソースまたはバッチを選択してください"),
+            ("t", "接続テストするソースを選択してください"),
+            ("e", "実行するバッチを選択してください"),
+        ):
+            await pilot.press(key)
+            await pilot.pause()
+            result = str(app.query_one("#sources-batches-result", Static).render())
+            assert "INVALID_INPUT" in result
+            assert expected_message in result
+
+
 async def test_narrow_layout_collapses_nav_to_single_pane(container: ServiceContainer) -> None:
     app = KbApp(container, start_worker=False)
     async with app.run_test(size=(120, 40)) as pilot:

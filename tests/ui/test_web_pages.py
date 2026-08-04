@@ -195,6 +195,43 @@ async def test_source_remove_confirm_after_selection_deletes_source(
     assert wired_container.sources.list() == []
 
 
+async def test_batch_add_rejects_non_object_items_with_invalid_input(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    await user.open("/sources")
+    user.find("バッチ追加").click()
+    user.find(marker="batch-name").type("不正なバッチ")
+    user.find(marker="batch-items").clear().type("[1]")
+    user.find("保存").click()
+
+    await user.should_see("INVALID_INPUT")
+    await user.should_see("各要素は JSON オブジェクト")
+    assert wired_container.batches.list() == []
+
+
+async def test_batch_edit_rejects_non_object_items_without_changing_batch(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    batch = wired_container.batches.add(
+        name="編集対象",
+        type="web",
+        output_dir="docs/original",
+        items=[{"target": "original"}],
+    )
+    original_items = wired_container.batches.show(batch["id"])["items"]
+
+    await user.open("/sources")
+    _select_row(user, "batches-table", batch)
+    user.find("バッチ編集").click()
+    user.find(marker="batch-items").clear().type("[1]")
+    user.find("保存").click()
+
+    await user.should_see("INVALID_INPUT")
+    await user.should_see("各要素は JSON オブジェクト")
+    unchanged = wired_container.batches.show(batch["id"])
+    assert unchanged["items"] == original_items
+
+
 async def test_sources_batches_page_exposes_all_web_actions(
     user: User, wired_container: ServiceContainer
 ) -> None:

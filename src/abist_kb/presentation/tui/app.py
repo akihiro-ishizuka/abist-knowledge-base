@@ -421,6 +421,13 @@ class KbApp(App[None]):
         self._sources_batches_action_result = text
         self.query_one("#sources-batches-result", Static).update(text)
 
+    def _show_sources_batches_invalid_input(self, message: str) -> None:
+        self._show_sources_batches_result(
+            self._format_action_result(
+                {"error": {"code": "INVALID_INPUT", "message": message}}
+            )
+        )
+
     def remove_source(self, source_id: str) -> None:
         source = self._source(source_id)
         if source is None:
@@ -484,7 +491,12 @@ class KbApp(App[None]):
         )
 
     def action_remove_selected(self) -> None:
-        if self.current_area != "sources_batches" or self._selected_source_or_batch is None:
+        if self.current_area != "sources_batches":
+            return
+        if self._selected_source_or_batch is None:
+            self._show_sources_batches_invalid_input(
+                "削除するソースまたはバッチを選択してください。"
+            )
             return
         kind, item_id = self._selected_source_or_batch
         if kind == "source":
@@ -492,13 +504,39 @@ class KbApp(App[None]):
         else:
             self.remove_batch(item_id)
 
+    def action_remove_selected_source(self) -> None:
+        if self.current_area != "sources_batches":
+            return
+        if self._selected_source_id is None:
+            self._show_sources_batches_invalid_input("削除するソースを選択してください。")
+            return
+        self.remove_source(self._selected_source_id)
+
+    def action_remove_selected_batch(self) -> None:
+        if self.current_area != "sources_batches":
+            return
+        if self._selected_batch_id is None:
+            self._show_sources_batches_invalid_input("削除するバッチを選択してください。")
+            return
+        self.remove_batch(self._selected_batch_id)
+
     def action_test_selected_source(self) -> None:
-        if self.current_area == "sources_batches" and self._selected_source_id:
-            self.test_source_connection(self._selected_source_id)
+        if self.current_area != "sources_batches":
+            return
+        if self._selected_source_id is None:
+            self._show_sources_batches_invalid_input(
+                "接続テストするソースを選択してください。"
+            )
+            return
+        self.test_source_connection(self._selected_source_id)
 
     def action_run_selected_batch(self) -> None:
-        if self.current_area == "sources_batches" and self._selected_batch_id:
-            self.run_batch(self._selected_batch_id)
+        if self.current_area != "sources_batches":
+            return
+        if self._selected_batch_id is None:
+            self._show_sources_batches_invalid_input("実行するバッチを選択してください。")
+            return
+        self.run_batch(self._selected_batch_id)
 
     def _render_documents_list(self) -> None:
         docs = screens.documents_list(self.container)["documents"]
@@ -603,8 +641,8 @@ class _SourceActions(Vertical):
             return
         if event.button.id == "source-test":
             app.action_test_selected_source()
-        elif event.button.id == "source-remove" and app._selected_source_id:
-            app.remove_source(app._selected_source_id)
+        elif event.button.id == "source-remove":
+            app.action_remove_selected_source()
 
 
 class _BatchActions(Vertical):
@@ -622,8 +660,8 @@ class _BatchActions(Vertical):
             return
         if event.button.id == "batch-run":
             app.action_run_selected_batch()
-        elif event.button.id == "batch-remove" and app._selected_batch_id:
-            app.remove_batch(app._selected_batch_id)
+        elif event.button.id == "batch-remove":
+            app.action_remove_selected_batch()
 
 
 def run_tui(container: ServiceContainer, *, start_worker: bool = True) -> None:
