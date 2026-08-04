@@ -75,3 +75,6 @@ media/
 
 # Agent worktrees (scratch)
 .claude/worktrees/
+
+# Pre-force-sync backups (local safety copies)
+backup/

@@ -23,7 +23,7 @@ pytest_plugins = ["nicegui.testing.plugin"]
 
 @pytest.fixture
 def wired_container(tmp_path: Path) -> ServiceContainer:
-    settings = Settings(root_dir=tmp_path / "root")
+    settings = Settings(root_dir=tmp_path / "root", _env_file=None)
     settings.ensure_directories()
     settings.docs_dir.mkdir(parents=True, exist_ok=True)
     cont = ServiceContainer(settings, check_same_thread=False)

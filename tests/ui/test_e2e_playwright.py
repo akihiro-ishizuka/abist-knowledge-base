@@ -51,7 +51,7 @@ def live_server(
     2回目の `build_web_app()`(=2回目の `add_middleware`)はスターレットが
     "already started" で拒否するため、テストごとに新しいサーバーは作れない)。"""
     tmp_path = tmp_path_factory.mktemp("e2e")
-    settings = Settings(root_dir=tmp_path / "root")
+    settings = Settings(root_dir=tmp_path / "root", _env_file=None)
     settings.ensure_directories()
     settings.docs_dir.mkdir(parents=True, exist_ok=True)
     container = ServiceContainer(settings, check_same_thread=False)

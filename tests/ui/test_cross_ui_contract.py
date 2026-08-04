@@ -58,7 +58,7 @@ PARTIAL_RESULT = {"succeeded_batches": 7, "failed_batches": 3, "total_batches": 
 
 @pytest.fixture
 def project_root(tmp_root: Path) -> Path:
-    settings = Settings(root_dir=tmp_root)
+    settings = Settings(root_dir=tmp_root, _env_file=None)
     settings.ensure_directories()
     settings.docs_dir.mkdir(parents=True, exist_ok=True)
     return tmp_root
@@ -67,7 +67,7 @@ def project_root(tmp_root: Path) -> Path:
 @pytest.fixture
 def partial_job_id(project_root: Path) -> str:
     """3つの UI 経路すべてが同じ DB ファイルから読む、実在する PARTIAL ジョブ。"""
-    settings = Settings(root_dir=project_root)
+    settings = Settings(root_dir=project_root, _env_file=None)
     container = ServiceContainer(settings, check_same_thread=False)
     try:
         repo = JobRepository(container.conn)
@@ -81,7 +81,7 @@ def partial_job_id(project_root: Path) -> str:
 
 
 def _web_job(project_root: Path, job_id: str) -> dict:
-    settings = Settings(root_dir=project_root)
+    settings = Settings(root_dir=project_root, _env_file=None)
     container = ServiceContainer(settings, check_same_thread=False)
     try:
         client = TestClient(create_api_app(container, bind_host="127.0.0.1"))
@@ -93,7 +93,9 @@ def _web_job(project_root: Path, job_id: str) -> dict:
 
 
 async def _tui_job_text(project_root: Path, job_id: str) -> str:
-    container = ServiceContainer(Settings(root_dir=project_root), check_same_thread=False)
+    container = ServiceContainer(
+        Settings(root_dir=project_root, _env_file=None), check_same_thread=False
+    )
     try:
         app = KbApp(container, start_worker=False)
         async with app.run_test(size=(120, 40)) as pilot:

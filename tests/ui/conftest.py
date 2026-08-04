@@ -11,7 +11,7 @@ from abist_kb.presentation.web.viewmodels.container import ServiceContainer
 
 @pytest.fixture
 def container(tmp_root: Path) -> Iterator[ServiceContainer]:
-    settings = Settings(root_dir=tmp_root)
+    settings = Settings(root_dir=tmp_root, _env_file=None)
     settings.ensure_directories()
     settings.docs_dir.mkdir(parents=True, exist_ok=True)
     # `check_same_thread=False`: `tests/ui/test_api.py` drives this fixture through

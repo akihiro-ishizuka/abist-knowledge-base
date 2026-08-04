@@ -178,7 +178,7 @@ async def test_start_worker_supervisor_runs_on_own_thread_without_thread_boundar
     (`taskkill` でしか止められない実障害)。本テストはその起動パターンを実際に
     再現し、tick失敗ログ(`worker_tick_failed`)が一切出ないことを確認する。
     """
-    settings = Settings(root_dir=tmp_root)
+    settings = Settings(root_dir=tmp_root, _env_file=None)
     settings.ensure_directories()
     settings.docs_dir.mkdir(parents=True, exist_ok=True)
     # 本番の `ui tui` と同じく既定(`check_same_thread=True`)で構築する。
