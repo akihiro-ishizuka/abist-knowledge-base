@@ -52,8 +52,9 @@ async def test_search_page_renders(user: User, wired_container: ServiceContainer
 
 
 async def test_chat_page_shows_stub_notice(user: User, wired_container: ServiceContainer) -> None:
+    # openai_api_key 未設定のテスト環境ではチャットはスタブへフォールバックする。
     await user.open("/chat")
-    await user.should_see("M7 で実装予定")
+    await user.should_see("チャットは利用できません")
 
 
 async def test_visualization_page_shows_stub_notice(
@@ -63,11 +64,10 @@ async def test_visualization_page_shows_stub_notice(
     await user.should_see("M7 で実装予定")
 
 
-async def test_quality_page_shows_stub_notice(
-    user: User, wired_container: ServiceContainer
-) -> None:
+async def test_quality_page_renders(user: User, wired_container: ServiceContainer) -> None:
+    # 品質監査4種(M7 Task 7.2)は配線済み。
     await user.open("/quality")
-    await user.should_see("M7 で実装予定")
+    await user.should_see("品質監査")
 
 
 async def test_settings_page_renders(user: User, wired_container: ServiceContainer) -> None:

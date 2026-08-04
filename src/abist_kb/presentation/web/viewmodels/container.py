@@ -23,6 +23,7 @@ from abist_kb.application.batch_service import (
     BUILTIN_BATCH_RESOURCES,
     BatchService,
 )
+from abist_kb.application.chat_service import ChatService
 from abist_kb.application.document_service import DocumentService
 from abist_kb.application.index_service import IndexService, run_index_inline
 from abist_kb.application.job_service import JobService
@@ -30,6 +31,7 @@ from abist_kb.application.search_service import SearchService
 from abist_kb.application.source_service import SourceService
 from abist_kb.application.sync_service import run_sync_inline
 from abist_kb.config import Settings
+from abist_kb.infrastructure.ai.chat_provider import OpenAIChatProvider
 from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.infrastructure.jobs import events as events_mod
 from abist_kb.infrastructure.jobs.supervisor import JobHandler, WorkerSupervisor
@@ -107,6 +109,30 @@ class ServiceContainer:
         # ため、この `jobs` には handlers を登録しない(投入しても実行されない
         # ジョブを作らないため)。
         self.jobs = JobService(self.conn, owner_id=self.owner_id, event_bus=self.event_bus)
+        self._chat: ChatService | None = None
+
+    @property
+    def chat(self) -> ChatService | None:
+        """`ChatService`(§7.1)。`openai_api_key` が未設定なら `None`(画面はスタブ表示)。
+
+        `SearchService` を根拠取得に、`OpenAIChatProvider` をベンダー実装として使う
+        (`ChatProvider` 境界のおかげで差し替え可能。実 API へは `openai_api_key`
+        が設定されているときのみ到達する)。
+        """
+        if self._chat is not None:
+            return self._chat
+        if not self.settings.openai_api_key:
+            return None
+        provider = OpenAIChatProvider(
+            model=self.settings.chat_model, api_key=self.settings.openai_api_key
+        )
+        self._chat = ChatService(
+            self.conn,
+            search_service=self.search,
+            provider=provider,
+            docs_dir=self.settings.docs_dir,
+        )
+        return self._chat
 
     def run_sync(
         self,

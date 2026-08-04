@@ -138,11 +138,14 @@ def test_search_without_index_returns_error_dict(container: ServiceContainer) ->
 
 
 def test_chat_visualization_quality_are_stubs(container: ServiceContainer) -> None:
+    # チャットは openai_api_key 未設定のテスト環境ではスタブへフォールバックする。
     chat = screens.chat_stub(container)
     assert chat["available"] is False
     assert chat["reason"]
+    # 可視化は次パス(M7 Task 7.3/7.4)のためスタブのまま。
     assert screens.visualization_stub(container)["available"] is False
-    assert screens.quality_stub(container)["available"] is False
+    # 品質監査4種(M7 Task 7.2)は配線済み。
+    assert screens.quality_stub(container)["available"] is True
 
 
 def test_settings_diagnostics_reports_paths_and_probes(container: ServiceContainer) -> None:

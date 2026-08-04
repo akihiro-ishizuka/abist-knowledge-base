@@ -41,11 +41,22 @@ def test_batch_run_not_found_returns_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
-def test_chat_visualization_quality_stub_endpoints(client: TestClient) -> None:
-    for path in ("/api/v1/chat", "/api/v1/visualization", "/api/v1/quality"):
-        response = client.get(path)
-        assert response.status_code == 200
-        assert response.json()["available"] is False
+def test_chat_visualization_quality_endpoints(client: TestClient) -> None:
+    # 可視化は次パス(M7 Task 7.3/7.4)のためスタブのまま。
+    response = client.get("/api/v1/visualization")
+    assert response.status_code == 200
+    assert response.json()["available"] is False
+
+    # チャットは openai_api_key 未設定のテスト環境ではスタブへフォールバックする
+    # (`_clear_app_env` autouse fixture が ABIST_KB_* を毎回消すため)。
+    response = client.get("/api/v1/chat")
+    assert response.status_code == 200
+    assert response.json()["available"] is False
+
+    # 品質監査4種(M7 Task 7.2)は配線済みで常に利用可能。
+    response = client.get("/api/v1/quality")
+    assert response.status_code == 200
+    assert response.json()["available"] is True
 
 
 def test_settings_diagnostics_endpoint(client: TestClient) -> None:

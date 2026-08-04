@@ -64,6 +64,7 @@ class Settings(BaseSettings):
     esa_team_name: str | None = None
     esa_access_token: str | None = None
     openai_api_key: str | None = None
+    chat_model: str = "gpt-4o-mini"
 
     @model_validator(mode="after")
     def _derive_paths(self) -> Settings:

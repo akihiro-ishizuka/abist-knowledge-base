@@ -29,7 +29,7 @@ import pytest
 from abist_kb.domain.errors import AppError
 from abist_kb.infrastructure.db.connection import connect
 from abist_kb.infrastructure.db.migrations import current_version
-from abist_kb.infrastructure.db.schema import ensure_app_schema, open_app_db
+from abist_kb.infrastructure.db.schema import ensure_app_schema, load_app_migrations, open_app_db
 from abist_kb.infrastructure.jobs.db import ensure_jobs_schema
 
 
@@ -58,14 +58,20 @@ def test_ensure_app_schema_also_creates_job_tables(tmp_root: Path) -> None:
 
 def test_ensure_jobs_schema_before_ensure_app_schema_is_safe(tmp_root: Path) -> None:
     """`ensure_jobs_schema`(バージョン2のみ把握)を先に呼んでも、後から
-    `ensure_app_schema`(バージョン2+3を把握)を同じ接続に対して呼べば
-    `MIGRATION_FAILED` にならず、バージョン3まで正しく進む。
+    `ensure_app_schema`(jobs 側も合わせた全マイグレーションを把握)を同じ接続に
+    対して呼べば `MIGRATION_FAILED` にならず、既知の最大バージョンまで正しく進む。
+
+    `load_app_migrations()` が把握する最大バージョンは M7(chat/audit)で
+    0005 まで伸びたため、ハードコードした `3` ではなく実際の一覧から求める
+    (`test_migrations.py::test_load_app_migrations_versions_are_unique_and_sequential`
+    がこの一覧自体の整合性を別途検査している)。
     """
     conn = connect(tmp_root / "app.sqlite")
     ensure_jobs_schema(conn)
     assert current_version(conn) == 2
     ensure_app_schema(conn)
-    assert current_version(conn) == 3
+    expected_max = max(m.version for m in load_app_migrations())
+    assert current_version(conn) == expected_max
     conn.close()
 
 
