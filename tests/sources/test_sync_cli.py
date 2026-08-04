@@ -135,9 +135,11 @@ def test_sync_batch_via_cli(tmp_root, esa_server: MockEsaServer) -> None:
             json.dumps([{"source_id": source_id, "target": "カテゴリX"}]),
         ),
     )
-    batch_id = json.loads(add_batch.stdout)["id"]
-
-    result = runner.invoke(app, _root_args(tmp_root, "--output", "json", "sync", "batch", batch_id))
+    assert add_batch.exit_code == 0, add_batch.output
+    result = runner.invoke(
+        app,
+        _root_args(tmp_root, "--output", "json", "sync", "batch", "CLIバッチ"),
+    )
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
     assert payload["summary"]["totals"]["added"] == 1

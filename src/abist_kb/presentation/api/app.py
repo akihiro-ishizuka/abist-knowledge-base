@@ -69,6 +69,31 @@ class DocumentMetadataRequest(BaseModel):
     document_type: str | None = None
 
 
+class ChatStartRequest(BaseModel):
+    title: str | None = None
+
+
+class ChatAskRequest(BaseModel):
+    conversation_id: str
+    question: str
+
+
+class QualityIntegrityRequest(BaseModel):
+    update_db: bool = False
+
+
+class QualityDuplicatesRequest(BaseModel):
+    corpus: str = "work"
+
+
+class QualityContradictionsRequest(BaseModel):
+    pass
+
+
+class QualityBackfillMetadataRequest(BaseModel):
+    apply: bool = False
+
+
 class VisualizationValidateRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
@@ -381,6 +406,34 @@ def register_api_routes(
     async def chat(request: Request) -> dict[str, Any]:
         return await run_locked(request, lambda: screens.chat_stub(get_container(request)))
 
+    @app.post(f"{router_prefix}/chat/start")
+    async def start_chat(body: ChatStartRequest, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.chat_start(get_container(request), title=body.title),
+        )
+
+    @app.post(f"{router_prefix}/chat/ask")
+    async def ask_chat(body: ChatAskRequest, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.chat_ask(
+                get_container(request),
+                conversation_id=body.conversation_id,
+                question=body.question,
+            ),
+        )
+
+    @app.get(f"{router_prefix}/chat/{{conversation_id}}/history")
+    async def chat_history(conversation_id: str, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.chat_history(
+                get_container(request),
+                conversation_id=conversation_id,
+            ),
+        )
+
     @app.get(f"{router_prefix}/visualization/deps")
     async def visualization_deps(request: Request) -> dict[str, Any]:
         return await run_locked(
@@ -410,6 +463,51 @@ def register_api_routes(
     @app.get(f"{router_prefix}/quality")
     async def quality(request: Request) -> dict[str, Any]:
         return await run_locked(request, lambda: screens.quality_stub(get_container(request)))
+
+    @app.post(f"{router_prefix}/quality/integrity")
+    async def run_quality_integrity(
+        body: QualityIntegrityRequest, request: Request
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.quality_run_integrity(
+                get_container(request),
+                update_db=body.update_db,
+            ),
+        )
+
+    @app.post(f"{router_prefix}/quality/duplicates")
+    async def run_quality_duplicates(
+        body: QualityDuplicatesRequest, request: Request
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.quality_run_duplicates(
+                get_container(request),
+                corpus=body.corpus,
+            ),
+        )
+
+    @app.post(f"{router_prefix}/quality/contradictions")
+    async def run_quality_contradictions(
+        _body: QualityContradictionsRequest, request: Request
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.quality_run_contradictions(get_container(request)),
+        )
+
+    @app.post(f"{router_prefix}/quality/backfill-metadata")
+    async def run_quality_backfill_metadata(
+        body: QualityBackfillMetadataRequest, request: Request
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: screens.quality_run_backfill_metadata(
+                get_container(request),
+                apply=body.apply,
+            ),
+        )
 
     @app.get(f"{router_prefix}/settings/diagnostics")
     async def diagnostics(request: Request) -> dict[str, Any]:

@@ -46,11 +46,10 @@ def test_batch_add_show_and_list(tmp_root):
         ),
     )
     assert add_result.exit_code == 0, add_result.output
-    batch_id = json.loads(add_result.stdout)["id"]
-
     show_result = runner.invoke(
-        app, _root_args(tmp_root, "--output", "json", "batch", "show", batch_id)
+        app, _root_args(tmp_root, "--output", "json", "batch", "show", "b1")
     )
+    assert show_result.exit_code == 0, show_result.output
     payload = json.loads(show_result.stdout)
     assert payload["items"][0]["target"] == "cat1"
 
@@ -75,16 +74,57 @@ def test_batch_remove_requires_yes_non_interactively(tmp_root):
 
 
 def test_batch_run_submits_and_completes_job(tmp_root):
-    add_result = runner.invoke(
+    added = runner.invoke(
         app,
         _root_args(tmp_root, "--output", "json", "batch", "add", "--name", "b1", "--type", "esa"),
     )
-    batch_id = json.loads(add_result.stdout)["id"]
-    result = runner.invoke(app, _root_args(tmp_root, "--output", "json", "batch", "run", batch_id))
+    assert added.exit_code == 0, added.output
+    result = runner.invoke(app, _root_args(tmp_root, "--output", "json", "batch", "run", "b1"))
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
     assert payload["kind"] == "batch"
     assert payload["state"] == "succeeded"
+
+
+def test_batch_edit_and_remove_accept_name(tmp_root):
+    added = runner.invoke(
+        app,
+        _root_args(
+            tmp_root,
+            "--output",
+            "json",
+            "batch",
+            "add",
+            "--name",
+            "named",
+            "--type",
+            "esa",
+        ),
+    )
+    assert added.exit_code == 0, added.output
+
+    edited = runner.invoke(
+        app,
+        _root_args(
+            tmp_root,
+            "--output",
+            "json",
+            "batch",
+            "edit",
+            "named",
+            "--output-dir",
+            "docs/named",
+        ),
+    )
+    assert edited.exit_code == 0, edited.output
+    assert json.loads(edited.stdout)["output_dir"] == "docs/named"
+
+    removed = runner.invoke(
+        app,
+        _root_args(tmp_root, "--output", "json", "--yes", "batch", "remove", "named"),
+    )
+    assert removed.exit_code == 0, removed.output
+    assert json.loads(removed.stdout)["removed"] is True
 
 
 def test_batch_import_from_old_config_does_not_modify_source_file(tmp_root, tmp_path: Path):

@@ -18,9 +18,11 @@ from typing import Annotated
 
 import typer
 
+from abist_kb.application.batch_service import BatchService
 from abist_kb.application.sync_service import run_sync_inline
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
 from abist_kb.infrastructure.db.schema import open_app_db
+from abist_kb.presentation.cli.batch_cmd import resolve_batch
 from abist_kb.presentation.cli.context import AppTyper, get_context
 
 sync_app = AppTyper(help="ソース同期(esa/web/git)の実行。", no_args_is_help=True)
@@ -134,7 +136,7 @@ def sync_source(
 @sync_app.command("batch")
 def sync_batch(
     ctx: typer.Context,
-    batch_id: Annotated[str, typer.Argument(help="バッチID(esa/web/git)。")],
+    batch_id: Annotated[str, typer.Argument(help="バッチ ID または名前(esa/web/git)。")],
     force: Annotated[bool, typer.Option("--force")] = False,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     prune_orphans: Annotated[bool, typer.Option("--prune-orphans")] = False,
@@ -143,6 +145,7 @@ def sync_batch(
     cli_ctx = get_context(ctx)
     conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
+        resolved_id = resolve_batch(BatchService(conn), batch_id)["id"]
         result = run_sync_inline(
             conn,
             root_dir=cli_ctx.settings.root_dir,
@@ -150,7 +153,7 @@ def sync_batch(
             reports_dir=cli_ctx.settings.reports_dir,
             missing_threshold=cli_ctx.settings.missing_threshold,
             target="batch",
-            target_id=batch_id,
+            target_id=resolved_id,
             force=force,
             dry_run=dry_run,
             prune_orphans=prune_orphans,

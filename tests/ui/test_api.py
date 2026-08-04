@@ -184,6 +184,37 @@ def test_chat_and_quality_endpoints(client: TestClient) -> None:
     assert response.json()["available"] is True
 
 
+def test_chat_action_routes_return_config_error_without_api_key(client: TestClient) -> None:
+    started = client.post("/api/v1/chat/start", json={})
+    asked = client.post(
+        "/api/v1/chat/ask",
+        json={"conversation_id": "missing", "question": "質問"},
+    )
+    history = client.get("/api/v1/chat/missing/history")
+
+    for response in (started, asked, history):
+        assert response.status_code == 500
+        assert response.json()["code"] == "CONFIG_ERROR"
+
+
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/api/v1/quality/integrity", {}),
+        ("/api/v1/quality/duplicates", {}),
+        ("/api/v1/quality/contradictions", {}),
+        ("/api/v1/quality/backfill-metadata", {}),
+    ],
+)
+def test_quality_action_routes_smoke(
+    client: TestClient, path: str, body: dict[str, object]
+) -> None:
+    response = client.post(path, json=body)
+
+    assert response.status_code == 200
+    assert "run_id" in response.json()
+
+
 # ---------------------------------------------------------------------------
 # 可視化(設計書 §10: render_scene をジョブとして実行する)
 # ---------------------------------------------------------------------------

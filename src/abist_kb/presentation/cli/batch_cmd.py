@@ -41,6 +41,16 @@ def _parse_items_json(value: str | None) -> list[dict[str, Any]] | None:
     return parsed
 
 
+def resolve_batch(service: BatchService, identifier: str) -> dict[str, Any]:
+    """バッチを ID 優先、見つからなければ一意な名前で解決する。"""
+    try:
+        return service.show(identifier)
+    except AppError as exc:
+        if exc.code != ErrorCode.NOT_FOUND:
+            raise
+    return service.list_by_name(identifier)
+
+
 def _present_batch(presenter: Presenter, batch: dict[str, Any]) -> None:
     if presenter.is_json:
         presenter.json_result(batch)
@@ -82,12 +92,15 @@ def batch_list(ctx: typer.Context) -> None:
 
 
 @batch_app.command("show")
-def batch_show(ctx: typer.Context, batch_id: Annotated[str, typer.Argument()]) -> None:
+def batch_show(
+    ctx: typer.Context,
+    batch_id: Annotated[str, typer.Argument(help="バッチ ID または名前。")],
+) -> None:
     """バッチの詳細(対象一覧を含む)。"""
     cli_ctx = get_context(ctx)
     conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
-        batch = BatchService(conn).show(batch_id)
+        batch = resolve_batch(BatchService(conn), batch_id)
         _present_batch(cli_ctx.presenter, batch)
     finally:
         conn.close()
@@ -118,7 +131,7 @@ def batch_add(
 @batch_app.command("edit")
 def batch_edit(
     ctx: typer.Context,
-    batch_id: Annotated[str, typer.Argument()],
+    batch_id: Annotated[str, typer.Argument(help="バッチ ID または名前。")],
     output_dir: Annotated[str | None, typer.Option("--output-dir")] = None,
     items: Annotated[
         str | None, typer.Option("--items", help="対象一覧(JSON配列)。指定時のみ全置換する。")
@@ -129,6 +142,8 @@ def batch_edit(
     cli_ctx = get_context(ctx)
     conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
+        service = BatchService(conn)
+        resolved_id = resolve_batch(service, batch_id)["id"]
         fields: dict[str, Any] = {}
         if output_dir is not None:
             fields["output_dir"] = output_dir
@@ -137,26 +152,30 @@ def batch_edit(
         parsed_items = _parse_items_json(items)
         if parsed_items is not None:
             fields["items"] = parsed_items
-        updated = BatchService(conn).edit(batch_id, **fields)
+        updated = service.edit(resolved_id, **fields)
         _present_batch(cli_ctx.presenter, updated)
     finally:
         conn.close()
 
 
 @batch_app.command("remove")
-def batch_remove(ctx: typer.Context, batch_id: Annotated[str, typer.Argument()]) -> None:
+def batch_remove(
+    ctx: typer.Context,
+    batch_id: Annotated[str, typer.Argument(help="バッチ ID または名前。")],
+) -> None:
     """バッチを削除する(確認必須、監査記録あり)。"""
     cli_ctx = get_context(ctx)
     conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
         service = BatchService(conn)
-        existing = service.show(batch_id)
+        existing = resolve_batch(service, batch_id)
+        resolved_id = existing["id"]
         removed = service.remove(
-            batch_id,
+            resolved_id,
             confirm=lambda prompt: cli_ctx.presenter.confirm(prompt, assume_yes=cli_ctx.assume_yes),
         )
         if cli_ctx.presenter.is_json:
-            cli_ctx.presenter.json_result({"id": batch_id, "removed": removed})
+            cli_ctx.presenter.json_result({"id": resolved_id, "removed": removed})
             return
         if removed:
             cli_ctx.presenter.success(f"バッチを削除しました: {existing['name']}")
@@ -167,12 +186,17 @@ def batch_remove(ctx: typer.Context, batch_id: Annotated[str, typer.Argument()])
 
 
 @batch_app.command("run")
-def batch_run(ctx: typer.Context, batch_id: Annotated[str, typer.Argument()]) -> None:
+def batch_run(
+    ctx: typer.Context,
+    batch_id: Annotated[str, typer.Argument(help="バッチ ID または名前。")],
+) -> None:
     """バッチの実行ジョブを投入し、完了まで同期実行する。"""
     cli_ctx = get_context(ctx)
     conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
-        job = BatchService(conn).run(batch_id)
+        service = BatchService(conn)
+        resolved_id = resolve_batch(service, batch_id)["id"]
+        job = service.run(resolved_id)
         if cli_ctx.presenter.is_json:
             cli_ctx.presenter.json_result(job)
             return
@@ -199,4 +223,4 @@ def batch_import(
         conn.close()
 
 
-__all__ = ["batch_app"]
+__all__ = ["batch_app", "resolve_batch"]
