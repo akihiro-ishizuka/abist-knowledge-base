@@ -22,9 +22,10 @@ from urllib.parse import urlsplit, urlunsplit
 
 from abist_kb.application.batch_service import BatchService
 from abist_kb.application.index_service import IndexService
-from abist_kb.domain.errors import AppError, ErrorCode
+from abist_kb.domain.errors import AppError, ErrorCode, wrap
 from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.infrastructure.db.sources_repo import SourceRepository
+from abist_kb.migration.inventory import resolve_batch_config_path
 from abist_kb.migration.manifest import (
     Manifest,
     StepRecord,
@@ -64,27 +65,48 @@ _DOCUMENTS_TEXT_COLUMNS = (
 _DOCUMENTS_INT_COLUMNS = ("post_number", "embedding_dimensions", "missing_count")
 
 
+def _read_source_bytes(from_root: Path, relative_path: str) -> bytes:
+    """移行元ファイルを読む。存在しない/読めない場合は AppError として
+
+    manifest に記録できる形にする(未捕捉例外で工程記録ごと失うことを防ぐ、
+    §11.1 の関連バグ修正)。
+    """
+    src = from_root / relative_path
+    try:
+        return src.read_bytes()
+    except OSError as exc:
+        raise wrap(
+            exc,
+            code=ErrorCode.MIGRATION_FAILED,
+            message=f"移行元ファイルを読み取れません: {relative_path}",
+            details={"relative_path": relative_path, "source_path": str(src)},
+        ) from exc
+
+
 def _copy_docs_step(plan: MigrationPlan, from_root: Path, build_dir: Path) -> StepRecord:
     copy_items = [item for item in plan.items if item.action == "copy"]
     input_hash = hash_inputs(*(f"{item.relative_path}" for item in copy_items))
     step = StepRecord(name="copy_docs", status="failed", input_hash=input_hash)
     step.started_at = now_iso()
     copied = 0
-    for item in copy_items:
-        src = from_root / item.relative_path
-        dest = build_dir / item.relative_path
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        data = src.read_bytes()
-        dest.write_bytes(data)
-        import hashlib
-
-        step.sha256[item.relative_path] = hashlib.sha256(data).hexdigest()
-        copied += 1
     excluded = [
         {"path": item.relative_path, "reason": item.reason}
         for item in plan.items
         if item.action == "exclude"
     ]
+    for item in copy_items:
+        dest = build_dir / item.relative_path
+        try:
+            data = _read_source_bytes(from_root, item.relative_path)
+        except AppError as exc:
+            excluded.append({"path": item.relative_path, "reason": str(exc)})
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(data)
+        import hashlib
+
+        step.sha256[item.relative_path] = hashlib.sha256(data).hexdigest()
+        copied += 1
     step.excluded = excluded
     step.counts = {"copied": copied, "excluded": len(excluded)}
     step.status = "completed"
@@ -93,24 +115,37 @@ def _copy_docs_step(plan: MigrationPlan, from_root: Path, build_dir: Path) -> St
 
 
 def _import_batch_config_step(plan: MigrationPlan, from_root: Path, build_dir: Path) -> StepRecord:
-    batch_items = [item for item in plan.items if item.relative_path == "data/batch-config.js"]
+    config_relative = resolve_batch_config_path(from_root).relative_to(from_root).as_posix()
+    batch_items = [item for item in plan.items if item.relative_path == config_relative]
     action = batch_items[0].action if batch_items else "exclude"
     step = StepRecord(name="import_batch_config", status="failed", input_hash=hash_inputs(action))
     step.started_at = now_iso()
     if action != "convert":
         reason = batch_items[0].reason if batch_items else "batch-config.js が計画にない"
-        step.excluded = [{"path": "data/batch-config.js", "reason": reason}]
+        step.excluded = [{"path": config_relative, "reason": reason}]
         step.counts = {"imported": 0, "excluded": 1}
         step.status = "completed"
         step.finished_at = now_iso()
         return step
 
-    config_path = from_root / "data" / "batch-config.js"
+    config_path = from_root / config_relative
     conn = open_app_db(build_dir / "app.sqlite")
     try:
         service = BatchService(conn)
         try:
             result = service.import_from_old_config(config_path)
+        except FileNotFoundError as exc:
+            app_err = wrap(
+                exc,
+                code=ErrorCode.MIGRATION_FAILED,
+                message=f"移行元ファイルを読み取れません: {config_relative}",
+                details={"relative_path": config_relative, "source_path": str(config_path)},
+            )
+            step.warnings.append(str(app_err))
+            step.excluded = [{"path": config_relative, "reason": str(app_err)}]
+            step.status = "failed"
+            step.finished_at = now_iso()
+            return step
         except AppError as exc:
             step.warnings.append(str(exc))
             step.status = "failed"
@@ -519,8 +554,9 @@ def run_migration(
         manifest.record_step(step)
         save_manifest(manifest, manifest_path)
 
+    batch_config_relative = resolve_batch_config_path(from_root).relative_to(from_root).as_posix()
     batch_action_items = [
-        item for item in plan.items if item.relative_path == "data/batch-config.js"
+        item for item in plan.items if item.relative_path == batch_config_relative
     ]
     batch_hash = hash_inputs(batch_action_items[0].action if batch_action_items else "absent")
     if not manifest.is_step_current("import_batch_config", batch_hash):

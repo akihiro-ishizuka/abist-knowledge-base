@@ -236,10 +236,23 @@ def _read_db_counts(db_path: Path, sandbox_dir: Path, path_column: str = "path")
         conn.close()
 
 
+def resolve_batch_config_path(from_root: Path) -> Path:
+    """`batch-config.js` の実パスを解決する。
+
+    実データ(旧リポジトリ)ではリポジトリ**直下**に置かれている
+    (`tools/lib/batch-config-store.js` とそのテストで確認済み)。
+    後方互換として `data/batch-config.js` も先に確認するが、実際に
+    見つかるのは通常こちらの直下パスの方である。どちらにも存在しない
+    場合は直下パスをそのまま返す(呼び出し側が not-found を扱う)。
+    """
+    data_path = from_root / "data" / "batch-config.js"
+    if data_path.exists():
+        return data_path
+    return from_root / "batch-config.js"
+
+
 def _batch_outside_docs(from_root: Path) -> tuple[tuple[str, ...], str | None]:
-    batch_config_path = from_root / "data" / "batch-config.js"
-    if not batch_config_path.exists():
-        batch_config_path = from_root / "batch-config.js"
+    batch_config_path = resolve_batch_config_path(from_root)
     if not batch_config_path.exists():
         return (), None
     text = batch_config_path.read_text(encoding="utf-8")

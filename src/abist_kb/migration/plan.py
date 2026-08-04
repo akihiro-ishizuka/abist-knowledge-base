@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Any, Literal
 
 from abist_kb.domain.errors import AppError, ErrorCode
-from abist_kb.migration.inventory import InspectReport, MarkdownCandidate
+from abist_kb.migration.inventory import (
+    InspectReport,
+    MarkdownCandidate,
+    resolve_batch_config_path,
+)
 
 PlanAction = Literal["copy", "convert", "regenerate", "exclude"]
 
@@ -92,16 +96,17 @@ def build_plan(report: InspectReport, from_root: Path, to_root: Path) -> Migrati
     """
     assert_safe_roots(from_root, to_root)
     items = [_plan_for_candidate(c) for c in report.markdown_candidates]
+    batch_config_relative = resolve_batch_config_path(from_root).relative_to(from_root).as_posix()
     if report.batch_config_error:
         items.append(
             PlanItem(
-                "data/batch-config.js",
+                batch_config_relative,
                 "exclude",
                 f"UNSUPPORTED_BATCH_CONFIG: {report.batch_config_error}",
             )
         )
     else:
-        items.append(PlanItem("data/batch-config.js", "convert", "M2 リテラルパーサで import"))
+        items.append(PlanItem(batch_config_relative, "convert", "M2 リテラルパーサで import"))
     if report.sync_state is not None:
         items.append(
             PlanItem("data/sync-state.sqlite", "convert", "列単位で documents テーブルへ import")

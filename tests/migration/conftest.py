@@ -53,7 +53,10 @@ def old_repo(tmp_path: Path) -> Path:
     (docs / "broken.md").write_text("---\ntitle: broken\n本文(閉じ区切り無し)\n", encoding="utf-8")
     (docs / "mojibake.md").write_bytes(b"---\ntitle: mojibake\n---\n\xff\xfe\x00broken bytes\n")
 
-    (root / "data" / "batch-config.js").write_text(_BATCH_CONFIG_JS, encoding="utf-8")
+    # 実データ確認済み: batch-config.js はリポジトリ**直下**に置かれる
+    # (`data/` 配下ではない。旧実装 `tools/lib/batch-config-store.js` とその
+    # テストで確認済み)。
+    (root / "batch-config.js").write_text(_BATCH_CONFIG_JS, encoding="utf-8")
 
     sync_db = root / "data" / "sync-state.sqlite"
     conn = sqlite3.connect(sync_db)
