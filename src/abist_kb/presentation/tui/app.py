@@ -101,7 +101,7 @@ class KbApp(App[None]):
         self._supervisor_thread: threading.Thread | None = None
         self.current_area = "dashboard"
         self.detail: tuple[str, str] | None = None  # (kind, id) e.g. ("job", "...")
-        self._last_action_result: str | None = None
+        self._job_action_results: dict[str, str] = {}
 
     # -- ライフサイクル --------------------------------------------------
 
@@ -291,8 +291,8 @@ class KbApp(App[None]):
             f"error: {job['error']}",
             f"progress: {job['progress']}",
         ]
-        if self._last_action_result:
-            lines.extend(["", self._last_action_result])
+        if action_result := self._job_action_results.get(job_id):
+            lines.extend(["", action_result])
         lines.extend(["", "履歴:"])
         for evt in data["history"]:
             lines.append(f"  [{evt['severity']}] {evt['phase']}: {evt['message']}")
@@ -308,13 +308,13 @@ class KbApp(App[None]):
             return f"操作結果: 成功: ジョブ {job['id']} state={job['state']}"
         return "操作結果: 成功"
 
-    async def confirm_and_run(self, message: str, action: Any) -> None:
+    async def confirm_and_run(self, message: str, action: Any, *, job_id: str) -> None:
         """破壊的操作(cancel/retry)をモーダル確認してから実行する。"""
 
         def _after(confirmed: bool | None) -> None:
             if confirmed:
                 result = action()
-                self._last_action_result = self._format_action_result(result)
+                self._job_action_results[job_id] = self._format_action_result(result)
                 self.render_area(self.current_area)
 
         self.push_screen(ConfirmModal(message), _after)
@@ -323,13 +323,17 @@ class KbApp(App[None]):
         def _do() -> dict[str, Any]:
             return screens.job_cancel(self.container, job_id)
 
-        self.run_worker(self.confirm_and_run(f"ジョブ {job_id} をキャンセルしますか?", _do))
+        self.run_worker(
+            self.confirm_and_run(f"ジョブ {job_id} をキャンセルしますか?", _do, job_id=job_id)
+        )
 
     def retry_job(self, job_id: str) -> None:
         def _do() -> dict[str, Any]:
             return screens.job_retry(self.container, job_id)
 
-        self.run_worker(self.confirm_and_run(f"ジョブ {job_id} を再投入しますか?", _do))
+        self.run_worker(
+            self.confirm_and_run(f"ジョブ {job_id} を再投入しますか?", _do, job_id=job_id)
+        )
 
     def _render_documents_list(self) -> None:
         docs = screens.documents_list(self.container)["documents"]

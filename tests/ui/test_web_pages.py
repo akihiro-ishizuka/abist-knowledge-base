@@ -113,6 +113,23 @@ async def test_batch_run_decline_shows_target_and_output_without_running(
     assert batch["id"]
 
 
+async def test_batch_run_confirm_shows_unset_output_destination(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    wired_container.batches.add(
+        name="出力先なし",
+        type="web",
+        output_dir=None,
+        items=[],
+    )
+
+    await user.open("/sources")
+    user.find("出力先なし を実行").click()
+
+    await user.should_see("対象: バッチ 出力先なし")
+    await user.should_see("出力先: 未設定")
+
+
 async def test_documents_page_renders(user: User, wired_container: ServiceContainer) -> None:
     await user.open("/documents")
 

@@ -34,9 +34,10 @@ def render(container: ServiceContainer) -> None:
 
         def make_run_handler(batch: dict):
             async def handler() -> None:
-                detail_lines = [f"対象: バッチ {batch['name']}"]
-                if batch.get("output_dir"):
-                    detail_lines.append(f"出力先: {batch['output_dir']}")
+                detail_lines = [
+                    f"対象: バッチ {batch['name']}",
+                    f"出力先: {batch.get('output_dir') or '未設定'}",
+                ]
                 if not await confirm_dialog("実行しますか?", detail="\n".join(detail_lines)):
                     return
 

@@ -167,6 +167,38 @@ async def test_retry_job_error_displays_code_and_message(container: ServiceConta
         assert "再試行できません" in body
 
 
+async def test_job_action_result_does_not_leak_to_another_job(
+    container: ServiceContainer,
+) -> None:
+    repo = JobRepository(container.conn)
+    acted_job = repo.submit("noop", {})
+    other_job = repo.submit("noop", {})
+
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.detail = ("job", acted_job.id)
+        app.current_area = "jobs"
+        app.render_area("jobs")
+        await pilot.pause()
+
+        app.cancel_job(acted_job.id)
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause()
+        await pilot.pause()
+
+        acted_body = str(app.query_one("#content > Static", Static).render())
+        assert "操作結果: 成功:" in acted_body
+
+        app.detail = ("job", other_job.id)
+        app.render_area("jobs")
+        await pilot.pause()
+
+        other_body = str(app.query_one("#content > Static", Static).render())
+        assert "操作結果:" not in other_body
+
+
 async def test_narrow_layout_collapses_nav_to_single_pane(container: ServiceContainer) -> None:
     app = KbApp(container, start_worker=False)
     async with app.run_test(size=(120, 40)) as pilot:
