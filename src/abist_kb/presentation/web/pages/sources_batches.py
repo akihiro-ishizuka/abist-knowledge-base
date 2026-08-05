@@ -290,7 +290,11 @@ def render(container: ServiceContainer) -> None:
             outcome = screens.batch_run(container, batch["id"])
             if "job" in outcome:
                 job = outcome["job"]
-                show_result(outcome, f"実行完了: state={job['state']}")
+                show_result(
+                    outcome,
+                    f"ジョブを投入しました: {job['id']} (state={job['state']})。"
+                    "ジョブ画面で進捗を確認してください。",
+                )
             else:
                 show_result(outcome, "")
 

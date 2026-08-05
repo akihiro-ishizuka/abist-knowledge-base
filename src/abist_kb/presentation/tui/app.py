@@ -14,6 +14,7 @@ Web(`presentation/web/viewmodels/screens.py`)と同じ view-model 関数を
 
 from __future__ import annotations
 
+import contextlib
 import json
 import threading
 from dataclasses import dataclass
@@ -22,6 +23,7 @@ from typing import Any
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
+from textual.css.query import NoMatches
 from textual.widgets import (
     Button,
     DataTable,
@@ -374,6 +376,11 @@ class KbApp(App[None]):
             return f"操作結果: エラー: {error['code']} - {error['message']}"
         if isinstance(result, dict) and "job" in result:
             job = result["job"]
+            if str(job.get("state")) == "queued":
+                return (
+                    f"操作結果: ジョブ投入: {job['id']} state={job['state']}"
+                    " — ジョブ画面で進捗を確認してください"
+                )
             return f"操作結果: 成功: ジョブ {job['id']} state={job['state']}"
         if isinstance(result, dict) and "ok" in result:
             status = "成功" if result["ok"] else "失敗"
@@ -387,18 +394,17 @@ class KbApp(App[None]):
         *,
         result_key: tuple[str, str] | None = None,
         sources_batches_result: bool = False,
-        run_in_thread: bool = False,
     ) -> None:
         """確認モーダルを経由して操作し、対象に対応する領域へ結果を保存する。
 
-        `run_in_thread=True` の場合、確認後の `action()` 呼び出しをワーカー
-        スレッドで実行し UI イベントループをブロックしない(バッチ実行は
-        `run_inline` で完了までジョブを同期的に処理するため長時間かかりうる)。
-        結果の反映(ウィジェット更新)は `call_from_thread` で UI スレッドへ
-        戻して行う。
+        バッチ実行は `screens.batch_run` → `jobs.detach` で即返るため、
+        UI スレッド上で同期呼び出ししてよい(長時間の `run_inline` は CLI 専用)。
         """
 
-        def _apply_result(result: Any) -> None:
+        def _after(confirmed: bool | None) -> None:
+            if not confirmed:
+                return
+            result = action()
             formatted = self._format_action_result(result)
             if result_key is not None:
                 self._action_results[result_key] = formatted
@@ -406,19 +412,6 @@ class KbApp(App[None]):
                 self._show_sources_batches_result(formatted)
             else:
                 self.render_area(self.current_area)
-
-        def _after(confirmed: bool | None) -> None:
-            if not confirmed:
-                return
-            if run_in_thread:
-
-                def _run_off_thread() -> None:
-                    result = action()
-                    self.call_from_thread(_apply_result, result)
-
-                self.run_worker(_run_off_thread, thread=True)
-            else:
-                _apply_result(action())
 
         self.push_screen(ConfirmModal(message), _after)
 
@@ -467,8 +460,13 @@ class KbApp(App[None]):
         )
 
     def _show_sources_batches_result(self, text: str) -> None:
+        """結果を保持し、ソース・バッチ画面上にウィジェットがあれば更新する。
+
+        実行直後に別画面へ遷移していても例外にしない(結果は次回描画で再表示)。
+        """
         self._sources_batches_action_result = text
-        self.query_one("#sources-batches-result", Static).update(text)
+        with contextlib.suppress(NoMatches):
+            self.query_one("#sources-batches-result", Static).update(text)
 
     def _show_sources_batches_invalid_input(self, message: str) -> None:
         self._show_sources_batches_result(
@@ -527,9 +525,7 @@ class KbApp(App[None]):
         message = (
             f"バッチ {batch['name']} を実行しますか?\n出力先: {batch.get('output_dir') or '未設定'}"
         )
-        self.run_worker(
-            self.confirm_and_run(message, _do, sources_batches_result=True, run_in_thread=True)
-        )
+        self.run_worker(self.confirm_and_run(message, _do, sources_batches_result=True))
 
     def action_remove_selected(self) -> None:
         if self.current_area != "sources_batches":

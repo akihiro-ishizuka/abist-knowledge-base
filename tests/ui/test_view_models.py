@@ -101,6 +101,40 @@ def test_batch_run_not_found_returns_error_dict(container: ServiceContainer) -> 
     assert outcome["error"]["code"] == "NOT_FOUND"
 
 
+def test_batch_run_without_live_worker_returns_worker_unavailable(
+    container: ServiceContainer,
+) -> None:
+    batch = container.batches.add(
+        name="待機バッチ",
+        type="web",
+        output_dir="docs/wait",
+        items=[],
+    )
+    outcome = screens.batch_run(container, batch["id"])
+    assert outcome["error"]["code"] == "WORKER_UNAVAILABLE"
+    assert JobRepository(container.conn).list() == []
+
+
+def test_batch_run_detaches_queued_job_when_worker_is_live(
+    container: ServiceContainer,
+) -> None:
+    from abist_kb.infrastructure.jobs import leases
+
+    batch = container.batches.add(
+        name="投入バッチ",
+        type="web",
+        output_dir="docs/queued",
+        items=[],
+    )
+    leases.try_acquire_worker_lease(container.conn, "test-worker", ttl_seconds=300)
+
+    outcome = screens.batch_run(container, batch["id"])
+    assert "error" not in outcome
+    assert outcome["job"]["kind"] == "batch"
+    assert outcome["job"]["state"] == "queued"
+    assert outcome["job"]["params"]["batch_id"] == batch["id"]
+
+
 def test_quality_run_backfill_metadata_apply_returns_invalid_input_error(
     container: ServiceContainer,
 ) -> None:

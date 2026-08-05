@@ -41,6 +41,42 @@ def test_batch_run_not_found_returns_404(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+def test_batch_run_without_worker_returns_409(
+    client: TestClient, container: ServiceContainer
+) -> None:
+    created = container.batches.add(
+        name="API待機",
+        type="web",
+        output_dir="docs/api-wait",
+        items=[],
+    )
+    response = client.post(f"/api/v1/batches/{created['id']}/run")
+    assert response.status_code == 409
+    assert response.json()["code"] == "WORKER_UNAVAILABLE"
+    assert JobRepository(container.conn).list() == []
+
+
+def test_batch_run_with_live_worker_queues_job(
+    client: TestClient, container: ServiceContainer
+) -> None:
+    from abist_kb.infrastructure.jobs import leases
+
+    created = container.batches.add(
+        name="API投入",
+        type="web",
+        output_dir="docs/api-queued",
+        items=[],
+    )
+    leases.try_acquire_worker_lease(container.conn, "test-worker", ttl_seconds=300)
+
+    response = client.post(f"/api/v1/batches/{created['id']}/run")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["job"]["kind"] == "batch"
+    assert body["job"]["state"] == str(JobState.QUEUED)
+    assert body["job"]["params"]["batch_id"] == created["id"]
+
+
 def test_batch_crud_routes(client: TestClient) -> None:
     created = client.post(
         "/api/v1/batches",

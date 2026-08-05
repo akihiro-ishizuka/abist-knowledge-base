@@ -307,12 +307,15 @@ async def test_batch_run_decline_after_row_selection_creates_no_job(
 async def test_batch_run_confirm_after_row_selection_creates_job(
     container: ServiceContainer,
 ) -> None:
+    from abist_kb.infrastructure.jobs import leases
+
     container.batches.add(
         name="定例取り込み",
         type="web",
         output_dir="docs/weekly",
         items=[],
     )
+    leases.try_acquire_worker_lease(container.conn, "test-worker", ttl_seconds=300)
     repo = JobRepository(container.conn)
 
     app = KbApp(container, start_worker=False)
@@ -336,6 +339,97 @@ async def test_batch_run_confirm_after_row_selection_creates_job(
         jobs = repo.list()
         assert len(jobs) == 1
         assert jobs[0].kind == "batch"
+        assert jobs[0].state == JobState.QUEUED
+        result = str(app.query_one("#sources-batches-result", Static).render())
+        assert "ジョブ投入" in result
+        assert "ジョブ画面で進捗を確認してください" in result
+
+
+async def test_batch_run_without_worker_shows_worker_unavailable(
+    container: ServiceContainer,
+) -> None:
+    container.batches.add(
+        name="ワーカー無し",
+        type="web",
+        output_dir="docs/noworker",
+        items=[],
+    )
+    repo = JobRepository(container.conn)
+
+    app = KbApp(container, start_worker=False)
+    async with app.run_test(size=(120, 40)) as pilot:
+        await pilot.pause()
+        app.action_goto_area("sources_batches")
+        await pilot.pause()
+
+        table = app.query_one("#batches-table", DataTable)
+        table.focus()
+        table.move_cursor(row=0)
+        await pilot.press("enter")
+        await pilot.press("e")
+        await pilot.pause()
+        await pilot.press("y")
+        await pilot.pause()
+        await pilot.pause()
+
+        result = str(app.query_one("#sources-batches-result", Static).render())
+        assert "WORKER_UNAVAILABLE" in result
+        assert repo.list() == []
+
+
+async def test_batch_run_same_thread_container_does_not_raise_and_survives_navigation(
+    tmp_path: Path,
+) -> None:
+    """本番 TUI と同じ `check_same_thread=True` でも detach 投入が成功し、
+    直後の画面遷移で結果ウィジェット欠如例外が出ないことを固定する。"""
+    from abist_kb.infrastructure.jobs import leases
+
+    settings = Settings(root_dir=tmp_path / "root", _env_file=None)
+    settings.ensure_directories()
+    settings.docs_dir.mkdir(parents=True, exist_ok=True)
+    container = ServiceContainer(settings, check_same_thread=True)
+    try:
+        container.batches.add(
+            name="同一スレッド",
+            type="web",
+            output_dir="docs/same-thread",
+            items=[],
+        )
+        leases.try_acquire_worker_lease(container.conn, "test-worker", ttl_seconds=300)
+        repo = JobRepository(container.conn)
+
+        app = KbApp(container, start_worker=False)
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            app.action_goto_area("sources_batches")
+            await pilot.pause()
+
+            table = app.query_one("#batches-table", DataTable)
+            table.focus()
+            table.move_cursor(row=0)
+            await pilot.press("enter")
+            await pilot.press("e")
+            await pilot.pause()
+            await pilot.press("y")
+            await pilot.pause()
+
+            # 結果表示前に別画面へ移動しても例外にならない
+            app.action_goto_area("jobs")
+            await pilot.pause()
+            await pilot.pause()
+
+            jobs = repo.list()
+            assert len(jobs) == 1
+            assert jobs[0].state == JobState.QUEUED
+            # UI が応答している(ジョブ画面へ遷移できている)
+            assert app.current_area == "jobs"
+            # 保持された結果はソース・バッチへ戻ると見える
+            app.action_goto_area("sources_batches")
+            await pilot.pause()
+            result = str(app.query_one("#sources-batches-result", Static).render())
+            assert "ジョブ投入" in result
+    finally:
+        container.close()
 
 
 async def test_sources_batches_actions_show_invalid_input_without_selection(

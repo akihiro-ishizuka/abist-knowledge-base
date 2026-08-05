@@ -142,10 +142,38 @@ async def test_batch_run_confirm_shows_unset_output_destination(
 async def test_batch_run_confirm_after_selection_creates_job(
     user: User, wired_container: ServiceContainer
 ) -> None:
+    from abist_kb.infrastructure.jobs import leases
+
     batch = wired_container.batches.add(
         name="定例取り込み",
         type="web",
         output_dir="docs/weekly",
+        items=[],
+    )
+    leases.try_acquire_worker_lease(wired_container.conn, "test-worker", ttl_seconds=300)
+    repo = JobRepository(wired_container.conn)
+
+    await user.open("/sources")
+    _select_row(user, "batches-table", batch)
+    user.find("バッチ実行").click()
+    await user.should_see("実行しますか?")
+    user.find("はい").click()
+    await user.should_see("ジョブを投入しました")
+    await user.should_see("ジョブ画面で進捗を確認してください")
+
+    jobs = repo.list()
+    assert len(jobs) == 1
+    assert jobs[0].kind == "batch"
+    assert jobs[0].state == JobState.QUEUED
+
+
+async def test_batch_run_without_worker_shows_worker_unavailable(
+    user: User, wired_container: ServiceContainer
+) -> None:
+    batch = wired_container.batches.add(
+        name="ワーカー無し",
+        type="web",
+        output_dir="docs/noworker",
         items=[],
     )
     repo = JobRepository(wired_container.conn)
@@ -155,11 +183,8 @@ async def test_batch_run_confirm_after_selection_creates_job(
     user.find("バッチ実行").click()
     await user.should_see("実行しますか?")
     user.find("はい").click()
-    await user.should_see("実行完了")
-
-    jobs = repo.list()
-    assert len(jobs) == 1
-    assert jobs[0].kind == "batch"
+    await user.should_see("WORKER_UNAVAILABLE")
+    assert repo.list() == []
 
 
 async def test_source_add_dialog_creates_source(

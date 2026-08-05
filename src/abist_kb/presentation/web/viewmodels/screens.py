@@ -131,12 +131,18 @@ def batch_remove(container: ServiceContainer, batch_id: str, *, confirmed: bool)
 
 
 def batch_run(container: ServiceContainer, batch_id: str) -> dict[str, Any]:
-    """バッチを実行する(§10.2: `docs-write` を全プロセス横断で直列化する)。"""
+    """バッチ実行ジョブをキューへ投入する(Web/TUI/API 向け)。
+
+    CLI の同期完了契約(`BatchService.run` → `run_inline`)とは分離する。
+    UI からは永続ジョブとして `detach` し、常駐ワーカーが処理する(§10)。
+    生きた worker が無ければ `WORKER_UNAVAILABLE`。存在確認は投入前に行う。
+    """
     try:
-        result = container.batches.run(batch_id, owner_id=container.owner_id)
+        container.batches.show(batch_id)  # NOT_FOUND を先に出す
+        job = container.jobs.detach("batch", {"batch_id": batch_id})
     except AppError as exc:
         return _err(exc)
-    return {"job": result}
+    return {"job": job_to_dict(job)}
 
 
 def source_test_connection(container: ServiceContainer, source_id: str) -> dict[str, Any]:
