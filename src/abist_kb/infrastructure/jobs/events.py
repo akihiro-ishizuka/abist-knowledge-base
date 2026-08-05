@@ -65,10 +65,10 @@ def list_events(conn: sqlite3.Connection, job_id: str) -> list[ProgressEvent]:
 
 
 class EventBus:
-    """プロセス内購読(§10.3): CLI/TUI がライブ描画するための即時通知。
+    """プロセス内購読(§10.3): CLI がライブ描画するための即時通知。
 
     `job_events` への永続化とは独立しており、購読者が居なくても
-    `append_event` は常に成功する。将来 Web(SSE)/MCP(`job_status`)は
+    `append_event` は常に成功する。API(SSE)/MCP(`job_status`)は
     `job_events` を読むため、このバスに登録しなくても最新状態を参照できる。
     """
 

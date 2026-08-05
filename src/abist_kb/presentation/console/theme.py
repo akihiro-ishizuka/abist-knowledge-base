@@ -1,7 +1,7 @@
 """セマンティックトークン(設計書 §6.1)。
 
 色だけで状態を伝えないため、各トークンは必ず記号を伴う。
-Web(NiceGUI)は web_hex、Rich/Textual は rich_style を使う。
+CLI(Rich)は rich_style を使う。web_hex は旧 Web 面向けの名残フィールド。
 """
 
 from __future__ import annotations

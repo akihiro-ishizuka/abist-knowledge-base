@@ -1,32 +1,36 @@
 # ABIST Knowledge Base システム設計書
 
-> 文書状態: 初版設計  
+> 文書状態: MCP-only UI cutover 反映済み（Phase 3）  
 > 作成日: 2026-08-03  
+> 更新: 2026-08-05（Web／TUI／NiceGUI／Textual を一次UIから外し、MCP＋CLI＋REST を正とする）  
 > 製品名: ABIST Knowledge Base  
 > Gitリポジトリ名: `abist-knowledge-base`  
 > 移行先: `C:\Temp\abist-knowledge-base`  
-> Pythonパッケージ名・CLIコマンド名: 未決定  
+> Pythonパッケージ名: `abist-kb` / import `abist_kb`  
+> CLIコマンド名: `abist-kb`  
 > 移植元: `multi-source-knowledge-base`
 
 ## 1. 目的
 
-現行のNode.js中心のナレッジベースを、実行コード・UI・運用ツールまでPythonへ移植する。すべての人間向けUIで同じ情報設計と状態表現を使い、ターミナル表示にはRichを使用する。
+現行のNode.js中心のナレッジベースを、実行コード・運用面・エージェント連携までPythonへ移植する。人間向けターミナル出力にはRichを使用し、エージェント／自動化向けの主操作面はMCPとする。
 
-対象UIは次のすべてとする。
+対象の操作面は次のとおりとする。
 
-- NiceGUIによるWeb UIおよびデスクトップUI
-- TextualによるフルスクリーンTUI
-- Typer + RichによるCLI
+- **MCP（一次）**: 管理は `kb-admin`（または統合 `all`）。既存スキル向けに互換3サーバー `kb-download`／`kb-search`／`kb-visualize` を維持
+- **CLI**: Typer + Rich（`abist-kb`）。長時間ジョブ実行は `abist-kb worker run`
+- **REST API**: `abist-kb api serve` → FastAPI `/api/v1`（SSE・ヘルス含む）
 - MCPサーバーのツール応答と運用ログ
 - バッチ、同期、索引、埋め込み、検索、チャット、可視化の進捗・結果・エラー
 - CI、ファイルリダイレクト、JSON出力などの非対話モード
+
+> **歴史メモ（削除済み）:** 初版設計では NiceGUI Web／デスクトップと Textual TUI を人間向け一次UIとしていた。MCP-only UI cutover（Phase 2b）で `presentation/web`・`presentation/tui` および `ui web`／`ui tui` コマンドは削除済み。操作契約の正本は `design/ui-action-matrix.yaml`（面は `mcp`／`api`）。
 
 既存のMarkdown、同期状態、バッチ設定、検索索引、埋め込み、可視化成果物は、検証可能なものを移行する。検索索引のように安全に再生成できるデータは、無理な直接変換より再構築を優先する。
 
 ## 2. 成功条件
 
 - 現行のesa／Web／Git収集、差分同期、検索、チャット、可視化、監査、MCP機能をPython版で代替できる。
-- 人間向けターミナル出力から素の`print()`を排除し、共通UIサービス経由にする。
+- 人間向けターミナル出力から素の`print()`を排除し、共通Presenter経由にする。
 - TTYでは色、表、パネル、スピナー、進捗バー、Markdown、構文ハイライトを使用する。
 - 非TTY、`NO_COLOR`、`TERM=dumb`、`--output json`ではANSI制御文字やアニメーションを出さない。
 - MCP stdioの標準出力はJSON-RPC専用とし、ログやRich出力を混入させない。
@@ -49,14 +53,14 @@
 | チャット | ストリーミング回答、会話履歴、検索根拠、引用、モデル設定 |
 | 品質管理 | 整合性検査、重複検出、矛盾候補、検索評価、知識昇格ドラフト |
 | 可視化 | SceneSpec検証、出典ハッシュ検証、Manim PNG／MP4生成、成果物管理 |
-| 連携 | MCP stdio、MCP Streamable HTTP、内部REST API |
+| 連携 | MCP stdio、MCP Streamable HTTP、内部REST API（`/api/v1`） |
 | 運用 | 設定、doctor、ログ、ジョブ履歴、バックアップ、移行、診断情報 |
 
 `tools/pptx_to_md.py`などのOffice変換は現行Node本体ではなく周辺Pythonツールである。ただし「現在のシステム全体をPythonへ統一する」対象には含め、コア移植完了後に任意依存グループ`office`の補助コマンドとして移す。Office変換の未導入はコア機能の起動を妨げない。
 
 ### 3.2 非目標
 
-- 現行Web UIのHTML/CSSをそのまま移植しない。機能だけを新UIへ再構成する。
+- 旧Node Web UIのHTML/CSSを移植しない。人間向け画面ホスト（NiceGUI／Textual）も現行スコープ外とする。
 - Node.jsランタイムを新システムの必須依存にしない。
 - 移行時に現行`docs/`、`data/`、`reports/`を直接更新しない。
 - 初版で複数サーバーによる分散ジョブ実行や大規模マルチテナントを実装しない。
@@ -68,23 +72,19 @@
 | Python | Python 3.12 | Manim・PyTorch・Windows互換性を優先 |
 | パッケージ管理 | uv + `pyproject.toml` + `uv.lock` | ロックファイルをGit管理 |
 | CLI | Typer + Rich | ヘルプ、入力検証、例外、結果をRich化 |
-| TUI | Textual | キーボード中心の全機能UI |
-| Web／デスクトップ | NiceGUIの最新安定版 | 同じPython画面コードをブラウザ／nativeで使用 |
-| API | FastAPI（NiceGUI内蔵アプリへ統合） | `/api/v1`、SSE、ヘルスチェック |
-| モデル／設定 | Pydantic v2 + pydantic-settings | UI間で同じ入力・出力型を使用 |
+| MCP | MCP Python SDK | エージェント一次面。`kb-admin`／`all`＋互換3サーバー |
+| API | FastAPI + uvicorn | `abist-kb api serve` → `/api/v1`、SSE、ヘルスチェック |
+| モデル／設定 | Pydantic v2 + pydantic-settings | 面間で同じ入力・出力型を使用 |
 | HTTP | httpx | esa、Web、OpenAIなどの非同期通信 |
 | 永続化 | SQLite WAL + Python `sqlite3` | 同期状態、索引、ジョブ、会話を管理 |
 | 全文検索 | SQLite FTS5 `unicode61`／`trigram` | 独立した2テーブルを構築し、実行時は設定された1方式を選択 |
 | ベクトル | NumPy、正規化済みFloat32 BLOB | メモリキャッシュした行列との内積 |
 | ローカル埋め込み | sentence-transformers | `intfloat/multilingual-e5-small` |
 | AI | OpenAI Python SDKを既定アダプターとする | プロバイダー境界を設けて交換可能にする |
-| MCP | MCP Python SDKの最新安定版 | stdioを既定、Streamable HTTPは明示起動 |
 | 可視化 | Manim + ffmpeg | 既存SceneSpec 1.0との互換を維持 |
-| テスト | pytest、pytest-asyncio、Hypothesis、NiceGUI test、Textual pilot、Playwright | 単体からE2EまでPythonに統一 |
+| テスト | pytest、pytest-asyncio、Hypothesis | 単体・契約・API／MCP契約までPythonに統一 |
 
-Rich、Typer、Textual、NiceGUI、MCP SDKなどの直接依存は、実装着手日にPyPIと公式リリースノートで安定版を再確認し、互換範囲を`pyproject.toml`、実際の版を`uv.lock`で固定する。基準日2026-08-03ではNiceGUI 3系とMCP Python SDK v2が公式に安定版として公開済みだが、メジャー番号だけを将来の固定条件にはしない。正式名決定時に変わる値は`identity.py`の表示名、パッケージ名、CLI名、環境変数接頭辞の4か所へ隔離する。
-
-2026-08-03にPyPI JSON APIで確認した安定版はRich 15.0.0、Typer 0.27.0、Textual 8.2.8、NiceGUI 3.15.0、MCP Python SDK 2.0.0である。この表は実在確認のスナップショットであり、依存固定値ではない。実装ブランチで互換テスト後に`uv.lock`へ確定値を記録する。
+Rich、Typer、MCP SDK、FastAPIなどの直接依存は、実装着手日にPyPIと公式リリースノートで安定版を再確認し、互換範囲を`pyproject.toml`、実際の版を`uv.lock`で固定する。正式名のうちパッケージ名・CLI名・環境変数接頭辞は`identity.py`へ隔離する。
 
 FTS5は現行どおり`chunks_fts_unicode61`と`chunks_fts_trigram`を別々に構築する。本番検索は設定された1テーブル（既定`trigram`）を使い、その結果を2文字日本語向けLIKE補助検索とベクトル検索にRRFで統合する。2つのFTSランキング同士は互換移植段階では統合しない。`compare-tokenizers.js`相当の比較コマンドをPythonへ移植し、`eval/queries.jsonl`でRecall@5、MRR、nDCG@10、平均応答時間を再測定して既定値の変更可否を判断する。
 
@@ -92,17 +92,15 @@ FTS5は現行どおり`chunks_fts_unicode61`と`chunks_fts_trigram`を別々に�
 
 ```mermaid
 flowchart TB
-  Web[NiceGUI Web / Desktop]
-  TUI[Textual TUI]
+  MCP[MCP kb-admin / all / compat3]
   CLI[Typer + Rich CLI]
-  MCP[MCP Python SDK]
-  API[FastAPI / SSE]
+  API[FastAPI /api/v1 + SSE]
+  Worker[abist-kb worker run]
 
-  Web --> App
-  TUI --> App
-  CLI --> App
   MCP --> App
+  CLI --> App
   API --> App
+  Worker --> Jobs
 
   App[Application Services]
   App --> Jobs[Durable Job Manager]
@@ -118,19 +116,18 @@ flowchart TB
   Ports --> Files[(docs / reports)]
 
   Jobs --> Events[Progress Event Bus]
-  Events --> Web
-  Events --> TUI
   Events --> CLI
   Events --> API
+  Events --> MCP
 ```
 
-プレゼンテーション層からDBや外部APIを直接呼ばない。CLI、TUI、Web、MCPは同一のApplication ServiceとPydantic DTOを利用し、処理結果とエラーコードを一致させる。
+プレゼンテーション層からDBや外部APIを直接呼ばない。CLI、MCP、REST APIは同一のApplication Service（`ServiceContainer`）とPydantic DTOを利用し、処理結果とエラーコードを一致させる。操作キーと到達面の正本は`design/ui-action-matrix.yaml`。
 
 ### 5.1 パッケージ構成
 
 ```text
-src/<package_name>/
-  identity.py          # 正式名決定時に変更する識別情報
+src/abist_kb/
+  identity.py          # 表示名・パッケージ名・CLI名・環境変数接頭辞
   config.py            # 設定読込、パス、秘密情報参照
   domain/              # Document、Source、Batch、Job、SceneSpec、同期ポリシー
   application/         # ユースケースとDTO
@@ -140,14 +137,14 @@ src/<package_name>/
     search/            # chunk、FTS5、embedding、RRF
     ai/                # chat／embedding provider
     visualization/     # Manim runner、artifact store
+    jobs/              # WorkerSupervisor、leases、execution、events
     observability/     # logging、audit、metrics
   presentation/
     console/           # Rich theme、renderable、progress、error presenter
-    cli/               # Typer commands
-    tui/               # Textual screens／widgets
-    web/               # NiceGUI pages／components
-    api/               # FastAPI routes／SSE
-    mcp/               # MCP tools／resources
+    cli/               # Typer commands（含 api serve / mcp serve / worker run）
+    api/               # FastAPI routes／SSE（abist-kb api serve）
+    mcp/               # MCP tools／resources（kb-admin / compat3 / all）
+    common/            # ServiceContainer、actions（MCP/API共有）
   migration/           # 現行システム診断・移行・照合
 tests/
 design/
@@ -155,31 +152,33 @@ design/
 
 ## 6. 共通UIデザイン
 
+CLI（Rich）とAPI／MCPの状態ラベルで共通のセマンティックトークンを使う。色だけで状態を伝えず、必ずラベルまたは記号を併記する。
+
 ### 6.1 セマンティックトークン
 
-色だけで状態を伝えず、必ずラベルまたは記号を併記する。
+| トークン | Rich | 記号 | 用途 |
+|---|---|---|---|
+| `primary` | `bold cyan` | `●` | 選択、主要操作 |
+| `success` | `bold green` | `✓` | 完了、正常 |
+| `warning` | `bold yellow` | `!` | 注意、競合、部分成功 |
+| `danger` | `bold red` | `×` | 失敗、破壊的操作 |
+| `info` | `blue` | `i` | 補足、進行中 |
+| `muted` | `dim` | `-` | 補助情報、未実行 |
+| `accent` | `magenta` | `◆` | AI、可視化、特別表示 |
 
-| トークン | Rich／Textual | Web | 記号 | 用途 |
-|---|---|---|---|---|
-| `primary` | `bold cyan` | `#0891B2` | `●` | 選択、主要操作 |
-| `success` | `bold green` | `#15803D` | `✓` | 完了、正常 |
-| `warning` | `bold yellow` | `#B45309` | `!` | 注意、競合、部分成功 |
-| `danger` | `bold red` | `#B91C1C` | `×` | 失敗、破壊的操作 |
-| `info` | `blue` | `#1D4ED8` | `i` | 補足、進行中 |
-| `muted` | `dim` | `#64748B` | `-` | 補助情報、未実行 |
-| `accent` | `magenta` | `#A21CAF` | `◆` | AI、可視化、特別表示 |
+> **歴史メモ:** 初版では Web hex（NiceGUI）と Textual 向けスタイル列も定義していた。コード上の`web_hex`フィールドはトークン定義の名残として残るが、画面ホストは存在しない。
 
-Webはライト／ダーク両テーマを提供し、TextualとRichは端末背景を尊重する。日本語と英数字の混在を前提に、罫線はRichの`safe_box`相当でフォールバック可能にする。絵文字は装飾としてのみ使い、絵文字なしでも意味が通る文言にする。
+Richは端末背景を尊重する。日本語と英数字の混在を前提に、罫線はRichの`safe_box`相当でフォールバック可能にする。絵文字は装飾としてのみ使い、絵文字なしでも意味が通る文言にする。
 
 ### 6.2 表示部品
 
-- 一覧: `Table`／DataTable／Web tableを使い、列順と状態ラベルを共通化する。
+- 一覧: Rich `Table`を使い、列順と状態ラベルを共通化する。
 - 単一結果: タイトル付きPanel、要約、主要値、次の操作の順に表示する。
 - 長時間処理: 全体・現在項目・完了数・失敗数・経過時間・残り時間を表示する。
 - 不定長処理: Spinner + 現在の工程を表示し、完了時は静的な最終行へ置換する。
 - 文書: Markdownとコードハイライトを使用し、出典パスと行番号を常時表示する。
 - エラー: エラーコード、概要、原因、回復手順、`--debug`案内を同じ順序で表示する。
-- 破壊的操作: 対象件数とパスを先に提示し、Web／TUI／対話CLIでは確認を必須とする。非対話CLIは`--yes`必須とする。
+- 破壊的操作: 対象件数とパスを先に提示し、対話CLI／MCP／APIでは確認（`confirmed` 等）を必須とする。非対話CLIは`--yes`必須とする。
 
 ### 6.3 出力モード
 
@@ -191,57 +190,42 @@ CLI共通オプションは`--output auto|rich|plain|json`、`--color auto|alway
 - `json`: stdoutへ単一JSONまたはJSON Linesのみ。進捗は抑止し、診断ログはstderrへ出す。
 - MCP stdio: stdoutはプロトコル専用。Richを初期化せず、ログはstderrまたはファイルへ出す。
 
-## 7. 各UIの情報設計
+## 7. 各操作面の情報設計
 
-### 7.1 Web／デスクトップ
+### 7.1 REST API（`abist-kb api serve`）
 
-NiceGUIで次の画面を提供する。
+FastAPIで`/api/v1`を提供する。起動は`abist-kb api serve`（uvicorn）。NiceGUI等の画面ホストへの組み込みは行わない。
 
-1. ダッシュボード: 文書数、同期状態、索引鮮度、直近ジョブ、警告。
+操作領域（マトリクスの screen に対応）:
+
+1. ダッシュボード相当: 文書数、同期状態、索引鮮度、直近ジョブ、警告（参照）。
 2. ソース／バッチ: esa・Web・GitソースとバッチのCRUD、接続テスト、実行。
-3. ジョブ: 実行中進捗、ログ、キャンセル、再実行、結果レポート。
-4. 文書: コーパス／状態／ソースの絞り込み、Markdown詳細、メタデータ。
-5. 検索: ハイブリッド検索、スコア内訳、出典行、関連文書。
-6. チャット: ストリーミング回答、引用、会話履歴、モデル選択。
-7. 可視化: SceneSpec作成・検証、レンダリング、PNG／MP4プレビュー。
-8. 品質: 整合性、重複、矛盾候補、検索評価。
-9. 設定／診断: パス、モデル、API接続、ffmpeg・Manim・FTS5診断。
+3. ジョブ: 進捗（SSE）、キャンセル、再実行、結果。
+4. 文書: コーパス／状態／ソースの絞り込み、メタデータ更新、削除。
+5. 検索: ハイブリッド検索。
+6. チャット: 会話開始、質問、履歴。
+7. 可視化: SceneSpec検証、レンダリング投入、依存診断。
+8. 品質: 整合性、重複、矛盾候補、メタデータ補完（dry-run）。
+9. 設定／診断: パス、モデル、接続、ffmpeg・Manim・FTS5診断。
 
-既定は`127.0.0.1`へバインドする。`0.0.0.0`へ公開する場合はアクセストークンまたはリバースプロキシ認証を必須とする。デスクトップ版は同じ画面をNiceGUI native modeで起動する。
+既定は`127.0.0.1`へバインドする。`0.0.0.0`へ公開する場合はアクセストークンまたはリバースプロキシ認証を必須とする。ジョブ進捗SSEはDBのジョブ履歴をポーリングして配信する（別プロセスの`worker run`が書いたイベントも届く）。
 
-### 7.2 Textual TUI
+業務操作は`presentation/api/facade.py`経由でApplication Serviceを呼び、操作キーは`design/ui-action-matrix.yaml`と一致させる。
 
-Webと同じ9領域を左ナビゲーションで提供する。最低幅100桁、高さ30行とし、それ未満では1ペイン表示へ切り替える。キーバインドは`Ctrl+K`コマンドパレット、`/`検索、`r`更新、`Esc`戻る、`?`ヘルプ、`q`終了とする。破壊的操作はモーダル確認を使う。
+### 7.2 MCP（一次のエージェント操作面）
 
-### 7.3 CLI
+**推奨接続:**
 
-正式CLI名はプロジェクト名決定時に確定する。コマンド体系は名称変更の影響を受けないよう、次で固定する。
+| 用途 | サーバーキー | 起動 |
+|---|---|---|
+| エージェント管理（推奨） | `kb-admin` または `all` | `abist-kb mcp serve kb-admin`／`all` |
+| 既存スキル互換 | `kb-download`／`kb-search`／`kb-visualize` | `abist-kb mcp serve <name>` |
+| REST | — | `abist-kb api serve` |
+| 長時間ジョブ | — | `abist-kb worker run` |
 
-```text
-<cli> source list|add|edit|remove|test
-<cli> batch list|show|add|edit|remove|run
-<cli> sync source|batch|all
-<cli> index build|embed|status
-<cli> search <query>
-<cli> document show <path>
-<cli> chat
-<cli> visualize kinds|check|render
-<cli> audit integrity|duplicates|contradictions|search-quality
-<cli> curate promote
-<cli> jobs list|show|cancel|retry
-<cli> worker run
-<cli> ui web|desktop|tui
-<cli> mcp serve kb-download|kb-search|kb-visualize|all [--transport stdio|http]
-<cli> migrate inspect|plan|run|verify
-<cli> config show|path|validate
-<cli> doctor
-```
+内部実装は1つのPythonモジュールへ統合するが、外部には現行と同じ3サーバーを互換エントリポイントとして提供する。`kb-admin`は管理操作（旧Web／TUI相当）をApplication Service直呼びで公開する。統合サーバー`all`は互換3＋管理を同一プロセスで公開する追加機能であり、既存3サーバーのスキーマを置き換えない。
 
-### 7.4 MCP
-
-内部実装は1つのPythonモジュールへ統合するが、外部には現行と同じ3サーバーを互換エントリポイントとして提供する。任意の統合サーバー`all`は追加機能であり、既存3サーバーを置き換えない。
-
-#### 7.4.1 互換性の定義
+#### 7.2.1 互換性の定義
 
 互換性は次の3層すべてを対象とする。
 
@@ -257,7 +241,7 @@ Webと同じ9領域を左ナビゲーションで提供する。最低幅100桁�
 
 Python移植前に現行3サーバーへ固定リクエストfixtureを送って応答を保存し、Python版へ同じfixtureを送る契約テストを作る。比較対象はJSONテキスト内のキー、型、必須性、エラーコード、0件時の意味、パス表記とし、時刻、処理時間、一時パスだけを正規化する。
 
-#### 7.4.2 同期ツールと新規ジョブ型ツール
+#### 7.2.2 同期ツールと新規ジョブ型ツール
 
 既存の`run_batch`、`download_*`、`render_scene`は、内部でジョブレコードを作成しても呼び出し元にはジョブIDだけを返さない。処理完了まで待機し、現行と同じ結果JSONを返す。`run_batch`最長60分、Web最長30分、Git最長15分、esa最長10分、render最長10分という既存契約も維持する。
 
@@ -270,11 +254,37 @@ Python移植前に現行3サーバーへ固定リクエストfixtureを送って
 
 `start_*`は`{ok:true, job_id, state:"queued"}`を返す。新規ツールは統合サーバー`all`および対応する互換サーバーに追加できるが、既存ツールのスキーマや応答へフィールドを追加しない。MCP stdioではstdoutをJSON-RPC専用とし、Richを初期化せず、ログはstderrへ送る。
 
-#### 7.4.3 クライアント移行
+#### 7.2.3 クライアント移行
 
 第1段階は`.mcp.json`の3キーを変えず、実行コマンドだけNode.jsからPythonの各互換エントリポイントへ差し替える。`searching-kb`、`downloading-kb-docs`、`visualizing-kb`の既存手順は変更しない。
 
-統合サーバー`all`は別キーで並行登録し、3スキルとクライアント設定を統合名前空間へ対応させた契約テストが通った後だけ利用可能にする。旧3キーの削除は別リリースの破壊的変更とし、移行ガイド、設定差分、ロールバック手順を提示する。それまでは3サーバー構成を正式サポートする。
+エージェント新規接続は`kb-admin`（または`all`）を推奨する。互換3キーの削除は別リリースの破壊的変更とし、移行ガイド、設定差分、ロールバック手順を提示する。それまでは3サーバー構成を正式サポートする。
+
+### 7.3 CLI
+
+コマンド体系:
+
+```text
+abist-kb source list|add|edit|remove|test
+abist-kb batch list|show|add|edit|remove|run
+abist-kb sync source|batch|all
+abist-kb index build|embed|status
+abist-kb search <query>
+abist-kb document show <path>
+abist-kb chat
+abist-kb visualize kinds|check|render
+abist-kb audit integrity|duplicates|contradictions|search-quality
+abist-kb curate promote
+abist-kb jobs list|show|cancel|retry
+abist-kb worker run
+abist-kb api serve
+abist-kb mcp serve kb-download|kb-search|kb-visualize|kb-admin|all [--transport stdio|http]
+abist-kb migrate inspect|plan|run|verify
+abist-kb config show|path|validate
+abist-kb doctor
+```
+
+> **歴史メモ:** 初版の`<cli> ui web|desktop|tui`は削除済み。画面ホストは提供しない。
 
 ## 8. アプリケーション境界
 
@@ -294,7 +304,7 @@ Python移植前に現行3サーバーへ固定リクエストfixtureを送って
 | `JobService` | submit、progress、cancel、retry、history |
 | `MigrationService` | inspect、plan、copy/import、verify、rollback |
 
-例外は`AppError(code, message, hint, details, retryable)`へ正規化する。外部API例外やSQLite例外をUIへ直接露出しない。`--debug`時だけRich Tracebackをstderrへ表示し、通常時はエラーコードと回復手順を表示する。
+例外は`AppError(code, message, hint, details, retryable)`へ正規化する。外部API例外やSQLite例外を呼び出し面へ直接露出しない。`--debug`時だけRich Tracebackをstderrへ表示し、通常時はエラーコードと回復手順を表示する。
 
 終了コードは`0`成功、`1`処理失敗、`2`入力不正、`3`設定不備、`4`外部サービス失敗、`5`競合／部分成功、`130`利用者キャンセルとする。
 
@@ -332,9 +342,11 @@ SQLiteはWALを使い、`PRAGMA foreign_keys=ON`、`busy_timeout=5000`を設定�
 
 ### 10.1 ワーカーの起動主体
 
-Web、デスクトップ、TUI、MCPの各長時間稼働エントリポイントは起動時に`WorkerSupervisor`を開始し、SQLiteの`worker_leases`でリーダー取得を試みる。`<cli> worker run`も同じSupervisorを起動する。所有者はプロセスUUID、heartbeatは5秒間隔、lease期限は15秒とし、同時にキューからジョブを取得できるのはリーダー1プロセスだけとする。リーダー停止後はlease期限切れを待って別プロセスが引き継ぐ。
+長時間ジョブのキュー消費は`abist-kb worker run`が起動する`WorkerSupervisor`が担う。SQLiteの`worker_leases`でリーダー取得を試みる。所有者はプロセスUUID、heartbeatは5秒間隔、lease期限は15秒とし、同時にキューからジョブを取得できるのはリーダー1プロセスだけとする。リーダー停止後はlease期限切れを待って別プロセスが引き継ぐ。
 
-したがって、MCP stdioだけが起動している場合はそのMCPプロセスがワーカー候補となり、CLI・Web・MCPが同時起動しても1プロセスだけがキューを消費する。常駐UIを使わないヘッドレス環境では`<cli> worker run`を明示起動する。
+MCPや`api serve`はApplication Serviceとジョブ投入・照会を提供するが、埋め込みワーカーとしては起動しない。常駐ワーカーが必要なヘッドレス環境では`abist-kb worker run`を明示起動する。複数の`worker run`を同時起動しても1プロセスだけがキューを消費する。
+
+> **歴史メモ:** 初版では Web／デスクトップ／TUI／MCP の各長時間エントリが起動時に`WorkerSupervisor`を開始する想定だった。MCP-only cutover後は`worker run`が正の起動主体。
 
 一回実行CLIは既定で処理をそのプロセス内で同期実行し、完了までRich進捗を表示する。`--detach`指定時だけキューへ投入して終了するが、有効なworker heartbeatが無ければ`WORKER_UNAVAILABLE`で失敗し、実行されないジョブを放置しない。
 
@@ -352,7 +364,7 @@ Web、デスクトップ、TUI、MCPの各長時間稼働エントリポイン�
 
 I/O処理はAnyIOのタスクグループ、CPU負荷の高い埋め込みとManimは子プロセスで実行する。アプリ異常終了時、heartbeatとresource leaseが期限切れになった`running`ジョブは次回リーダーが`interrupted`へ変更し、安全に再試行できるジョブだけを利用者確認後に再投入する。
 
-`ProgressEvent`は`job_id`、`phase`、`current`、`total`、`message`、`severity`、`item`、`timestamp`を持つ。WebはSSE、TUIとCLIはインプロセス購読、MCPは`job_status`で同じイベントを参照する。
+`ProgressEvent`は`job_id`、`phase`、`current`、`total`、`message`、`percent`、`item`、`timestamp`を持つ。APIはSSE、CLIはインプロセス購読、MCPは`job_status`で同じイベントを参照する。
 
 ## 11. 既存データ移行
 
@@ -389,10 +401,10 @@ I/O処理はAnyIOのタスクグループ、CPU負荷の高い埋め込みとMan
 ### 11.3 移行コマンド
 
 ```text
-<cli> migrate inspect --from <old-root>
-<cli> migrate plan --from <old-root> --to <new-data-root>
-<cli> migrate run --plan <plan.json>
-<cli> migrate verify --manifest <migration-manifest.json>
+abist-kb migrate inspect --from <old-root>
+abist-kb migrate plan --from <old-root> --to <new-data-root>
+abist-kb migrate run --plan <plan.json>
+abist-kb migrate verify --manifest <migration-manifest.json>
 ```
 
 本移行の既定値は`--from C:\Temp\multi-source-knowledge-base`、`--to C:\Temp\abist-knowledge-base`とする。いずれも設定またはCLI引数で明示的に上書きできるようにし、移行元と移行先が同一または親子関係にある場合は安全のため拒否する。
@@ -415,7 +427,7 @@ I/O処理はAnyIOのタスクグループ、CPU負荷の高い埋め込みとMan
 - 出力パスは解決後に`docs/`または`reports/`配下であることを確認し、`..`、絶対パス、Windows予約名を拒否する。
 - Web収集は同一ホストを既定とし、最大深さ、最大ページ数、サイズ、タイムアウトを必須上限にする。
 - Gitは任意フックを実行せず、取得内容をデータとして扱う。
-- Markdown内HTMLはWeb表示時にサニタイズする。
+- Markdown内HTMLをAPI等で返す場合はサニタイズする。
 - 文書削除、バッチ削除、強制同期は監査イベントへ記録する。
 
 ## 13. テスト設計
@@ -428,17 +440,19 @@ I/O処理はAnyIOのタスクグループ、CPU負荷の高い埋め込みとMan
 - FTS5、ベクトル、RRF、フィルター、index stale。
 - `unicode61`／`trigram`の2テーブル構築、実行時トークナイザ選択、短語LIKE補助、比較指標。
 - SceneSpec 1.0、予約kind、出典hash、出力パス制限。
-- 各Application ServiceをCLI、TUI、Web、MCPから呼んだ際のDTO／エラーコード一致。
+- 各Application ServiceをCLI、MCP、APIから呼んだ際のDTO／エラーコード一致。
 - 現行15 MCPツールについて、名前・入力スキーマ・同期応答・エラー・所属サーバーを固定fixtureで比較する。
+- `design/ui-action-matrix.yaml`の操作がMCP／APIから到達できること（`tests/mcp/test_matrix_actions_contract.py`）。
 - `--output json`とMCP stdoutにANSIやログが混ざらないこと。
-- 複数エントリポイントを同時起動してもworkerリーダーが1つで、resource leaseにより書込み処理が重複しないこと。
+- 複数ワーカーを同時起動してもworkerリーダーが1つで、resource leaseにより書込み処理が重複しないこと。
 
-### 13.2 UIテスト
+### 13.2 操作面テスト
 
 - Rich Consoleを固定幅・`color_system=None`でcaptureし、表・エラー・plain出力をスナップショット比較する。
-- Textual Pilotでナビゲーション、検索、モーダル、キャンセル、狭幅レイアウトを検証する。
-- NiceGUIのPythonレベルfixtureで画面状態、Playwrightで主要ユーザーフローとアクセシビリティを検証する。
-- Web／TUI／CLIで同じジョブが同じ状態・件数・エラーを表示することを契約テストする。
+- FastAPI／MCPの契約テストで主要操作フロー、破壊的操作の確認、エラーコードを検証する。
+- MCP／API／CLIで同じジョブが同じ状態・件数・エラーを返すことを契約テストする。
+
+> **歴史メモ:** 初版の Textual Pilot／NiceGUI fixture／Playwright画面E2Eは、画面ホスト削除に伴い対象外。
 
 ### 13.3 移行・E2E
 
@@ -455,7 +469,7 @@ I/O処理はAnyIOのタスクグループ、CPU負荷の高い埋め込みとMan
 2. front matter、同期状態、改行・ハッシュ・チャンク・e5入力、検索、出典検証を現行テストfixtureごと移植し、JavaScript版とのビット一致を確認する。
 3. esa／Web／Git収集とバッチ、永続ジョブ、Rich CLIを実装する。
 4. FTS5の2テーブル構築、トークナイザ比較、埋め込み、ハイブリッド検索、3つの互換MCPサーバーと任意の統合サーバーを実装する。
-5. NiceGUI Web／デスクトップとTextual TUIを同じApplication Service上へ実装する。
+5. FastAPI `/api/v1`、`kb-admin`、操作マトリクス契約を同じApplication Service上へ実装する（画面ホストは実装しない）。
 6. チャット、監査、可視化、知識昇格を移植する。
 7. 移行ツールをread-only診断、dry-run、本移行、検証の順に実装する。
 8. 並行稼働で検索品質と同期結果を比較し、受入条件を満たしてからPython版を正本に切り替える。
@@ -465,7 +479,9 @@ I/O処理はAnyIOのタスクグループ、CPU負荷の高い埋め込みとMan
 
 - 現行の主要コマンドとMCPツールに対応するPython版操作が存在する。
 - 既存15 MCPツールの名前・入出力・同期動作と`kb-download`／`kb-search`／`kb-visualize`の所属が契約テストで一致する。
-- Web、デスクトップ、TUI、CLIの全画面で共通セマンティックトークンを使用する。
+- エージェント一次面は`kb-admin`（または`all`）、RESTは`abist-kb api serve`、長時間ジョブは`abist-kb worker run`で到達できる。
+- `design/ui-action-matrix.yaml`の操作がMCP／APIから到達でき、破壊的操作は確認必須である。
+- CLIのセマンティックトークンと状態ラベルが共通である。
 - 30秒を超える処理に進捗、キャンセル、履歴、再試行がある。
 - 非TTY、plain、JSON、MCPの各出力契約テストが通る。
 - 現行データ移行のmanifestに未説明の欠落がない。
@@ -474,13 +490,13 @@ I/O処理はAnyIOのタスクグループ、CPU負荷の高い埋め込みとMan
 - Windowsと対応Linux環境でSQLite 3.34.0以上、FTS5、`unicode61`、`trigram`が`doctor`と受入テストに合格する。
 - 秘密情報がログ、DB、移行成果物、テストスナップショットに含まれない。
 
-## 16. 未決定事項
+## 16. 識別子
 
-製品名は`ABIST Knowledge Base`、リポジトリ名は`abist-knowledge-base`、移行先は`C:\Temp\abist-knowledge-base`で確定する。次の識別子のみ保留し、機能・アーキテクチャの実装判断は保留しない。
+製品名は`ABIST Knowledge Base`、リポジトリ名は`abist-knowledge-base`、移行先は`C:\Temp\abist-knowledge-base`で確定する。
 
-- Python配布パッケージ名とimport名
-- CLI実行ファイル名
-- 環境変数の共通接頭辞
+- Python配布パッケージ名／import名: `abist-kb`／`abist_kb`
+- CLI実行ファイル名: `abist-kb`
+- 環境変数の共通接頭辞: `identity.py`に隔離（実装時の値に従う）
 
 ## 17. 参照資料
 
@@ -488,10 +504,10 @@ I/O処理はAnyIOのタスクグループ、CPU負荷の高い埋め込みとMan
 - [Rich Console API](https://rich.readthedocs.io/en/stable/console.html)
 - [Rich Progress](https://rich.readthedocs.io/en/latest/progress.html)
 - [Typer公式ドキュメント](https://typer.tiangolo.com/)
-- [Textual公式ドキュメント](https://textual.textualize.io/)
-- [NiceGUI公式ドキュメント](https://nicegui.io/documentation/)
-- [NiceGUI PyPI](https://pypi.org/project/nicegui/)
+- [FastAPI](https://fastapi.tiangolo.com/)
 - [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk)
 - [MCP Python SDK PyPI](https://pypi.org/project/mcp/)
 - [uv: Locking and syncing](https://docs.astral.sh/uv/concepts/projects/sync/)
 - [intfloat/multilingual-e5-small](https://huggingface.co/intfloat/multilingual-e5-small)
+- 操作マトリクス正本: [`design/ui-action-matrix.yaml`](ui-action-matrix.yaml)
+- MCP cutover 記録: [`design/plans/M9-mcp-cutover.md`](plans/M9-mcp-cutover.md)

@@ -2,7 +2,14 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development。各マイルストーン着手時に該当節を `design/plans/M<n>-*.md` へ展開してから実装する。
 
-**Goal:** UI 3種(Web/デスクトップ/TUI)、チャット・監査・可視化、旧データ移行、並行稼働と切替、旧システム廃止までを完了する。
+> **[STATUS — MCP-only UI cutover Phase 3]**  
+> 本稿の **M6（NiceGUI Web／デスクトップ・Textual TUI）** は **歴史計画** である。  
+> Phase 2b で画面ホストは削除済み。現行の正は [../system-design.md](../system-design.md) と  
+> [../ui-action-matrix.yaml](../ui-action-matrix.yaml): 一次面は **MCP（`kb-admin`／`all`）**、  
+> REST は `abist-kb api serve`、長時間ジョブは `abist-kb worker run`。  
+> M6 のうち FastAPI `/api/v1`・SSE・操作マトリクス契約は存続。NiceGUI／Textual タスクは実施しない。
+
+**Goal（改訂）:** REST API／MCP 管理面、チャット・監査・可視化、旧データ移行、並行稼働と切替、旧システム廃止までを完了する。
 
 **Context:** 親計画 `C:\Users\a1199118\.claude\plans\design-system-design-md-push-glowing-tulip.md`。設計の正は [../system-design.md](../system-design.md)。M0〜M5 で確立した前提は各マイルストーンの計画書と `tests/fixtures/PROVENANCE.md` にある。
 
@@ -25,34 +32,33 @@
 
 ---
 
-# M6 NiceGUI Web/デスクトップ・Textual TUI・FastAPI/SSE
+# M6 FastAPI `/api/v1`・操作面契約（歴史: NiceGUI／Textual は中止）
 
-**Goal:** 設計書 §7.1 の9画面を Web・デスクトップ・TUI で提供し、CLI と同じ Application Service 上で同じ状態・件数・エラーを表示する。
+> **歴史メモ:** 当初 Goal は「§7.1 の9画面を Web・デスクトップ・TUI で提供」だった。  
+> MCP-only cutover 後の現行 Goal は次のとおり。
 
-**依存:** M3(ジョブ・収集)、M4(検索)。チャットと可視化の画面は M7 の Service が要るので、**サービス境界を先に切ってスタブで進める**。
+**Goal（現行）:** 設計書 §7.1 の操作領域を **REST `/api/v1`** と **MCP（`kb-admin`）** で提供し、CLI と同じ Application Service 上で同じ状態・件数・エラーを返す。
 
-## Task 6.1 FastAPI `/api/v1` と SSE
-- NiceGUI 内蔵アプリへ統合。ジョブ進捗の SSE、ヘルスチェック。
-- 既定バインドは `127.0.0.1`。`0.0.0.0` 公開時はアクセストークンまたはリバースプロキシ認証を必須にする(§7.1)。
-- SSE は M3 の `ProgressEvent` バスを購読する。イベント形状は表示層に依存しない。
+**依存:** M3(ジョブ・収集)、M4(検索)。チャットと可視化の操作は M7 の Service が要るので、**サービス境界を先に切ってスタブで進める**。
 
-## Task 6.2 NiceGUI 9画面
-ダッシュボード / ソース・バッチ / ジョブ / 文書 / 検索 / チャット(M7 までスタブ)/ 可視化(同)/ 品質 / 設定・診断。
+## Task 6.1 FastAPI `/api/v1` と SSE（存続）
+- `abist-kb api serve`（uvicorn）でスタンドアロン起動。画面ホストへの統合はしない。
+- ジョブ進捗の SSE、ヘルスチェック。既定バインドは `127.0.0.1`。`0.0.0.0` 公開時はアクセストークンまたはリバースプロキシ認証を必須(§7.1)。
+- SSE は DB のジョブ履歴をポーリング（別プロセスの `worker run` のイベントも届く）。イベント形状は表示層に依存しない。
 
-- §6.1 のセマンティックトークン7種を Web の hex 値で実装。**色だけで状態を伝えない**(記号かラベルを必ず併記)。
-- ライト/ダーク両テーマ。Markdown 内 HTML は表示時にサニタイズする(§12)。
-- デスクトップは同じ画面を native mode で起動。
-- 長時間稼働エントリポイントは `WorkerSupervisor` を開始する(§10.1)。
+## Task 6.2 NiceGUI 9画面 — **中止（歴史）**
+~~ダッシュボード / ソース・バッチ / … を NiceGUI で実装。~~  
+→ 同等操作は `kb-admin` MCP と `/api/v1`（`design/ui-action-matrix.yaml`）へ。
 
-## Task 6.3 Textual TUI
-- 同9領域を左ナビで。`Ctrl+K` パレット / `/` 検索 / `r` 更新 / `Esc` 戻る / `?` ヘルプ / `q` 終了。
-- 最低 100桁×30行。未満は1ペイン表示へ切替。破壊的操作はモーダル確認。
+## Task 6.3 Textual TUI — **中止（歴史）**
+~~同9領域のフルスクリーン TUI。~~ → 実施しない。
 
-## Task 6.4 UI テストと横断契約
-- Textual Pilot(ナビ・検索・モーダル・キャンセル・狭幅)、NiceGUI の Python fixture、Playwright(主要フロー+アクセシビリティ)。
-- **UI 横断契約テスト**: 同一ジョブが Web・TUI・CLI で同じ状態・件数・エラーコードを表示すること。これが §15 の受入条件。
+## Task 6.4 操作面テストと横断契約（改訂）
+- FastAPI／MCP 契約テスト、破壊的操作の確認フロー。
+- **横断契約テスト**: 同一ジョブが MCP・API・CLI で同じ状態・件数・エラーコードを返すこと。正本は `ui-action-matrix.yaml`（`tests/mcp/test_matrix_actions_contract.py`）。
+- 長時間ジョブのキュー消費は `abist-kb worker run`（`WorkerSupervisor`）。
 
-**ゲート:** §13.2 の UI テスト群が緑 / 横断契約テストが緑 / 30秒超の処理に進捗・キャンセルがある。
+**ゲート:** §13.2 の操作面テストが緑 / マトリクス契約が緑 / 30秒超の処理に進捗・キャンセルがある。
 
 ---
 

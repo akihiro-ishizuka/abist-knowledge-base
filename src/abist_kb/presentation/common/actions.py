@@ -124,10 +124,10 @@ def batch_remove(container: ServiceContainer, batch_id: str, *, confirmed: bool)
 
 
 def batch_run(container: ServiceContainer, batch_id: str) -> dict[str, Any]:
-    """バッチ実行ジョブをキューへ投入する(Web/TUI/API 向け)。
+    """バッチ実行ジョブをキューへ投入する(MCP/API 向け)。
 
     CLI の同期完了契約(`BatchService.run` → `run_inline`)とは分離する。
-    UI からは永続ジョブとして `detach` し、常駐ワーカーが処理する(§10)。
+    呼び出し側からは永続ジョブとして `detach` し、`abist-kb worker run` が処理する(§10)。
     生きた worker が無ければ `WORKER_UNAVAILABLE`。存在確認は投入前に行う。
     """
     try:
@@ -216,8 +216,8 @@ def job_cancel(
     container: ServiceContainer, job_id: str, *, confirmed: bool = False
 ) -> dict[str, Any]:
     """ジョブキャンセルは破壊的操作(§ui-action-matrix)。`source_remove` 等と同じく
-    `confirmed=True` が無ければ実行前に `INVALID_INPUT` で止める(Web/TUI はモーダル
-    確認後に `confirmed=True` を渡す、§12)。"""
+    `confirmed=True` が無ければ実行前に `INVALID_INPUT` で止める(MCP/API は
+    preview → confirmed 後に `confirmed=True` を渡す、§12)。"""
     if not confirmed:
         return _err(
             AppError(

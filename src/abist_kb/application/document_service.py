@@ -4,7 +4,7 @@
 (§12「文書削除、バッチ削除、強制同期は監査イベントへ記録する」)。確認方法
 (対話確認/`--yes`)は呼び出し側(CLI の `Presenter.confirm`)の責務であり、
 このサービスは `confirm` コールバック(prompt: str -> bool)を受け取るだけで
-Presenter に依存しない(TUI/Web からも同じサービスを再利用できるようにするため)。
+Presenter に依存しない(MCP/API/CLI からも同じサービスを再利用できるようにするため)。
 
 **一覧・件数は「不在=非存在」を意味しない**(`tests/fixtures/PROVENANCE.md` §4)。
 旧 `sync-state.sqlite` は参照コーパス等を既定除外した1回限りのバックフィル・

@@ -7,6 +7,15 @@
 MCP-only UI cutover 後の面は **MCP** と **API**（必要に応じて CLI）です。
 Web / TUI は削除済み。破壊的操作は実行前の確認を必須とします。
 
+## 推奨接続
+
+| 用途 | 接続 |
+|---|---|
+| エージェント（推奨） | MCP **`kb-admin`** または **`all`** |
+| 既存スキル互換 | `kb-download`／`kb-search`／`kb-visualize` |
+| REST | `abist-kb api serve` → `/api/v1` |
+| 長時間ジョブ | `abist-kb worker run` |
+
 | 画面 | 操作キー | 表示名 | 破壊的 | MCP | API |
 |---|---|---|---:|:---:|:---:|
 | ダッシュボード | — | 参照のみ | — | — | — |

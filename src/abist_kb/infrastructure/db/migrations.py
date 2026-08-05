@@ -66,8 +66,8 @@ def _ensure_schema_migrations_table(conn: sqlite3.Connection) -> None:
     書込(テーブル作成)であり書込ロックを要求する(テーブルが既に存在すれば
     メタデータ参照に短絡され、WAL の読者は書き手にブロックされないため
     問題にならない ―― 未初期化DBに限って踏み抜く経路)。複数プロセスが
-    同時に未初期化DBへ `apply_migrations` を試みるのは通常運用(Web/TUI/CLI/MCP
-    の同時起動)であるため、`transaction()`/`_apply_one` の `BEGIN IMMEDIATE` と
+    同時に未初期化DBへ `apply_migrations` を試みるのは通常運用(CLI/API/MCP/
+    `worker run` の同時起動)であるため、`transaction()`/`_apply_one` の `BEGIN IMMEDIATE` と
     同じく `wrap_begin_immediate_failure` を再利用してロック競合を
     `AppError(ErrorCode.CONFLICT, retryable=True)` へ正規化する
     (判定ロジックを重複させず、他の2箇所と同一の正規化結果にするため)。
@@ -124,8 +124,8 @@ def _apply_one(conn: sqlite3.Connection, migration: Migration) -> bool:
         # ロックを取得した直後に改めてバージョンを確認する。呼び出し元
         # `apply_migrations` が読んだバージョンは、ロック待ちの間に他の接続が
         # 同時にブートストラップして古くなっている可能性がある
-        # (Web/TUI/CLI/MCP を同時起動すると各エントリポイントの
-        # WorkerSupervisor が未初期化DBへ同時にマイグレーションを試みうるため、
+        # (CLI/API/MCP/`worker run` を同時起動すると各エントリポイントが
+        # 未初期化DBへ同時にマイグレーションを試みうるため、
         # これは通常運用であり、"table already exists" のようなエラーにしてはならない)。
         if migration.version <= current_version(conn):
             conn.execute("ROLLBACK")

@@ -2,6 +2,12 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development でタスク単位に実行する。ステップは `- [ ]` で進捗管理。
 
+> **[STATUS — MCP-only UI cutover Phase 3]**  
+> 本稿は M0 時点の実装計画（歴史）。当時の `pyproject.toml` description や  
+> NiceGUI／Textual 言及は当時の想定。現行の正は [../system-design.md](../system-design.md)  
+> （MCP＋CLI＋`api serve`＋`worker run`）。パッケージ説明の現行値はリポジトリ直下の  
+> `pyproject.toml` を参照。
+
 **Goal:** ABIST Knowledge Base の Python プロジェクト骨格を作り、以降の全マイルストーンが依存する横断基盤(識別情報・設定・エラー型・Console 出力・SQLite 基盤・ロギング・CLI 骨格・doctor・CI)を動作する状態で確立する。
 
 **Architecture:** `src/abist_kb/` レイヤード配置。`identity.py` に名前系4値を隔離し他モジュールは必ず経由。人間向け出力は `presentation/console` の Presenter 経由のみ(素の `print()` 禁止)。全例外は `AppError` に正規化し終了コードへ写像。SQLite は接続ファクトリ+連番マイグレーションで統一。
@@ -119,7 +125,9 @@ tests/
 [project]
 name = "abist-kb"
 version = "0.1.0"
-description = "ABIST Knowledge Base - multi-source knowledge base with CLI, TUI, Web and MCP interfaces"
+description = "ABIST Knowledge Base - multi-source knowledge base with CLI, REST API and MCP interfaces"
+# （歴史メモ: 初稿は "CLI, TUI, Web and MCP"。MCP-only cutover 後は上の文言が正。現行 pyproject.toml と一致）
+
 readme = "README.md"
 requires-python = "==3.12.*"
 license = { text = "Proprietary" }
@@ -868,7 +876,8 @@ Run: `uv run pytest tests/console/test_theme.py -v` → FAIL(モジュール未�
 """セマンティックトークン(設計書 §6.1)。
 
 色だけで状態を伝えないため、各トークンは必ず記号を伴う。
-Web(NiceGUI)は web_hex、Rich/Textual は rich_style を使う。
+Rich は rich_style を使う。web_hex は旧 Web 面向けの名残フィールド。
+# （歴史メモ: 初稿は "Web(NiceGUI)は web_hex、Rich/Textual は rich_style"）
 """
 
 from __future__ import annotations

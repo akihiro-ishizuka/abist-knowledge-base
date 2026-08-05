@@ -1,6 +1,6 @@
 """ジョブ・リース・進捗イベントのドメイン型(設計書 §10)。
 
-`JobState`/`ResourceKind`/`ProgressEvent`/`Job` はどの層(CLI/TUI/Web/MCP)からも
+`JobState`/`ResourceKind`/`ProgressEvent`/`Job` はどの層(CLI/API/MCP)からも
 同じ形で参照する。永続化(`infrastructure/jobs`)や提示(`presentation`)固有の
 関心事はここに混ぜない。
 """
@@ -76,7 +76,7 @@ class Severity(StrEnum):
 class ProgressEvent:
     """進捗イベント(設計書 §10.3)。
 
-    `job_events` への永続化とインプロセス購読(CLI/TUIのライブ描画)の両方で
+    `job_events` への永続化とインプロセス購読(CLIのライブ描画)の両方で
     同じ形を使う。将来の Web(SSE)/MCP(`job_status`)もこの形をそのまま参照する
     ため、提示層固有の概念(色・記号等)をここに混ぜない。
     """

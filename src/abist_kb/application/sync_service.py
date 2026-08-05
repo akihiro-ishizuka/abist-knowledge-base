@@ -900,7 +900,7 @@ def make_sync_job_handler(
             # 失敗があれば `run.finish_as(PARTIAL)` でジョブ行自体を SUCCEEDED
             # ではなく PARTIAL として終端させる — CLI の終了コード判定
             # (`presentation.cli.sync_cmd._fail_if_partial`)だけに頼ると、
-            # M5のMCPツールやM6のWeb/TUI画面のようにジョブ状態しか見ない消費者に
+            # M5のMCPツールやAPIのようにジョブ状態しか見ない消費者に
             # 半分失敗した同期がクリーンな成功として見えてしまうため。
             if failed:
                 run.finish_as(

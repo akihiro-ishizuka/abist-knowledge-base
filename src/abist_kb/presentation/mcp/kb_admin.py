@@ -1,6 +1,6 @@
-"""kb-admin MCP ツール(MCP-only UI cutover Phase 1)。
+"""kb-admin MCP ツール(MCP-only UI cutover)。
 
-Web/TUI 画面にあった管理操作を Application Service 直呼びで公開する。
+管理操作を Application Service 直呼びで公開する(エージェント向け一次面)。
 互換3サーバー(`kb-download`/`kb-search`/`kb-visualize`)のツール一覧・スキーマ・
 応答形は一切変更しない。破壊的操作は preview → `confirmed` + 対象再指定。
 """

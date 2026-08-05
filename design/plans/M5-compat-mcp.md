@@ -176,4 +176,9 @@ M3 の `BatchService` / `SyncService` を呼ぶ。**同期ブロッキング**: 
 
 ## 次のマイルストーン
 
-M5 完了後は **M6(NiceGUI Web/デスクトップ・Textual TUI・FastAPI/SSE)**。M6 のチャットと可視化画面は M7 の Service が要るので、サービス境界を先に切ってスタブで進める。
+> **[STATUS — MCP-only UI cutover]**  
+> 原文の「M6(NiceGUI Web/デスクトップ・Textual TUI・FastAPI/SSE)」のうち、  
+> NiceGUI／Textual は **中止**。存続するのは FastAPI `/api/v1`・SSE と MCP 管理面（`kb-admin`）。  
+> 詳細は [M6-M10-remaining.md](M6-M10-remaining.md) の STATUS 注記と [../system-design.md](../system-design.md) §7。
+
+M5 完了後は **M6（FastAPI `/api/v1`・操作マトリクス／`kb-admin`）**。チャットと可視化の操作は M7 の Service が要るので、サービス境界を先に切ってスタブで進める。

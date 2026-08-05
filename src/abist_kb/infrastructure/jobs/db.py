@@ -1,7 +1,7 @@
 """ジョブ用 SQLite 接続のブートストラップ(設計書 §9.2, §10)。
 
 `app_db_path` を開き、`0002_jobs.sql` のマイグレーションを適用する唯一の経路。
-複数プロセス(Web/TUI/CLI/MCP)が同時に未初期化DBへ最初に触れても、
+複数プロセス(CLI/API/MCP/`worker run`)が同時に未初期化DBへ最初に触れても、
 `apply_migrations`/`transaction` が `BEGIN IMMEDIATE` で調停するため安全である
 (`infrastructure.db.migrations` の設計と同じ前提)。
 """

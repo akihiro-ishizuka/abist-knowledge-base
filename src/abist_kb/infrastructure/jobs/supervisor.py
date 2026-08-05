@@ -1,9 +1,11 @@
 """`WorkerSupervisor`(設計書 §10.1, §10.3)。
 
-Web、デスクトップ、TUI、MCPの各長時間稼働エントリポイントは起動時にこれを
-開始し、リーダー選出を試みる。`<cli> worker run` も同じ Supervisor を起動する。
-リーダーだけがキューを消費する。heartbeat 5秒、lease 15秒(既定値。テストは
-実行時間短縮のため上書きする)。
+正の起動主体は `abist-kb worker run`。リーダー選出を試み、リーダーだけが
+キューを消費する。heartbeat 5秒、lease 15秒(既定値。テストは実行時間短縮の
+ため上書きする)。
+
+歴史メモ: 初版設計では Web／TUI／MCP の長時間エントリも起動時に Supervisor
+を開始する想定だったが、MCP-only cutover 後は `worker run` が担う。
 """
 
 from __future__ import annotations
@@ -95,7 +97,7 @@ class JobRunContext:
         ない」結果を返すハンドラや、`render_scene` のように呼び出し元へ返す
         べき結果(`visualization_id`/`output_dir` 等)を持つハンドラは、ここで
         宣言しないとジョブ行が実態と異なる `SUCCEEDED`/`result=None` のまま
-        記録されてしまう(MCP・Web・TUI 等、CLI 終了コードを見ない全ての消費者
+        記録されてしまう(MCP・API・CLI 等、終了コードを見ない全ての消費者
         がそれを「クリーンな成功・結果なし」と誤読する)。
         `state=JobState.FAILED` を渡すことも可能(その場合は `error` を渡すこと
         を推奨する)。
@@ -148,9 +150,9 @@ class WorkerSupervisor:
     def last_error(self) -> BaseException | None:
         """直近の `tick()` が失敗していればその例外、成功していれば `None`。
 
-        ホストUI(TUI/Web)が「ワーカーが繰り返し失敗している」ことを1箇所の
-        状態表示として出すために使う想定(繰り返しログを画面へ流し込まない
-        ようにするため、ログ自体は `run_forever` 側で間引く)。
+        運用監視側が「ワーカーが繰り返し失敗している」ことを1箇所の状態として
+        読むために使う想定(繰り返しログを無制限に流し込まないようにするため、
+        ログ自体は `run_forever` 側で間引く)。
         """
         return self._last_error
 
@@ -236,10 +238,10 @@ class WorkerSupervisor:
         ここで捕捉するのは `AppError` に限らない(`Exception` 全般)。ホストの
         接続設定に問題があるなど `tick()` が毎回同じ理由で失敗し続ける場合でも、
         ワーカーはあくまでバックグラウンドの1構成要素であり、その異常を理由に
-        ホストの長時間稼働エントリポイント(TUI/Web/デスクトップ/MCP)全体を
-        巻き込んで落としたり、ログを無制限に吐き続けて画面・端末を使用不能に
-        したりしてはならない(実際に TUI でスレッド境界を越えた SQLite 接続
-        共有が原因で `sqlite3.ProgrammingError` が毎tick発生し、無間隔でログが
+        `worker run` プロセス全体を巻き込んで落としたり、ログを無制限に吐き続けて
+        端末を使用不能にしたりしてはならない(歴史メモ: 旧 TUI でスレッド境界を
+        越えた SQLite 接続共有が原因で `sqlite3.ProgrammingError` が毎tick発生し、
+        無間隔でログが
         流れ続けて画面もキー入力も応答不能になった不具合の再発防止)。
         `KeyboardInterrupt`/`SystemExit` は `Exception` のサブクラスではないため
         素通しする。

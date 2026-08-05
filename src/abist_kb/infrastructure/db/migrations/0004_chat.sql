@@ -1,7 +1,7 @@
 -- conversations / messages / citations(設計書 §7.1, §9.2)。
 --
 -- 旧 chat-server.js は会話履歴をクライアント側(ブラウザ)に持っており、
--- リロードや別サーフェス(Web/TUI/デスクトップ)間での共有ができなかった。
+-- リロードや別クライアント間での共有ができなかった。
 -- ここではサーバー側 DB に持つ(M7 task-1 の設計判断)。
 --
 -- citations は ChatService が `range_hash`(domain/line_range.py, get_document と

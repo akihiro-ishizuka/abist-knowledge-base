@@ -1,4 +1,4 @@
-"""`JobService`(設計書 §10): CLI/TUI/Web/MCP から共通で使うジョブ操作の窓口。
+"""`JobService`(設計書 §10): CLI/API/MCP から共通で使うジョブ操作の窓口。
 
 インライン実行(CLIの既定)と `--detach`(キュー投入のみ)の両方をここで扱う。
 インライン実行も `resource_leases` を取得するため、他プロセスのキュージョブと

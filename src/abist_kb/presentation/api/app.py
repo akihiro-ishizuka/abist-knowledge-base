@@ -1,9 +1,8 @@
 """FastAPI `/api/v1` 層(設計書 §7.1, §10.3)。
 
 スタンドアロン起動は `abist-kb api serve`(`presentation/cli/api_cmd.py` +
-uvicorn)。NiceGUI Web は `register_api_routes()` で同一アプリへマウントする
-(Phase 2b まで)。業務操作は `presentation/api/facade.py` 経由で Application
-Service を呼び、`web.viewmodels.screens` には依存しない。
+uvicorn)。業務操作は `presentation/api/facade.py` 経由で Application Service
+を呼ぶ。画面ホスト(旧 NiceGUI Web)は削除済み。
 
 ジョブ進捗 SSE は DB の job history をポーリングして配信する(別プロセスの
 `worker run` が書いたイベントも届く)。in-process `event_bus` には依存しない。
@@ -135,10 +134,8 @@ def register_api_routes(
 ) -> FastAPI:
     """`/api/v1` ルートを既存の FastAPI アプリへ登録する。
 
-    Web(`presentation/web/app.py`)は NiceGUI 自身の FastAPI インスタンスへ
-    これを直接呼ぶ(サブアプリを `mount()` するとパスプレフィックスがずれるため、
-    同一アプリへルートを足す方式にしている)。単体テスト・スタンドアロン用途は
-    `create_api_app()` が新規 `FastAPI()` を作ってこれを呼ぶ。
+    単体テスト・スタンドアロン用途は `create_api_app()` が新規 `FastAPI()` を
+    作ってこれを呼ぶ。旧 NiceGUI Web へのマウント経路は削除済み。
 
     `enforce_token_requirement=True`(既定)では、非ループバック `bind_host` で
     `access_token` 未設定だと起動時に `ValueError` になる(フェイルセーフ)。
@@ -173,10 +170,10 @@ def register_api_routes(
         HTTP ステータスへ変換する。
 
         facade/`actions` の各関数は `AppError` を re-raise せず `{"error":
-        error_to_dict(exc)}` へ変換して返す(NiceGUI の画面側がそのまま
-        エラーメッセージを描画できるようにするため)。そのため FastAPI の
-        `AppError` 例外ハンドラだけでは NOT_FOUND 等を検知できず、ここで
-        戻り値の形を見て `_status_for` 相当のステータスへ変換する。
+        error_to_dict(exc)}` へ変換して返す(MCP/API クライアントが同じ形で
+        エラーを読めるようにするため)。そのため FastAPI の `AppError`
+        例外ハンドラだけでは NOT_FOUND 等を検知できず、ここで戻り値の形を
+        見て `_status_for` 相当のステータスへ変換する。
         """
         async with request.app.state.db_lock:
             result = fn()
@@ -526,7 +523,7 @@ def create_api_app(
 ) -> FastAPI:
     """スタンドアロンの `/api/v1` FastAPI アプリ。
 
-    `abist-kb api serve` およびテストから使う。NiceGUI 非依存で起動できる。
+    `abist-kb api serve` およびテストから使う。
     """
     app = FastAPI(title="ABIST Knowledge Base API", version="1.0.0")
     return register_api_routes(
