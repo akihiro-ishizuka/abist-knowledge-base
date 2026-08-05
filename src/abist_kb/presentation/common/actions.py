@@ -1,10 +1,10 @@
-"""Application Service 直呼びの操作ヘルパー(API / Web / TUI 共有)。
+"""Application Service 直呼びの操作ヘルパー(API / MCP 共有)。
 
 各関数は `ServiceContainer` だけを受け取り、`application/` の戻り値
 (dict/`Job`/`AppError`)を JSON 互換の dict へ組み立てて返す。API facade と
-Web/TUI の `screens` がこれを共有し、破壊的操作の確認契約を二重実装しない。
+kb-admin MCP がこれを共有し、破壊的操作の確認契約を二重実装しない。
 
-`document_detail` の `body_html` は Web 表示向けのサニタイズ HTML を含む
+`document_detail` の `body_html` はサニタイズ済み HTML を含む
 (既存 `/api/v1` 契約互換のため API でも同じ形を返す)。
 """
 
@@ -17,8 +17,8 @@ from typing import Any
 from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.domain.job import JobState
 from abist_kb.presentation.common.container import ServiceContainer
+from abist_kb.presentation.common.markdown_render import render_markdown_safe
 from abist_kb.presentation.common.serialize import error_to_dict, event_to_dict, job_to_dict
-from abist_kb.presentation.web.viewmodels.markdown_render import render_markdown_safe
 
 
 def _err(exc: AppError) -> dict[str, Any]:

@@ -209,6 +209,26 @@ def test_document_delete_without_confirmation_returns_400(client: TestClient) ->
     assert response.json()["code"] == "INVALID_INPUT"
 
 
+def test_document_detail_sanitizes_markdown_html(
+    client: TestClient, container: ServiceContainer
+) -> None:
+    docs = container.settings.docs_dir
+    docs.mkdir(parents=True, exist_ok=True)
+    (docs / "xss.md").write_text(
+        '<img src=x onerror="alert(1)">plain <script>bad()</script>',
+        encoding="utf-8",
+    )
+    container.documents.upsert(
+        {"path": "xss.md", "source": "manual", "status": "active", "sync_status": "synced"}
+    )
+    response = client.get("/api/v1/documents/xss.md")
+    assert response.status_code == 200
+    html = response.json()["body_html"]
+    assert "onerror" not in html
+    assert "<script>" not in html
+    assert "plain" in html
+
+
 def test_chat_and_quality_endpoints(client: TestClient) -> None:
     # チャットは openai_api_key 未設定のテスト環境ではスタブへフォールバックする
     # (`_clear_app_env` autouse fixture が ABIST_KB_* を毎回消すため)。

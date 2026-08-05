@@ -9,39 +9,35 @@ screens:
       source_add:
         label: ソース追加
         destructive: false
-        surfaces: [web, api]
-        tui_omitted_reason: フォーム入力が TUI では煩雑なため Web/API に限定
+        surfaces: [mcp, api]
       source_edit:
         label: ソース編集
         destructive: false
-        surfaces: [web, api]
-        tui_omitted_reason: フォーム入力が TUI では煩雑なため Web/API に限定
+        surfaces: [mcp, api]
       source_remove:
         label: ソース削除
         destructive: true
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       source_test_connection:
         label: ソース接続テスト
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       batch_add:
         label: バッチ追加
         destructive: false
-        surfaces: [web, api]
-        tui_omitted_reason: フォーム入力が TUI では煩雑なため Web/API に限定
+        surfaces: [mcp, api]
       batch_edit:
         label: バッチ編集
         destructive: false
-        surfaces: [web, api]
-        tui_omitted_reason: フォーム入力が TUI では煩雑なため Web/API に限定
+        surfaces: [mcp, api]
       batch_remove:
         label: バッチ削除
         destructive: true
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       batch_run:
         label: バッチ実行
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
 
   jobs:
     label: ジョブ
@@ -49,11 +45,11 @@ screens:
       job_cancel:
         label: ジョブキャンセル
         destructive: true
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       job_retry:
         label: ジョブ再試行
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
 
   documents:
     label: 文書
@@ -61,11 +57,11 @@ screens:
       document_update_metadata:
         label: 文書メタデータ編集（status/document_type のみ）
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       document_delete:
         label: 文書削除
         destructive: true
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
 
   search:
     label: 検索
@@ -73,7 +69,7 @@ screens:
       search_run:
         label: 検索実行
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
 
   chat:
     label: チャット
@@ -81,15 +77,15 @@ screens:
       chat_start:
         label: 会話開始
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       chat_ask:
         label: 質問
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       chat_history:
         label: 会話履歴
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
 
   visualization:
     label: 可視化
@@ -97,15 +93,15 @@ screens:
       visualization_validate:
         label: SceneSpec 検証
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       visualization_submit_render:
         label: レンダリング投入
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       visualization_deps:
         label: 可視化依存関係診断
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
 
   quality:
     label: 品質
@@ -113,19 +109,19 @@ screens:
       quality_run_integrity:
         label: 整合性監査
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       quality_run_duplicates:
         label: 重複監査
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       quality_run_contradictions:
         label: 矛盾候補監査
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
       quality_run_backfill_metadata:
         label: メタデータ補完監査（apply=false / dry-run）
         destructive: false
-        surfaces: [web, tui, api]
+        surfaces: [mcp, api]
 
   settings:
     label: 設定・診断

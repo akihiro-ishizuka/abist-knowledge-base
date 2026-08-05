@@ -1,4 +1,4 @@
-"""`ServiceContainer`: MCP / API / Web / TUI が共有する Application Service の束(§5, §8)。
+"""`ServiceContainer`: MCP / API / CLI が共有する Application Service の束(§5, §8)。
 
 CLI が各コマンド内で毎回 `open_app_db` + 個別サービス構築を行っているのと同じ配線を
 1箇所へ集約する。プレゼンテーション層はいずれもこの `ServiceContainer` 経由で
@@ -7,6 +7,9 @@ CLI が各コマンド内で毎回 `open_app_db` + 個別サービス構築を�
 
 **ここに UI 固有の概念(色、記号、HTML)を混ぜない。** MCP ツールは本 Container の
 サービスを直接呼び、画面ヘルパーには依存しない。
+
+長時間ジョブの実行は埋め込みワーカーではなく `abist-kb worker run`
+(`WorkerSupervisor`)が担う。
 """
 
 from __future__ import annotations
@@ -28,28 +31,13 @@ from abist_kb.config import Settings
 from abist_kb.infrastructure.ai.chat_provider import OpenAIChatProvider
 from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.infrastructure.jobs import events as events_mod
-from abist_kb.infrastructure.jobs.builtin_registry import (
-    build_builtin_handlers,
-    build_builtin_resources,
-)
-from abist_kb.infrastructure.jobs.supervisor import JobHandler, WorkerSupervisor
-
-#: Web の常駐ワーカー(`WorkerSupervisor`)がキューから消費できるジョブ種別。
-#: `infrastructure.jobs.builtin_registry` と同じ集合
-#: (`noop`/`batch`/`kb_download_*`/`render_scene`)。モジュール属性名は
-#: 既存テスト互換のため残し、実体は `ServiceContainer.build_worker_supervisor`
-#: が settings+conn で組み立てる(ここではリソース表のみ静的に公開する)。
-WEB_WORKER_RESOURCES: dict[str, Any] = build_builtin_resources()
-#: 遅延初期化前のプレースホルダ。実ハンドラは `build_worker_supervisor` が入れる。
-WEB_WORKER_HANDLERS: dict[str, JobHandler] = {}
 
 
 class ServiceContainer:
     """1つの `app.sqlite` 接続と全アプリケーションサービスをまとめる。
 
-    プロセス生存期間中は1つの Container を使い回す想定(NiceGUI/FastAPI の
-    起動時に1つ作り、リクエストハンドラ間で共有する)。将来の Textual TUI も
-    同じクラスを import して同じ画面状態を再現できる。
+    プロセス生存期間中は1つの Container を使い回す想定(FastAPI / MCP の
+    起動時に1つ作り、リクエスト・ツールハンドラ間で共有する)。
     """
 
     def __init__(
@@ -59,16 +47,15 @@ class ServiceContainer:
         owner_id: str | None = None,
         check_same_thread: bool = True,
     ) -> None:
-        """`check_same_thread=False` は ASGI 層(FastAPI/NiceGUI)専用。
+        """`check_same_thread=False` は ASGI 層(FastAPI)専用。
 
         Starlette の `TestClient`/実運用の ASGI サーバーは、この接続を作った
         スレッドとは別スレッドでリクエストを処理しうる
         (`infrastructure/db/connection.py::connect` の docstring 参照)。
-        Web(`presentation/web/app.py`)はこの値を `False` で渡し、代わりに
-        `presentation/api/app.py` の `asyncio.Lock` で全リクエストのDBアクセスを
-        直列化することで、単一接続への同時アクセスを防ぐ。CLI/TUI/テストのような
-        単一スレッド利用では既定の `True`(スレッド越境を誤って許してしまうバグを
-        検出できる状態)のままにする。
+        API(`presentation/api/app.py`)はこの値を `False` で渡し、代わりに
+        `asyncio.Lock` で全リクエストのDBアクセスを直列化することで、
+        単一接続への同時アクセスを防ぐ。CLI/テストのような単一スレッド利用では
+        既定の `True`(スレッド越境を誤って許してしまうバグを検出できる状態)のままにする。
         """
         self.settings = settings
         self.owner_id = owner_id or str(uuid.uuid4())
@@ -91,18 +78,15 @@ class ServiceContainer:
             work_index_path=settings.work_index_path,
             reference_index_path=settings.reference_index_path,
         )
-        # 参照専用: `jobs` 画面の一覧・詳細・履歴・キャンセル・再試行はジョブ種別に
-        # 依存しない(`JobRepository`/`job_events` はどのハンドラが書いたジョブでも
-        # 同じ形で読める)。インライン実行(`run_sync_inline`/`run_index_inline`/
-        # `BatchService.run`)はそれぞれ専用の一時的な `JobService` を都度組み立てる
-        # ため、この `jobs` には handlers を登録しない(投入しても実行されない
-        # ジョブを作らないため)。
+        # 参照専用: ジョブ一覧・詳細・履歴・キャンセル・再試行はジョブ種別に
+        # 依存しない。インライン実行はそれぞれ専用の一時的な `JobService` を
+        # 都度組み立てるため、この `jobs` には handlers を登録しない。
         self.jobs = JobService(self.conn, owner_id=self.owner_id, event_bus=self.event_bus)
         self._chat: ChatService | None = None
 
     @property
     def chat(self) -> ChatService | None:
-        """`ChatService`(§7.1)。`openai_api_key` が未設定なら `None`(画面はスタブ表示)。
+        """`ChatService`(§7.1)。`openai_api_key` が未設定なら `None`。
 
         `SearchService` を根拠取得に、`OpenAIChatProvider` をベンダー実装として使う
         (`ChatProvider` 境界のおかげで差し替え可能。実 API へは `openai_api_key`
@@ -153,32 +137,12 @@ class ServiceContainer:
             self.index, self.conn, action=action, corpus=corpus, owner_id=self.owner_id
         )
 
-    def build_worker_supervisor(self) -> WorkerSupervisor:
-        """長時間稼働エントリポイント(Web)用の `WorkerSupervisor`(§10.1)。
-
-        Web は他の常駐エントリポイント(デスクトップ/TUI/MCP)と同じく起動時に
-        これを開始し、リーダー選出に参加する。専用接続を使う
-        (`WorkerSupervisor` はバックグラウンドスレッドで heartbeat 更新するため、
-        リクエスト処理用の `self.conn` と共有しない)。
-        """
-        supervisor_conn = open_app_db(self.settings.app_db_path)
-        handlers = build_builtin_handlers(settings=self.settings, conn=supervisor_conn)
-        # テストが `WEB_WORKER_HANDLERS` 名で参照できるように最新表を公開する。
-        WEB_WORKER_HANDLERS.clear()
-        WEB_WORKER_HANDLERS.update(handlers)
-        return WorkerSupervisor(
-            supervisor_conn,
-            owner_id=self.owner_id,
-            handlers=handlers,
-            resource_for_kind=WEB_WORKER_RESOURCES,
-        )
-
     def close(self) -> None:
         self.conn.close()
 
 
 def build_container(root_dir: Path | None = None, **overrides: Any) -> ServiceContainer:
-    """`Settings` を組み立てて `ServiceContainer` を返す(Web/TUI 共通の入口)。"""
+    """`Settings` を組み立てて `ServiceContainer` を返す。"""
     settings = (
         Settings(root_dir=root_dir, **overrides) if root_dir is not None else Settings(**overrides)
     )
@@ -187,8 +151,6 @@ def build_container(root_dir: Path | None = None, **overrides: Any) -> ServiceCo
 
 
 __all__ = [
-    "WEB_WORKER_HANDLERS",
-    "WEB_WORKER_RESOURCES",
     "ServiceContainer",
     "build_container",
 ]

@@ -1,8 +1,7 @@
 """`worker` コマンド群(設計書 §7, §10.1)。
 
-`worker run` は `WorkerSupervisor` を起動する。Web/デスクトップ/TUI/MCP の
-各常駐エントリポイントも起動時に同じ Supervisor を開始する想定だが、常駐UIを
-使わないヘッドレス環境ではこのコマンドを明示的に起動する必要がある。
+`worker run` は `WorkerSupervisor` を起動する。長時間ジョブの実行は
+埋め込みワーカーではなく本コマンドが担う(API / MCP はキューへ投入するだけ)。
 """
 
 from __future__ import annotations

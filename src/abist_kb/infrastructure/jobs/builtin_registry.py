@@ -1,11 +1,11 @@
 """組み込みジョブ種別のハンドラ/リソース要求レジストリ。
 
-CLI `worker run`・Web 常駐ワーカー・`BatchService.run` が同じ語彙
+CLI `worker run`・`BatchService.run` が同じ語彙
 (`noop`/`batch`/`kb_download_*`/`render_scene`)を実行できるようにする。
 MCP `start_*`(`presentation.mcp.jobs_tools._JOB_KIND_FOR_TOOL`)がキューへ
-投入する `kind` と、UI `screens.batch_run` が使う `"batch"` をここで揃える。
+投入する `kind` と、facade/`actions.batch_run` が使う `"batch"` をここで揃える。
 
-**`batch` と `kb_download_batch` の語彙統一**: UI は `{"batch_id": ...}`、
+**`batch` と `kb_download_batch` の語彙統一**: API/MCP admin は `{"batch_id": ...}`、
 MCP `start_run_batch` は `{"batch": name}` を渡す。どちらも同一ハンドラが
 解決して `SyncService.sync_batch` を呼ぶ(旧スタブの「M3 Task 3〜5」メッセージは
 使わない)。

@@ -1,4 +1,4 @@
-"""プレゼンテーション層の共通配線(MCP / API / Web / TUI)。"""
+"""プレゼンテーション層の共通配線(MCP / API / CLI)。"""
 
 from __future__ import annotations
 

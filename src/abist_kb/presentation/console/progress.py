@@ -125,7 +125,15 @@ def progress_scope(
         yield ProgressHandle(total)
         return
 
-    if presenter.mode is OutputMode.PLAIN:
+    # §6.3: `color_system=None` / 非TTY では ANSI・アニメーション禁止。
+    # RICH モードでも Rich Progress はカーソル制御シーケンス(`\x1b[?25l` 等)を
+    # 出すため、色無し解決時は PLAIN と同じ静的サマリへ落とす。
+    live_rich = (
+        presenter.mode is OutputMode.RICH
+        and presenter.console.color_system is not None
+        and not presenter.console.no_color
+    )
+    if presenter.mode is OutputMode.PLAIN or not live_rich:
         handle = ProgressHandle(total)
         started = time.monotonic()
         presenter.info(description)

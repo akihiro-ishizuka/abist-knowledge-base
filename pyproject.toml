@@ -1,7 +1,7 @@
 [project]
 name = "abist-kb"
 version = "0.1.0"
-description = "ABIST Knowledge Base - multi-source knowledge base with CLI, TUI, Web and MCP interfaces"
+description = "ABIST Knowledge Base - multi-source knowledge base with CLI, REST API and MCP interfaces"
 readme = "README.md"
 requires-python = "==3.12.*"
 license = { text = "Proprietary" }
@@ -18,11 +18,9 @@ dependencies = [
     "numpy>=2.1,<3",
     "mcp>=1.2,<2",
     "fastapi>=0.118,<1",
-    "nicegui>=1.4,<3",
     "uvicorn[standard]>=0.30,<1",
     "bleach>=6.1,<7",
     "markdown>=3.6,<4",
-    "textual>=8.2.8",
 ]
 
 [project.scripts]
@@ -34,14 +32,10 @@ dev = [
     "pytest-asyncio>=1.4,<2",
     "hypothesis>=6.165,<7",
     "ruff>=0.16,<0.17",
-    # `tests/ui/test_ui_actions_contract.py` が正本 `design/ui-action-matrix.yaml`
-    # を直接読む(Task 8)。実行環境には既に推移的依存で入っているが、テストが
-    # 直接 import するため明示する。
+    # `tests/mcp/test_matrix_actions_contract.py` が正本 `design/ui-action-matrix.yaml`
+    # を直接読む。実行環境には既に推移的依存で入っているが、テストが直接 import
+    # するため明示する。
     "pyyaml>=6.0,<7",
-    # `nicegui.testing.plugin`(tests/ui/test_web_pages.py)は import 時に
-    # 無条件で `selenium` を要求する(スクリーンショット系フィクスチャ用、
-    # 本タスクでは使わないが import エラーになるため必要)。
-    "selenium>=4.20,<5",
 ]
 
 [build-system]
@@ -53,24 +47,12 @@ packages = ["src/abist_kb"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# `e2e_browser`(Playwright)は既定実行から除外する: pytest-playwright の
-# `pytest_runtest_call` フック(実行中に Playwright 用イベントループを張る)は
-# `asyncio_mode = "auto"` 下の `async def` テスト(Textual Pilot/`nicegui.testing`)
-# と同一セッションで `RuntimeError: Runner.run() cannot be called from a running
-# event loop` を起こすことを実測で確認した(`tests/ui/test_tui.py` 等が対象外の
-# はずのブラウザテストと同居しただけで壊れる)。`pytest -m e2e_browser
-# tests/ui/test_e2e_playwright.py` で明示的に別セッションとして実行する。
-addopts = "-ra --strict-markers -m \"not e2e_browser\""
-# NiceGUI の `nicegui.testing.plugin`(`tests/ui/test_web_pages.py`)は素の
-# `async def`/`@pytest.fixture async def` を使う。`auto` にしないと明示マーク漏れで
-# 実行されずに終わる、または pytest-asyncio の strict モードとの相互作用で
-# fixture の finalizer 二重登録エラーになる(実測で確認済み)。
+addopts = "-ra --strict-markers"
 asyncio_mode = "auto"
 markers = [
     "slow: 実行時間の長いテスト",
     "requires_node: 旧Nodeシステムを必要とするテスト",
     "timing_sensitive: 実時間計測に依存する(CPU高負荷下でフレークしうる)テスト",
-    "e2e_browser: Playwright を使う実ブラウザE2Eテスト。既定実行から除外(理由は addopts コメント参照)。",
 ]
 
 [tool.ruff]

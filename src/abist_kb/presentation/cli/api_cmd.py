@@ -1,8 +1,7 @@
 """`api` コマンド群: スタンドアロン FastAPI `/api/v1` サーバー。
 
-MCP-only UI cutover Phase 2a。NiceGUI 非依存で `create_api_app()` を
-uvicorn 上に起動する。安全契約は `ui web` と同じ
-(既定 `127.0.0.1`、非ループバックはアクセストークン必須)。
+MCP-only UI cutover Phase 2a。`create_api_app()` を uvicorn 上に起動する。
+安全契約: 既定 `127.0.0.1`、非ループバックはアクセストークン必須。
 """
 
 from __future__ import annotations

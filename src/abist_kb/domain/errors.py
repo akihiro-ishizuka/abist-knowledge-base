@@ -63,7 +63,7 @@ _EXIT_CODE_BY_ERROR: dict[ErrorCode, ExitCode] = {
 
 #: `ErrorCode` -> HTTP ステータスの単一のソース。以前は
 #: `presentation/api/app.py` にだけ `_ERROR_STATUS` 表があり、
-#: `screens.py` が返す `{"error": ...}` 規約(NiceGUI/TUI 向け)と FastAPI の
+#: facade/`actions` が返す `{"error": ...}` 規約と FastAPI の
 #: 例外ハンドラが同じ表を別々に参照していた。表自体は同じ辞書オブジェクトだった
 #: ため2箇所とも更新されるコード経路は一致していたが、新しい `ErrorCode` を
 #: 追加した実装者が HTTP マッピングの存在に気付けるとは限らない
