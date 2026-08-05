@@ -1,7 +1,8 @@
 # UI action matrix — surface contract (MCP + API).
 # Canonical for tests/mcp/test_matrix_actions_contract.py.
 # Screens are logical domains (not NiceGUI/Textual hosts; those were removed).
-# Agents: prefer MCP kb-admin (or all). Compat: kb-download/kb-search/kb-visualize.
+# Agents: prefer MCP all (search + admin + jobs). Admin-only: kb-admin.
+# Compat: kb-download/kb-search/kb-visualize.
 # REST: abist-kb api serve. Long-running jobs: abist-kb worker run.
 screens:
   dashboard:

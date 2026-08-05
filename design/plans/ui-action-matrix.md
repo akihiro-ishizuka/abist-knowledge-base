@@ -11,7 +11,8 @@ Web / TUI は削除済み。破壊的操作は実行前の確認を必須とし�
 
 | 用途 | 接続 |
 |---|---|
-| エージェント（推奨） | MCP **`kb-admin`** または **`all`** |
+| エージェント（推奨） | MCP **`all`** — `abist-kb mcp serve all`（検索 + 管理 + jobs） |
+| 管理のみ | MCP `kb-admin` — `search_kb` は含まない（KB 回答は `chat_ask` 経由） |
 | 既存スキル互換 | `kb-download`／`kb-search`／`kb-visualize` |
 | REST | `abist-kb api serve` → `/api/v1` |
 | 長時間ジョブ | `abist-kb worker run` |
@@ -38,19 +39,30 @@ Web / TUI は削除済み。破壊的操作は実行前の確認を必須とし�
 | 可視化 | `visualization_validate` | SceneSpec 検証 | いいえ | ✓ | ✓ |
 | 可視化 | `visualization_submit_render` | レンダリング投入 | いいえ | ✓ | ✓ |
 | 可視化 | `visualization_deps` | 可視化依存関係診断 | いいえ | ✓ | ✓ |
-| 品質 | `quality_run_integrity` | 整合性監査 | いいえ | ✓ | ✓ |
+| 品質 | `quality_run_integrity` | 整合性監査（読取専用） | いいえ | ✓ | ✓ |
+| 品質 | `quality_apply_integrity_updates` | 整合性監査の DB 更新適用 | はい | ✓ | — |
 | 品質 | `quality_run_duplicates` | 重複監査 | いいえ | ✓ | ✓ |
 | 品質 | `quality_run_contradictions` | 矛盾候補監査 | いいえ | ✓ | ✓ |
-| 品質 | `quality_run_backfill_metadata` | メタデータ補完監査（`apply=false` / dry-run） | いいえ | ✓ | ✓ |
+| 品質 | `quality_preview_backfill_metadata` | メタデータ補完 preview（dry-run） | いいえ | ✓ | — |
+| 品質 | `quality_apply_backfill_metadata` | メタデータ補完の適用 | はい | ✓ | — |
+| 品質 | `quality_run_backfill_metadata` | メタデータ補完監査（API: `apply=false` 既定） | いいえ | — | ✓ |
 | 設定・診断 | — | 参照のみ | — | — | — |
 
 ## MCP 到達先
 
-大半の管理操作は `kb-admin` ツール。例外:
+大半の管理操作は `kb-admin` ツール（推奨接続は `all`）。例外:
 
 - `job_cancel` → jobs MCP の `cancel_job`
 - `search_run` → kb-search の `search_kb`
 - `visualization_submit_render` → jobs MCP の `start_render_scene`
 - `visualization_deps` → kb-visualize の `check_visualize_deps`
+
+品質の書込系は MCP では preview / apply に分離:
+
+- `quality_run_integrity` → 読取専用
+- `quality_apply_integrity_updates` → 破壊的（`confirmed` + `confirm_action`）
+- `quality_preview_backfill_metadata` → dry-run
+- `quality_apply_backfill_metadata` → 破壊的（`confirmed` + `confirm_action`）
+- API の `quality_run_backfill_metadata` は MCP には無い（API 専用）
 
 到達性は `tests/mcp/test_matrix_actions_contract.py` がマトリクスを正本として検査する。
