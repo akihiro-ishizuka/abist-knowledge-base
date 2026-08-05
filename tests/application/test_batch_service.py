@@ -15,7 +15,6 @@ from abist_kb.config import Settings
 from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.infrastructure.db.schema import open_app_db
 
-
 _SAMPLE_BATCH_CONFIG_JS = """#!/usr/bin/env node
 
 export const batchConfigs = {
