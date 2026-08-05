@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 from abist_kb.presentation.mcp import jobs_tools
+from abist_kb.presentation.mcp.kb_admin import list_tools as kb_admin_list_tools
 from abist_kb.presentation.mcp.kb_download import list_tools as kb_download_list_tools
 from abist_kb.presentation.mcp.kb_search import list_tools as kb_search_list_tools
 
@@ -31,7 +32,7 @@ _NEW_TOOL_NAMES = {
     "get_batch",
     "list_corpora",
     "system_status",
-}
+} | {tool.name for tool in kb_admin_list_tools()}
 
 
 def _expected_compat_tools() -> dict[str, dict]:
@@ -52,9 +53,14 @@ def _expected_compat_tools() -> dict[str, dict]:
 
 
 def test_all_server_tools_list_is_additions_only() -> None:
-    """kb-download 8 + kb-search 4 の既存12ツールはそのまま、12ツールが純増する。"""
+    """kb-download 8 + kb-search 4 の既存12ツールはそのまま、jobs+kb-admin が純増する。"""
     expected = _expected_compat_tools()
-    combined = [*kb_search_list_tools(), *kb_download_list_tools(), *jobs_tools.list_tools()]
+    combined = [
+        *kb_search_list_tools(),
+        *kb_download_list_tools(),
+        *jobs_tools.list_tools(),
+        *kb_admin_list_tools(),
+    ]
     actual = {tool.name: tool for tool in combined}
 
     assert len(combined) == len(actual), "ツール名の重複(既存/新規の衝突)がある"

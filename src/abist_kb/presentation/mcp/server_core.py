@@ -22,6 +22,10 @@ from mcp.server.models import InitializationOptions
 from abist_kb.presentation.mcp.jobs_tools import JobTools
 from abist_kb.presentation.mcp.jobs_tools import list_tools as jobs_list_tools
 from abist_kb.presentation.mcp.jobs_tools import validate_arguments as validate_jobs_arguments
+from abist_kb.presentation.mcp.kb_admin import KbAdminTools
+from abist_kb.presentation.mcp.kb_admin import handlers_for as kb_admin_handlers
+from abist_kb.presentation.mcp.kb_admin import list_tools as kb_admin_list_tools
+from abist_kb.presentation.mcp.kb_admin import validate_arguments as validate_kb_admin_arguments
 from abist_kb.presentation.mcp.kb_download import KbDownloadTools
 from abist_kb.presentation.mcp.kb_download import list_tools as kb_download_list_tools
 from abist_kb.presentation.mcp.kb_download import (
@@ -38,9 +42,10 @@ from abist_kb.presentation.mcp.payloads import error_result
 
 SERVER_NAMES: tuple[str, ...] = ("kb-download", "kb-search", "kb-visualize")
 
-#: `all` サーバーは `SERVER_NAMES` には含めない(design: 個別3サーバーは
-#: 既定の公式構成のまま残し、`all` はそれとは別のキーとして追加する)。
+#: `all` / `kb-admin` は `SERVER_NAMES`(互換3)には含めない。既定の公式構成は
+#: 互換3のまま残し、管理操作用の `kb-admin` と結合用の `all` を別キーで追加する。
 ALL_SERVER_NAME = "all"
+KB_ADMIN_SERVER_NAME = "kb-admin"
 
 _SERVER_VERSION = "1.0.0"
 
@@ -179,6 +184,52 @@ def build_kb_visualize_server(
     return server
 
 
+def build_kb_admin_server(
+    *,
+    docs_dir: Path,
+    work_index_path: Path,
+    reference_index_path: Path,
+    app_db_path: Path,
+    root_dir: Path | None = None,
+    reports_dir: Path | None = None,
+) -> Server[Any, Any]:
+    """kb-admin サーバー(管理操作ツール群)を組み立てる。"""
+    from abist_kb.config import Settings
+    from abist_kb.presentation.common.container import ServiceContainer
+
+    server: Server[Any, Any] = Server(KB_ADMIN_SERVER_NAME, version=_SERVER_VERSION)
+    resolved_root = root_dir if root_dir is not None else Path.cwd()
+    resolved_reports = reports_dir if reports_dir is not None else (resolved_root / "reports")
+    settings = Settings(
+        root_dir=resolved_root,
+        docs_dir=docs_dir,
+        reports_dir=resolved_reports,
+        app_db_path=app_db_path,
+        work_index_path=work_index_path,
+        reference_index_path=reference_index_path,
+    )
+    settings.ensure_directories()
+    container = ServiceContainer(settings)
+    tools = KbAdminTools(container)
+    handlers = kb_admin_handlers(tools)
+
+    @server.list_tools()
+    async def _list_tools() -> list[types.Tool]:
+        return kb_admin_list_tools()
+
+    @server.call_tool(validate_input=False)
+    async def _call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
+        validation_error = validate_kb_admin_arguments(name, arguments)
+        if validation_error is not None:
+            return validation_error
+        handler = handlers.get(name)
+        if handler is None:
+            return error_result(f"未知のツールです: {name}")
+        return handler(arguments)
+
+    return server
+
+
 def build_all_server(
     *,
     docs_dir: Path,
@@ -189,19 +240,14 @@ def build_all_server(
     reports_dir: Path | None = None,
     missing_threshold: int | None = None,
 ) -> Server[Any, Any]:
-    """`all` サーバー: 既存18ツール(kb-search 4 + kb-download 8 + kb-visualize 3 +
-    task-3a/3b互換)に加え、M5 task-4 の新規ジョブ指向ツール(`start_*`/`job_status`/
-    `cancel_job`/`get_batch`/`list_corpora`/`system_status`)を同一プロセスで公開する。
-
-    **`kb-visualize` の扱い(M7 で解禁)**: M5 時点では未実装のため `tools/list`
-    から省略していたが、M7 でレンダラーが実装されたためここに組み込む。
-
-    `kb-download`/`kb-search`/`kb-visualize`/新規ジョブツールはいずれも同じ
-    `app.sqlite` 接続を共有する(`docs-write`/`render` リースの single-flight
-    契約は接続をまたいでも DB 行ベースで効くため問題ない)。
+    """`all` サーバー: 互換3(kb-search/kb-download/kb-visualize) + jobs 拡張 +
+    kb-admin を同一プロセスで公開する。互換3の list_tools / スキーマ / 応答は
+    変更しない(additions only)。
     """
+    from abist_kb.config import Settings
     from abist_kb.infrastructure.db.schema import open_app_db
     from abist_kb.infrastructure.sources.esa import DEFAULT_MISSING_THRESHOLD
+    from abist_kb.presentation.common.container import ServiceContainer
 
     server: Server[Any, Any] = Server(ALL_SERVER_NAME, version=_SERVER_VERSION)
     conn: sqlite3.Connection = open_app_db(app_db_path)
@@ -240,6 +286,16 @@ def build_all_server(
         reports_dir=resolved_reports_dir,
         repo_root=resolved_root_dir,
     )
+    admin_settings = Settings(
+        root_dir=resolved_root_dir,
+        docs_dir=docs_dir,
+        reports_dir=resolved_reports_dir,
+        app_db_path=app_db_path,
+        work_index_path=work_index_path,
+        reference_index_path=reference_index_path,
+    )
+    admin_settings.ensure_directories()
+    admin_tools = KbAdminTools(ServiceContainer(admin_settings))
 
     handlers: dict[str, Any] = {
         "search_kb": search_tools.search_kb,
@@ -269,6 +325,7 @@ def build_all_server(
         "get_batch": job_tools.get_batch,
         "list_corpora": job_tools.list_corpora,
         "system_status": job_tools.system_status,
+        **kb_admin_handlers(admin_tools),
     }
 
     @server.list_tools()
@@ -278,6 +335,7 @@ def build_all_server(
             *kb_download_list_tools(),
             *kb_visualize_list_tools(),
             *jobs_list_tools(),
+            *kb_admin_list_tools(),
         ]
 
     @server.call_tool(validate_input=False)
@@ -289,6 +347,9 @@ def build_all_server(
         if validation_error is not None:
             return validation_error
         validation_error = validate_jobs_arguments(name, arguments)
+        if validation_error is not None:
+            return validation_error
+        validation_error = validate_kb_admin_arguments(name, arguments)
         if validation_error is not None:
             return validation_error
         handler = handlers.get(name)
@@ -336,6 +397,17 @@ def build_server(
             repo_root=root_dir,
             reports_dir=reports_dir,
         )
+    if name == KB_ADMIN_SERVER_NAME:
+        if app_db_path is None:
+            raise ValueError("kb-admin サーバーには app_db_path が必要です")
+        return build_kb_admin_server(
+            docs_dir=docs_dir,
+            work_index_path=work_index_path,
+            reference_index_path=reference_index_path,
+            app_db_path=app_db_path,
+            root_dir=root_dir,
+            reports_dir=reports_dir,
+        )
     if name == ALL_SERVER_NAME:
         if app_db_path is None:
             raise ValueError("'all' サーバーには app_db_path が必要です")
@@ -349,7 +421,8 @@ def build_server(
             missing_threshold=missing_threshold,
         )
     raise NotImplementedError(
-        f"未知のサーバー名です: '{name}'(kb-search/kb-download/kb-visualize/all のみ実装済み)。"
+        f"未知のサーバー名です: '{name}'"
+        f"(kb-search/kb-download/kb-visualize/kb-admin/all のみ実装済み)。"
     )
 
 
@@ -395,7 +468,11 @@ async def run_http(server: Server[Any, Any], *, host: str = "127.0.0.1", port: i
 
 
 __all__ = [
+    "ALL_SERVER_NAME",
+    "KB_ADMIN_SERVER_NAME",
     "SERVER_NAMES",
+    "build_all_server",
+    "build_kb_admin_server",
     "build_kb_download_server",
     "build_kb_search_server",
     "build_kb_visualize_server",

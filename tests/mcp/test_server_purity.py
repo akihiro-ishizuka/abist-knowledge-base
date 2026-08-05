@@ -21,6 +21,7 @@ def test_importing_server_modules_writes_nothing_to_stdout() -> None:
             "-c",
             "import abist_kb.presentation.mcp.server_core\n"
             "import abist_kb.presentation.mcp.kb_search\n"
+            "import abist_kb.presentation.mcp.kb_admin\n"
             "import abist_kb.presentation.mcp.payloads\n",
         ],
         capture_output=True,

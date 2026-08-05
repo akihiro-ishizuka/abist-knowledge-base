@@ -42,4 +42,16 @@ def error_result(message: str, *, extra: dict[str, Any] | None = None) -> types.
     return tool_result(payload, is_error=True)
 
 
-__all__ = ["dumps_tool_json", "error_result", "ok_result", "tool_result"]
+def app_error_result(exc: Any) -> types.CallToolResult:
+    """`AppError` を MCP 失敗応答へ正規化する唯一の入口。
+
+    `jobs_tools` / `kb_admin` など新規ツールはすべてここ経由にする。
+    """
+    from abist_kb.domain.errors import AppError
+
+    if not isinstance(exc, AppError):
+        raise TypeError(f"AppError 以外は渡せません: {type(exc)!r}")
+    return error_result(exc.message, extra={"code": str(exc.code)})
+
+
+__all__ = ["app_error_result", "dumps_tool_json", "error_result", "ok_result", "tool_result"]

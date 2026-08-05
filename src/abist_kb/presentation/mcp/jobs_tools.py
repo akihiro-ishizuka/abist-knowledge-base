@@ -57,7 +57,7 @@ from abist_kb.infrastructure.db.batches_repo import BatchRepository
 from abist_kb.infrastructure.jobs import leases
 from abist_kb.infrastructure.sources.base import with_docs_prefix
 from abist_kb.presentation.mcp.kb_download import _camelize_batch
-from abist_kb.presentation.mcp.payloads import error_result, ok_result
+from abist_kb.presentation.mcp.payloads import app_error_result, error_result, ok_result
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
     "start_run_batch": (
@@ -363,7 +363,7 @@ def validate_arguments(tool_name: str, arguments: dict[str, Any]) -> types.CallT
 
 
 def _app_error_result(exc: AppError) -> types.CallToolResult:
-    return error_result(exc.message, extra={"code": str(exc.code)})
+    return app_error_result(exc)
 
 
 def _job_to_status_payload(job: Job) -> dict[str, Any]:

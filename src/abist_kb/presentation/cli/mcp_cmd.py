@@ -19,12 +19,18 @@ from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.presentation.cli.context import AppTyper, get_context
 from abist_kb.presentation.console.output import OutputMode
 from abist_kb.presentation.console.presenter import Presenter
-from abist_kb.presentation.mcp.server_core import SERVER_NAMES, build_server, run_http, run_stdio
+from abist_kb.presentation.mcp.server_core import (
+    ALL_SERVER_NAME,
+    KB_ADMIN_SERVER_NAME,
+    SERVER_NAMES,
+    build_server,
+    run_http,
+    run_stdio,
+)
 
-_ALL = "all"
-_VALID_SERVERS = (*SERVER_NAMES, _ALL)
+_VALID_SERVERS = (*SERVER_NAMES, KB_ADMIN_SERVER_NAME, ALL_SERVER_NAME)
 
-mcp_app = AppTyper(help="MCP サーバー(kb-download/kb-search/kb-visualize)の起動。")
+mcp_app = AppTyper(help="MCP サーバー(kb-download/kb-search/kb-visualize/kb-admin/all)の起動。")
 
 
 def _stderr_presenter() -> Presenter:
