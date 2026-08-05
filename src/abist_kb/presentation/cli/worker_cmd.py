@@ -14,9 +14,12 @@ import typer
 
 from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.infrastructure.jobs import leases
+from abist_kb.infrastructure.jobs.builtin_registry import (
+    build_builtin_handlers,
+    build_builtin_resources,
+)
 from abist_kb.infrastructure.jobs.supervisor import WorkerSupervisor
 from abist_kb.presentation.cli.context import AppTyper, get_context
-from abist_kb.presentation.cli.jobs_cmd import BUILTIN_HANDLERS, BUILTIN_RESOURCE_FOR_KIND
 
 worker_app = AppTyper(
     help="ワーカー(リーダー選出・ジョブ実行)の起動と状態確認。", no_args_is_help=True
@@ -34,11 +37,12 @@ def worker_run(
     cli_ctx = get_context(ctx)
     conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
+        handlers = build_builtin_handlers(settings=cli_ctx.settings, conn=conn)
         supervisor = WorkerSupervisor(
             conn,
             owner_id=str(uuid.uuid4()),
-            handlers=BUILTIN_HANDLERS,
-            resource_for_kind=BUILTIN_RESOURCE_FOR_KIND,
+            handlers=handlers,
+            resource_for_kind=build_builtin_resources(),
         )
         if once:
             did_work = supervisor.tick()

@@ -74,9 +74,10 @@ def test_batch_remove_requires_yes_non_interactively(tmp_root):
 
 
 def test_batch_run_submits_and_completes_job(tmp_root):
+    # オフライン完了: 空の web バッチ(ネットワーク不要)。
     added = runner.invoke(
         app,
-        _root_args(tmp_root, "--output", "json", "batch", "add", "--name", "b1", "--type", "esa"),
+        _root_args(tmp_root, "--output", "json", "batch", "add", "--name", "b1", "--type", "web"),
     )
     assert added.exit_code == 0, added.output
     result = runner.invoke(app, _root_args(tmp_root, "--output", "json", "batch", "run", "b1"))

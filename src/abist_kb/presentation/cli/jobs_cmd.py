@@ -5,19 +5,10 @@ Rich 進捗を表示する。`--detach` を指定した場合のみキューへ�
 終了するが、有効な worker heartbeat が無ければ `WORKER_UNAVAILABLE` で失敗する
 (§10.1: 実行されないジョブを放置しない)。
 
-**組み込みジョブ種別について**: 具体的なジョブ種別(sync/batch/索引更新/埋め込み/
-監査/レンダリング)は本タスク(M3 Task 1: 永続ジョブ基盤とリース)の対象外であり、
-後続タスクがそれぞれ `JobHandler` を登録する。ここでは基盤の配線を実演するための
-`noop`(何もしないジョブ、リソースリース不要)だけを組み込みで提供する。
-
-**`BUILTIN_HANDLERS` へハンドラを追加する実装者への注意(fix2)**: 複数回の
-副作用(1件ずつファイルを書く・APIを叩く等)を繰り返すハンドラは、各反復の間で
-`JobRunContext.check_lease()` を呼ぶこと。`run_job`
-(`infrastructure.jobs.execution`)はリース喪失をバックグラウンドで検知するが、
-実行中のハンドラを安全に強制中断できないため、ハンドラ自身が協調的に確認しない
-限り、リースを奪われた後もハンドラが戻ってくるまで副作用を出し続けてしまう
-(`JobRunContext` のクラスdocstring・`run_job` のdocstring参照)。1回きりの
-不可分な操作だけを行うハンドラは呼ばなくてよい。
+組み込みジョブ種別のハンドラは `infrastructure.jobs.builtin_registry` が
+提供する(`noop`/`batch`/`kb_download_*`/`render_scene`)。複数回の副作用を
+繰り返すハンドラは各反復の間で `JobRunContext.check_lease()` を呼ぶこと
+(`JobRunContext` のクラス docstring・`run_job` の docstring 参照)。
 """
 
 from __future__ import annotations
@@ -28,29 +19,23 @@ from typing import Annotated, Any
 import typer
 
 from abist_kb.application.job_service import JobService, ResourceRequirement
-from abist_kb.application.visualization.render_job import (
-    BUILTIN_RENDER_HANDLERS,
-    BUILTIN_RENDER_RESOURCES,
-)
 from abist_kb.domain.job import Job, JobState, ProgressEvent, Severity
 from abist_kb.infrastructure.db.schema import open_app_db
-from abist_kb.infrastructure.jobs.supervisor import JobHandler, JobRunContext
+from abist_kb.infrastructure.jobs.builtin_registry import (
+    build_builtin_handlers,
+    build_builtin_resources,
+)
 from abist_kb.presentation.cli.context import AppTyper, get_context
 from abist_kb.presentation.console.presenter import Presenter
 from abist_kb.presentation.console.progress import progress_scope
 
 jobs_app = AppTyper(help="ジョブの投入・確認・キャンセル・再試行。", no_args_is_help=True)
 
-
-def _noop_handler(run: JobRunContext) -> None:
-    run.emit(phase="noop", current=1, total=1, message="ノーオペレーション完了")
-
-
-#: `noop`(基盤の疎通確認) + `render_scene`(可視化レンダリング、設計書 §10)。
-#: `presentation/web/viewmodels/container.py::WEB_WORKER_HANDLERS` と同じ種別を
-#: 登録する(`worker run` はヘッドレス環境向けの同じ Supervisor 起動経路のため)。
-BUILTIN_HANDLERS: dict[str, JobHandler] = {"noop": _noop_handler, **BUILTIN_RENDER_HANDLERS}
-BUILTIN_RESOURCE_FOR_KIND: dict[str, ResourceRequirement] = dict(BUILTIN_RENDER_RESOURCES)
+#: 後方互換: 設定・接続を閉じ込めたハンドラが必要な呼び出し側は
+#: `build_builtin_handlers(settings=..., conn=...)` を使うこと。
+#: モジュール定数は「登録される種別の集合」の参照用に空の静的表を残さない。
+BUILTIN_HANDLERS: dict[str, Any] = {}
+BUILTIN_RESOURCE_FOR_KIND: dict[str, ResourceRequirement] = build_builtin_resources()
 
 
 def _build_service(settings: Any) -> tuple[JobService, Any]:
@@ -59,10 +44,14 @@ def _build_service(settings: Any) -> tuple[JobService, Any]:
     # 共有するため、単独の版一覧でブートストラップすると呼び出し順序によっては
     # `MIGRATION_FAILED` になる)。
     conn = open_app_db(settings.app_db_path)
+    handlers = build_builtin_handlers(settings=settings, conn=conn)
+    # テストや外部参照向けに最新のハンドラ表を公開する。
+    BUILTIN_HANDLERS.clear()
+    BUILTIN_HANDLERS.update(handlers)
     service = JobService(
         conn,
         owner_id=str(uuid.uuid4()),
-        handlers=BUILTIN_HANDLERS,
+        handlers=handlers,
         resource_for_kind=BUILTIN_RESOURCE_FOR_KIND,
     )
     return service, conn
@@ -103,7 +92,9 @@ def _present_job(presenter: Presenter, job: Job) -> None:
 @jobs_app.command("submit")
 def jobs_submit(
     ctx: typer.Context,
-    kind: Annotated[str, typer.Argument(help="ジョブ種別(組み込み: noop)。")],
+    kind: Annotated[
+        str, typer.Argument(help="ジョブ種別(組み込み: noop/batch/kb_download_*/render_scene)。")
+    ],
     detach: Annotated[
         bool,
         typer.Option(

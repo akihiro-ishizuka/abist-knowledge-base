@@ -194,7 +194,7 @@ def batch_run(
     cli_ctx = get_context(ctx)
     conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
-        service = BatchService(conn)
+        service = BatchService(conn, settings=cli_ctx.settings)
         resolved_id = resolve_batch(service, batch_id)["id"]
         job = service.run(resolved_id)
         if cli_ctx.presenter.is_json:

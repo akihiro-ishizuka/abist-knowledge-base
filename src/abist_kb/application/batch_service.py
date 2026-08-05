@@ -4,12 +4,10 @@
 `import_from_old_config` は `migration.batch_config_parser`(JavaScript を実行しない
 リテラル限定パーサ)を使って読み取るだけの一方向インポートである。
 
-**`run` は M3 Task 3〜5(esa/web/git ソースアダプター)がまだ実装されていない
-現時点では、実際の同期処理を行わない。** `JobService` 経由でジョブ種別 `"batch"`
-を投入する配線だけをここで用意し(§10.2: バッチ・sync は `docs-write` リソース
-リースで全プロセス横断に直列化する)、既定のハンドラは「同期処理は後続タスクで
-実装される」旨を記録して即座に成功として終了する。Task 3〜5 が実ハンドラを
-`BUILTIN_HANDLERS["batch"]` へ差し替える想定。
+**`run` は `infrastructure.jobs.builtin_registry` の共有 `batch` ハンドラ経由で
+`SyncService.sync_batch` を実行する**(`docs-write` リソースリースで全プロセス横断に
+直列化、§10.2)。UI detach (`{"batch_id"}`) と MCP `start_run_batch` (`{"batch"}`)
+も同じハンドラを使う。
 """
 
 from __future__ import annotations
@@ -20,12 +18,12 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from abist_kb.config import Settings, load_settings
 from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.domain.job import Job, ResourceKind
 from abist_kb.domain.metadata_schema import safe_batch_name
 from abist_kb.infrastructure.db import audit
 from abist_kb.infrastructure.db.batches_repo import BatchRepository
-from abist_kb.infrastructure.jobs.supervisor import JobRunContext
 from abist_kb.migration.batch_config_parser import parse_batch_config
 
 ConfirmFn = Callable[[str], bool]
@@ -50,23 +48,11 @@ _GIT_OPTION_KEY_MAP: dict[str, str] = {
 }
 
 
-def _batch_run_handler(run: JobRunContext) -> None:
-    run.emit(
-        phase="batch-run",
-        current=1,
-        total=1,
-        message=(
-            "バッチの実同期処理は M3 Task 3〜5(esa/web/git ソースアダプター)で"
-            "実装されます。このジョブはジョブ基盤の配線確認のみを行いました。"
-        ),
-    )
-
-
-#: `JobService(handlers=...)` へそのまま渡せる既定ハンドラ。
-BUILTIN_BATCH_HANDLERS: dict[str, Any] = {"batch": _batch_run_handler}
-#: `JobService(resource_for_kind=...)` へそのまま渡せる既定リソース要求。
+#: 後方互換のエイリアス。実ハンドラは `build_builtin_handlers` が組み立てる。
+#: リソース要求だけは settings 非依存なので静的に公開する。
 BUILTIN_BATCH_RESOURCES: dict[str, tuple[ResourceKind, str | None]] = {
-    "batch": (ResourceKind.DOCS_WRITE, None)
+    "batch": (ResourceKind.DOCS_WRITE, None),
+    "kb_download_batch": (ResourceKind.DOCS_WRITE, None),
 }
 
 
@@ -91,9 +77,10 @@ def _job_to_dict(job: Job) -> dict[str, Any]:
 class BatchService:
     """`BatchRepository` を包み、確認・監査・一方向インポート・実行を提供する。"""
 
-    def __init__(self, conn: sqlite3.Connection) -> None:
+    def __init__(self, conn: sqlite3.Connection, *, settings: Settings | None = None) -> None:
         self._conn = conn
         self._repo = BatchRepository(conn)
+        self._settings = settings
 
     # -- CRUD -------------------------------------------------------------
 
@@ -194,26 +181,45 @@ class BatchService:
 
     # -- 実行 -------------------------------------------------------------
 
-    def run(self, batch_id: str, *, owner_id: str | None = None) -> dict[str, Any]:
+    def run(
+        self,
+        batch_id: str,
+        *,
+        owner_id: str | None = None,
+        settings: Settings | None = None,
+    ) -> dict[str, Any]:
         """バッチの実行ジョブを投入し、完了まで同期実行する(CLI 既定の契約)。
 
-        実同期処理は M3 Task 3〜5 が `BUILTIN_BATCH_HANDLERS["batch"]` を
-        差し替えるまでの間、モジュール docstring の既定ハンドラが応答する。
+        実同期は共有レジストリの `batch` ハンドラ(`SyncService.sync_batch`)が行う。
         """
         self.show(batch_id)  # NOT_FOUND を先に出す
 
         # ローカル import: `application.job_service` は `infrastructure.jobs` へ
         # 依存するため、他サービスから常時 import すると循環しやすい箇所を避ける。
         from abist_kb.application.job_service import JobService
+        from abist_kb.infrastructure.jobs.builtin_registry import (
+            build_builtin_handlers,
+            build_builtin_resources,
+        )
 
+        effective = settings or self._settings
+        if effective is None:
+            effective = load_settings()
+
+        handlers = build_builtin_handlers(settings=effective, conn=self._conn)
         job_service = JobService(
             self._conn,
             owner_id=owner_id or str(uuid.uuid4()),
-            handlers=BUILTIN_BATCH_HANDLERS,
-            resource_for_kind=BUILTIN_BATCH_RESOURCES,
+            handlers=handlers,
+            resource_for_kind=build_builtin_resources(),
         )
         job = job_service.run_inline("batch", {"batch_id": batch_id})
         return _job_to_dict(job)
+
+
+#: 後方互換: 実ハンドラは settings+conn が必要なため、モジュール定数は空。
+#: 呼び出し側は `BatchService.run` または `build_builtin_handlers` を使うこと。
+BUILTIN_BATCH_HANDLERS: dict[str, Any] = {}
 
 
 __all__ = [

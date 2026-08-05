@@ -18,11 +18,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from abist_kb.application.batch_service import (
-    BUILTIN_BATCH_HANDLERS,
-    BUILTIN_BATCH_RESOURCES,
-    BatchService,
-)
+from abist_kb.application.batch_service import BatchService
 from abist_kb.application.chat_service import ChatService
 from abist_kb.application.document_service import DocumentService
 from abist_kb.application.index_service import IndexService, run_index_inline
@@ -30,34 +26,24 @@ from abist_kb.application.job_service import JobService
 from abist_kb.application.search_service import SearchService
 from abist_kb.application.source_service import SourceService
 from abist_kb.application.sync_service import run_sync_inline
-from abist_kb.application.visualization.render_job import (
-    BUILTIN_RENDER_HANDLERS,
-    BUILTIN_RENDER_RESOURCES,
-)
 from abist_kb.config import Settings
 from abist_kb.infrastructure.ai.chat_provider import OpenAIChatProvider
 from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.infrastructure.jobs import events as events_mod
+from abist_kb.infrastructure.jobs.builtin_registry import (
+    build_builtin_handlers,
+    build_builtin_resources,
+)
 from abist_kb.infrastructure.jobs.supervisor import JobHandler, WorkerSupervisor
 
 #: Web の常駐ワーカー(`WorkerSupervisor`)がキューから消費できるジョブ種別。
-#: `noop`(基盤の疎通確認) + `batch`(バッチ実行) + `render_scene`(可視化レンダ
-#: リング、設計書 §10)。sync/index-build/index-embed は CLI と同じく操作の都度
-#: `run_sync_inline`/`run_index_inline` がその場で専用の `JobService` を組み立て
-#: て `docs-write`/`corpus-write:<corpus>` リースを取るため
-#: (`application/sync_service.py::run_sync_inline`, `application/index_service.py::
-#: run_index_inline` を参照)、常駐ワーカーの静的ハンドラ表には含めない。CLI の
-#: `worker run`(`presentation/cli/worker_cmd.py`)も同じ種別を登録する
-#: (`presentation/cli/jobs_cmd.py::BUILTIN_HANDLERS`)。
-WEB_WORKER_HANDLERS: dict[str, JobHandler] = {**BUILTIN_BATCH_HANDLERS, **BUILTIN_RENDER_HANDLERS}
-WEB_WORKER_RESOURCES: dict[str, Any] = {**BUILTIN_BATCH_RESOURCES, **BUILTIN_RENDER_RESOURCES}
-
-
-def _noop_handler(run: Any) -> None:
-    run.emit(phase="noop", current=1, total=1, message="ノーオペレーション完了")
-
-
-WEB_WORKER_HANDLERS["noop"] = _noop_handler
+#: `infrastructure.jobs.builtin_registry` と同じ集合
+#: (`noop`/`batch`/`kb_download_*`/`render_scene`)。モジュール属性名は
+#: 既存テスト互換のため残し、実体は `ServiceContainer.build_worker_supervisor`
+#: が settings+conn で組み立てる(ここではリソース表のみ静的に公開する)。
+WEB_WORKER_RESOURCES: dict[str, Any] = build_builtin_resources()
+#: 遅延初期化前のプレースホルダ。実ハンドラは `build_worker_supervisor` が入れる。
+WEB_WORKER_HANDLERS: dict[str, JobHandler] = {}
 
 
 class ServiceContainer:
@@ -94,7 +80,7 @@ class ServiceContainer:
         self.event_bus = events_mod.EventBus()
 
         self.sources = SourceService(self.conn, settings=settings)
-        self.batches = BatchService(self.conn)
+        self.batches = BatchService(self.conn, settings=settings)
         self.documents = DocumentService(self.conn)
         self.search = SearchService(
             docs_dir=settings.docs_dir,
@@ -178,10 +164,14 @@ class ServiceContainer:
         リクエスト処理用の `self.conn` と共有しない)。
         """
         supervisor_conn = open_app_db(self.settings.app_db_path)
+        handlers = build_builtin_handlers(settings=self.settings, conn=supervisor_conn)
+        # テストが `WEB_WORKER_HANDLERS` 名で参照できるように最新表を公開する。
+        WEB_WORKER_HANDLERS.clear()
+        WEB_WORKER_HANDLERS.update(handlers)
         return WorkerSupervisor(
             supervisor_conn,
             owner_id=self.owner_id,
-            handlers=WEB_WORKER_HANDLERS,
+            handlers=handlers,
             resource_for_kind=WEB_WORKER_RESOURCES,
         )
 

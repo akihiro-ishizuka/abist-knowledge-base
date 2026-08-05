@@ -11,9 +11,10 @@ from pathlib import Path
 import pytest
 
 from abist_kb.application.batch_service import BatchService
+from abist_kb.config import Settings
 from abist_kb.domain.errors import AppError, ErrorCode
-from abist_kb.infrastructure.db.connection import connect
-from abist_kb.infrastructure.db.schema import ensure_app_schema
+from abist_kb.infrastructure.db.schema import open_app_db
+
 
 _SAMPLE_BATCH_CONFIG_JS = """#!/usr/bin/env node
 
@@ -41,9 +42,10 @@ export const batchConfigs = {
 
 @pytest.fixture
 def service(tmp_root: Path) -> BatchService:
-    conn = connect(tmp_root / "app.sqlite")
-    ensure_app_schema(conn)
-    return BatchService(conn)
+    settings = Settings(root_dir=tmp_root, _env_file=None)
+    settings.ensure_directories()
+    conn = open_app_db(settings.app_db_path)
+    return BatchService(conn, settings=settings)
 
 
 def test_add_and_show(service: BatchService) -> None:
@@ -119,7 +121,8 @@ def test_import_from_old_config_rejects_unsupported_syntax(
 
 
 def test_run_submits_job_via_job_service(service: BatchService) -> None:
-    created = service.add(name="b", type="esa", output_dir="docs/b", items=[{"target": "cat1"}])
+    # オフラインで完了する空の web バッチ(アイテム無し → SyncService が即成功)。
+    created = service.add(name="b", type="web", output_dir="docs/b", items=[])
     job = service.run(created["id"])
     assert job["kind"] == "batch"
     assert job["params"]["batch_id"] == created["id"]
