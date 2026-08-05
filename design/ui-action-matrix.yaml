@@ -112,9 +112,14 @@ screens:
     label: 品質
     actions:
       quality_run_integrity:
-        label: 整合性監査
+        label: 整合性監査（読取専用）
         destructive: false
         surfaces: [mcp, api]
+      quality_apply_integrity_updates:
+        label: 整合性監査の DB 更新適用
+        destructive: true
+        surfaces: [mcp]
+        api_omitted_reason: API は update_db クエリで別契約。MCP は専用破壊的ツールに分離
       quality_run_duplicates:
         label: 重複監査
         destructive: false
@@ -123,10 +128,21 @@ screens:
         label: 矛盾候補監査
         destructive: false
         surfaces: [mcp, api]
-      quality_run_backfill_metadata:
-        label: メタデータ補完監査（apply=false / dry-run）
+      quality_preview_backfill_metadata:
+        label: メタデータ補完 preview（dry-run）
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
+        api_omitted_reason: API は quality_run_backfill_metadata(apply=false) で同等
+      quality_apply_backfill_metadata:
+        label: メタデータ補完の適用
+        destructive: true
+        surfaces: [mcp]
+        api_omitted_reason: API は apply+confirmed クエリで別契約。MCP は専用破壊的ツールに分離
+      quality_run_backfill_metadata:
+        label: "メタデータ補完監査（API: apply=false 既定）"
+        destructive: false
+        surfaces: [api]
+        mcp_omitted_reason: MCP では preview/apply ツールに分離済み
 
   settings:
     label: 設定・診断

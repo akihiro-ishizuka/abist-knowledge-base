@@ -19,6 +19,7 @@ import mcp.types as types
 from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 
+from abist_kb.config import Settings, load_settings
 from abist_kb.presentation.mcp.jobs_tools import JobTools
 from abist_kb.presentation.mcp.jobs_tools import list_tools as jobs_list_tools
 from abist_kb.presentation.mcp.jobs_tools import validate_arguments as validate_jobs_arguments
@@ -48,6 +49,23 @@ ALL_SERVER_NAME = "all"
 KB_ADMIN_SERVER_NAME = "kb-admin"
 
 _SERVER_VERSION = "1.0.0"
+
+
+def _resolve_settings(
+    *,
+    settings: Settings | None,
+    root_dir: Path | None,
+) -> Settings:
+    """CLI でロード済みの Settings を優先し、無ければ `load_settings(root=...)`。
+
+    `Settings(...)` をパスだけ渡して作り直すと、カレントの `.env` を読んでしまい
+    `--root` 配下の OpenAI/esa/Git 資格情報を取り違える。
+    """
+    if settings is not None:
+        return settings
+    loaded = load_settings(root=root_dir if root_dir is not None else Path.cwd())
+    loaded.ensure_directories()
+    return loaded
 
 
 def build_kb_search_server(
@@ -184,32 +202,61 @@ def build_kb_visualize_server(
     return server
 
 
+def _settings_for_admin(
+    *,
+    settings: Settings | None,
+    root_dir: Path | None,
+    docs_dir: Path | None = None,
+    work_index_path: Path | None = None,
+    reference_index_path: Path | None = None,
+    app_db_path: Path | None = None,
+    reports_dir: Path | None = None,
+) -> Settings:
+    """資格情報は `settings` / `load_settings(root=...)` から取り、パスのみ上書き可。"""
+    resolved = _resolve_settings(settings=settings, root_dir=root_dir)
+    updates: dict[str, Any] = {}
+    if root_dir is not None:
+        updates["root_dir"] = root_dir
+    if docs_dir is not None:
+        updates["docs_dir"] = docs_dir
+    if work_index_path is not None:
+        updates["work_index_path"] = work_index_path
+    if reference_index_path is not None:
+        updates["reference_index_path"] = reference_index_path
+    if app_db_path is not None:
+        updates["app_db_path"] = app_db_path
+    if reports_dir is not None:
+        updates["reports_dir"] = reports_dir
+    if updates:
+        resolved = resolved.model_copy(update=updates)
+    resolved.ensure_directories()
+    return resolved
+
+
 def build_kb_admin_server(
     *,
-    docs_dir: Path,
-    work_index_path: Path,
-    reference_index_path: Path,
-    app_db_path: Path,
+    docs_dir: Path | None = None,
+    work_index_path: Path | None = None,
+    reference_index_path: Path | None = None,
+    app_db_path: Path | None = None,
     root_dir: Path | None = None,
     reports_dir: Path | None = None,
+    settings: Settings | None = None,
 ) -> Server[Any, Any]:
     """kb-admin サーバー(管理操作ツール群)を組み立てる。"""
-    from abist_kb.config import Settings
     from abist_kb.presentation.common.container import ServiceContainer
 
     server: Server[Any, Any] = Server(KB_ADMIN_SERVER_NAME, version=_SERVER_VERSION)
-    resolved_root = root_dir if root_dir is not None else Path.cwd()
-    resolved_reports = reports_dir if reports_dir is not None else (resolved_root / "reports")
-    settings = Settings(
-        root_dir=resolved_root,
+    resolved = _settings_for_admin(
+        settings=settings,
+        root_dir=root_dir,
         docs_dir=docs_dir,
-        reports_dir=resolved_reports,
-        app_db_path=app_db_path,
         work_index_path=work_index_path,
         reference_index_path=reference_index_path,
+        app_db_path=app_db_path,
+        reports_dir=reports_dir,
     )
-    settings.ensure_directories()
-    container = ServiceContainer(settings)
+    container = ServiceContainer(resolved)
     tools = KbAdminTools(container)
     handlers = kb_admin_handlers(tools)
 
@@ -232,70 +279,66 @@ def build_kb_admin_server(
 
 def build_all_server(
     *,
-    docs_dir: Path,
-    work_index_path: Path,
-    reference_index_path: Path,
-    app_db_path: Path,
+    docs_dir: Path | None = None,
+    work_index_path: Path | None = None,
+    reference_index_path: Path | None = None,
+    app_db_path: Path | None = None,
     root_dir: Path | None = None,
     reports_dir: Path | None = None,
     missing_threshold: int | None = None,
+    settings: Settings | None = None,
 ) -> Server[Any, Any]:
     """`all` サーバー: 互換3(kb-search/kb-download/kb-visualize) + jobs 拡張 +
     kb-admin を同一プロセスで公開する。互換3の list_tools / スキーマ / 応答は
     変更しない(additions only)。
     """
-    from abist_kb.config import Settings
     from abist_kb.infrastructure.db.schema import open_app_db
     from abist_kb.infrastructure.sources.esa import DEFAULT_MISSING_THRESHOLD
     from abist_kb.presentation.common.container import ServiceContainer
 
     server: Server[Any, Any] = Server(ALL_SERVER_NAME, version=_SERVER_VERSION)
-    conn: sqlite3.Connection = open_app_db(app_db_path)
-
-    resolved_root_dir = root_dir if root_dir is not None else Path.cwd()
-    resolved_reports_dir = (
-        reports_dir if reports_dir is not None else (resolved_root_dir / "reports")
-    )
-
-    search_tools = KbSearchTools(
+    resolved = _settings_for_admin(
+        settings=settings,
+        root_dir=root_dir,
         docs_dir=docs_dir,
         work_index_path=work_index_path,
         reference_index_path=reference_index_path,
+        app_db_path=app_db_path,
+        reports_dir=reports_dir,
+    )
+    conn: sqlite3.Connection = open_app_db(resolved.app_db_path)  # type: ignore[arg-type]
+    threshold = missing_threshold if missing_threshold is not None else resolved.missing_threshold
+    if threshold is None:
+        threshold = DEFAULT_MISSING_THRESHOLD
+
+    search_tools = KbSearchTools(
+        docs_dir=resolved.docs_dir,  # type: ignore[arg-type]
+        work_index_path=resolved.work_index_path,  # type: ignore[arg-type]
+        reference_index_path=resolved.reference_index_path,  # type: ignore[arg-type]
     )
     download_tools = KbDownloadTools(
         conn,
-        root_dir=root_dir,
-        docs_dir=docs_dir,
-        reports_dir=reports_dir,
-        missing_threshold=(
-            missing_threshold if missing_threshold is not None else DEFAULT_MISSING_THRESHOLD
-        ),
+        root_dir=resolved.root_dir,
+        docs_dir=resolved.docs_dir,
+        reports_dir=resolved.reports_dir,
+        missing_threshold=threshold,
     )
     visualize_tools = KbVisualizeTools(
         conn,
-        docs_dir=docs_dir,
-        reports_dir=resolved_reports_dir / "visualizations",
-        repo_root=resolved_root_dir,
+        docs_dir=resolved.docs_dir,  # type: ignore[arg-type]
+        reports_dir=resolved.reports_dir / "visualizations",  # type: ignore[operator]
+        repo_root=resolved.root_dir,
     )
     job_tools = JobTools(
         conn,
-        docs_dir=docs_dir,
-        app_db_path=app_db_path,
-        work_index_path=work_index_path,
-        reference_index_path=reference_index_path,
-        reports_dir=resolved_reports_dir,
-        repo_root=resolved_root_dir,
+        docs_dir=resolved.docs_dir,  # type: ignore[arg-type]
+        app_db_path=resolved.app_db_path,  # type: ignore[arg-type]
+        work_index_path=resolved.work_index_path,  # type: ignore[arg-type]
+        reference_index_path=resolved.reference_index_path,  # type: ignore[arg-type]
+        reports_dir=resolved.reports_dir,  # type: ignore[arg-type]
+        repo_root=resolved.root_dir,
     )
-    admin_settings = Settings(
-        root_dir=resolved_root_dir,
-        docs_dir=docs_dir,
-        reports_dir=resolved_reports_dir,
-        app_db_path=app_db_path,
-        work_index_path=work_index_path,
-        reference_index_path=reference_index_path,
-    )
-    admin_settings.ensure_directories()
-    admin_tools = KbAdminTools(ServiceContainer(admin_settings))
+    admin_tools = KbAdminTools(ServiceContainer(resolved))
 
     handlers: dict[str, Any] = {
         "search_kb": search_tools.search_kb,
@@ -363,16 +406,34 @@ def build_all_server(
 def build_server(
     name: str,
     *,
-    docs_dir: Path,
-    work_index_path: Path,
-    reference_index_path: Path,
+    settings: Settings | None = None,
+    docs_dir: Path | None = None,
+    work_index_path: Path | None = None,
+    reference_index_path: Path | None = None,
     app_db_path: Path | None = None,
     root_dir: Path | None = None,
     reports_dir: Path | None = None,
     missing_threshold: int | None = None,
 ) -> Server[Any, Any]:
-    """サーバー名から `Server` を組み立てる。"""
+    """サーバー名から `Server` を組み立てる。
+
+    `settings` を渡すと `--root` 配下の `.env` 資格情報をそのまま使う
+    (CLI `mcp serve` の推奨経路)。パス引数だけ渡す場合は
+    `load_settings(root=root_dir)` でルート配下の `.env` を読む。
+    """
+    if settings is not None:
+        docs_dir = docs_dir or settings.docs_dir
+        work_index_path = work_index_path or settings.work_index_path
+        reference_index_path = reference_index_path or settings.reference_index_path
+        app_db_path = app_db_path or settings.app_db_path
+        root_dir = root_dir or settings.root_dir
+        reports_dir = reports_dir or settings.reports_dir
+        if missing_threshold is None:
+            missing_threshold = settings.missing_threshold
+
     if name == "kb-search":
+        if docs_dir is None or work_index_path is None or reference_index_path is None:
+            raise ValueError("kb-search サーバーには docs_dir / index paths が必要です")
         return build_kb_search_server(
             docs_dir=docs_dir,
             work_index_path=work_index_path,
@@ -398,8 +459,6 @@ def build_server(
             reports_dir=reports_dir,
         )
     if name == KB_ADMIN_SERVER_NAME:
-        if app_db_path is None:
-            raise ValueError("kb-admin サーバーには app_db_path が必要です")
         return build_kb_admin_server(
             docs_dir=docs_dir,
             work_index_path=work_index_path,
@@ -407,10 +466,9 @@ def build_server(
             app_db_path=app_db_path,
             root_dir=root_dir,
             reports_dir=reports_dir,
+            settings=settings,
         )
     if name == ALL_SERVER_NAME:
-        if app_db_path is None:
-            raise ValueError("'all' サーバーには app_db_path が必要です")
         return build_all_server(
             docs_dir=docs_dir,
             work_index_path=work_index_path,
@@ -419,6 +477,7 @@ def build_server(
             root_dir=root_dir,
             reports_dir=reports_dir,
             missing_threshold=missing_threshold,
+            settings=settings,
         )
     raise NotImplementedError(
         f"未知のサーバー名です: '{name}'"

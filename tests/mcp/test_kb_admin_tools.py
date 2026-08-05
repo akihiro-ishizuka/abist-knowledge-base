@@ -67,21 +67,32 @@ def test_list_tools_includes_required_admin_names() -> None:
         "chat_ask",
         "chat_history",
         "quality_run_integrity",
+        "quality_apply_integrity_updates",
         "quality_run_duplicates",
         "quality_run_contradictions",
-        "quality_run_backfill_metadata",
+        "quality_preview_backfill_metadata",
+        "quality_apply_backfill_metadata",
         "visualization_validate",
     }
     assert required <= names
     assert "cancel_job" not in names  # jobs_tools 側に既にあるため重複しない
+    assert "quality_run_backfill_metadata" not in names
 
 
 def test_destructive_tools_have_destructive_hint() -> None:
     by_name = {tool.name: tool for tool in kb_admin.list_tools()}
-    for name in ("source_remove", "batch_remove", "document_delete"):
+    for name in (
+        "source_remove",
+        "batch_remove",
+        "document_delete",
+        "quality_apply_integrity_updates",
+        "quality_apply_backfill_metadata",
+    ):
         anns = by_name[name].annotations
         assert anns is not None
         assert anns.destructiveHint is True
+    assert by_name["quality_run_integrity"].annotations is None
+    assert by_name["quality_preview_backfill_metadata"].annotations is None
 
 
 # ---------------------------------------------------------------------------
@@ -291,10 +302,174 @@ def test_quality_run_integrity_smoke(
     tools: tuple[KbAdminTools, ServiceContainer],
 ) -> None:
     admin, _container = tools
-    result = _payload(admin.quality_run_integrity({"update_db": False}))
+    result = _payload(admin.quality_run_integrity({}))
     assert result["ok"] is True
     assert "run_id" in result
     assert "totals" in result
+
+
+def test_quality_apply_integrity_requires_confirm(
+    tools: tuple[KbAdminTools, ServiceContainer],
+) -> None:
+    admin, _container = tools
+    preview = _payload(admin.quality_apply_integrity_updates({}))
+    assert preview["ok"] is True
+    assert preview.get("preview") is True
+
+    mismatch = _payload(
+        admin.quality_apply_integrity_updates({"confirmed": True, "confirm_action": "wrong"})
+    )
+    assert mismatch["ok"] is False
+    assert mismatch["code"] == "INVALID_INPUT"
+
+    applied = _payload(
+        admin.quality_apply_integrity_updates(
+            {"confirmed": True, "confirm_action": "apply_integrity_updates"}
+        )
+    )
+    assert applied["ok"] is True
+    assert applied.get("applied") is True
+
+
+def test_quality_apply_backfill_requires_confirm(
+    tools: tuple[KbAdminTools, ServiceContainer],
+) -> None:
+    admin, _container = tools
+    preview = _payload(admin.quality_apply_backfill_metadata({}))
+    assert preview["ok"] is True
+    assert preview.get("preview") is True
+
+    mismatch = _payload(
+        admin.quality_apply_backfill_metadata({"confirmed": True, "confirm_action": "nope"})
+    )
+    assert mismatch["ok"] is False
+
+    # dry-run preview tool always non-destructive
+    dry = _payload(admin.quality_preview_backfill_metadata({}))
+    assert dry["ok"] is True
+    assert dry.get("preview") is True
+
+
+def test_batch_and_source_edit_named_fields(
+    tools: tuple[KbAdminTools, ServiceContainer],
+) -> None:
+    admin, container = tools
+    src = container.sources.add(
+        type="web",
+        display_name="Old",
+        connection={"url": "https://example.com"},
+        output_dir="docs/old",
+    )
+    empty = _payload(admin.source_edit({"source_id": src["id"]}))
+    assert empty["ok"] is False
+    assert empty["code"] == "INVALID_INPUT"
+
+    edited = _payload(admin.source_edit({"source_id": src["id"], "display_name": "NewName"}))
+    assert edited["ok"] is True
+    assert edited["source"]["display_name"] == "NewName"
+    assert container.sources.get(src["id"])["display_name"] == "NewName"
+
+    batch = container.batches.add(name="b1", type="web", output_dir="docs/b1", items=[])
+    empty_b = _payload(admin.batch_edit({"batch_id": batch["id"]}))
+    assert empty_b["ok"] is False
+
+    edited_b = _payload(admin.batch_edit({"batch_id": batch["id"], "name": "b2", "enabled": False}))
+    assert edited_b["ok"] is True
+    assert edited_b["batch"]["name"] == "b2"
+    assert edited_b["batch"]["enabled"] is False
+    shown = container.batches.show(batch["id"])
+    assert shown["name"] == "b2"
+    assert shown["enabled"] is False
+
+    # unknown keys rejected by schema
+    bad = kb_admin.validate_arguments(
+        "batch_edit", {"batch_id": batch["id"], "fields": {"name": "x"}}
+    )
+    assert bad is not None
+
+
+def test_chat_ask_returns_citations(
+    tools: tuple[KbAdminTools, ServiceContainer], tmp_root: Path
+) -> None:
+    from abist_kb.application.chat_service import ChatService
+    from abist_kb.infrastructure.ai.chat_provider import ChatChunk, RawCitation
+
+    admin, container = tools
+    doc = tmp_root / "docs" / "note.md"
+    doc.parent.mkdir(parents=True, exist_ok=True)
+    doc.write_text("line1\nline2\nline3\n", encoding="utf-8")
+
+    class _FakeProvider:
+        def stream(self, *, system, messages, context):  # noqa: ANN001
+            yield ChatChunk(delta="根拠付き回答です。", done=False)
+            yield ChatChunk(
+                done=True,
+                citations=(RawCitation(path="note.md", start_line=1, end_line=2),),
+            )
+
+    class _FakeSearch:
+        def search(self, *args, **kwargs):  # noqa: ANN002, ANN003
+            return {"ok": True, "count": 0, "results": [], "diagnostics": {}, "note": ""}
+
+    container._chat = ChatService(  # noqa: SLF001 - テスト用差し替え
+        container.conn,
+        search_service=_FakeSearch(),  # type: ignore[arg-type]
+        provider=_FakeProvider(),
+        docs_dir=container.settings.docs_dir,
+    )
+
+    started = _payload(admin.chat_start({"title": "t"}))
+    assert started["ok"] is True
+    asked = _payload(
+        admin.chat_ask({"conversation_id": started["conversation_id"], "question": "何？"})
+    )
+    assert asked["ok"] is True, asked
+    assert "根拠付き回答" in asked["text"]
+    assert asked["citations"]
+    assert asked["citations"][0]["path"] == "note.md"
+    assert asked["citations"][0]["valid"] is True
+
+
+def test_kb_admin_uses_root_env_for_openai_key(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`--root` 配下の .env が Settings 経由で chat に届くこと。"""
+    import os
+
+    from abist_kb.config import load_settings
+    from abist_kb.presentation.mcp.server_core import build_kb_admin_server
+
+    # CWD 側に偽キーを置いても root 側が優先されること
+    cwd_env = tmp_path / "cwd"
+    root = tmp_path / "kb-root"
+    cwd_env.mkdir()
+    root.mkdir()
+    (root / "docs").mkdir()
+    (root / "data").mkdir()
+    (root / ".env").write_text("ABIST_KB_OPENAI_API_KEY=root-secret-key\n", encoding="utf-8")
+    (cwd_env / ".env").write_text("ABIST_KB_OPENAI_API_KEY=cwd-wrong-key\n", encoding="utf-8")
+
+    monkeypatch.chdir(cwd_env)
+    # プロセス環境に残っているキーを消す
+    monkeypatch.delenv("ABIST_KB_OPENAI_API_KEY", raising=False)
+    for key in list(os.environ):
+        if key.startswith("ABIST_KB_"):
+            monkeypatch.delenv(key, raising=False)
+
+    settings = load_settings(root=root)
+    assert settings.openai_api_key == "root-secret-key"
+
+    settings.ensure_directories()
+    open_app_db(settings.app_db_path)
+    server = build_kb_admin_server(settings=settings)
+    assert server.name == "kb-admin"
+
+    # Settings 再構築ではなく渡した settings のキーが Container に載ること
+    from abist_kb.presentation.common.container import ServiceContainer
+
+    container = ServiceContainer(settings)
+    assert container.settings.openai_api_key == "root-secret-key"
+    assert container.chat is not None
 
 
 def test_visualization_validate_invalid_spec(

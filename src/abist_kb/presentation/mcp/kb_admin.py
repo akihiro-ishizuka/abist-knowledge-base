@@ -99,12 +99,17 @@ def list_tools() -> list[types.Tool]:
         ),
         _tool(
             "source_edit",
-            "ソースを編集する。",
+            "ソースを編集する。更新する項目を名前付き引数で渡す"
+            "(display_name/connection/output_dir/enabled)。未知キーは拒否。"
+            "更新項目が0件なら INVALID_INPUT。",
             {
                 "source_id": {"type": "string", "minLength": 1},
-                "fields": {"type": "object", "additionalProperties": True},
+                "display_name": {"type": "string", "minLength": 1},
+                "connection": {"type": "object", "additionalProperties": True},
+                "output_dir": {"type": "string", "minLength": 1},
+                "enabled": {"type": "boolean"},
             },
-            required=["source_id", "fields"],
+            required=["source_id"],
         ),
         _tool(
             "source_remove",
@@ -139,12 +144,18 @@ def list_tools() -> list[types.Tool]:
         ),
         _tool(
             "batch_edit",
-            "バッチを編集する。",
+            "バッチを編集する。更新する項目を名前付き引数で渡す"
+            "(name/type/output_dir/enabled/items)。未知キーは拒否。"
+            "更新項目が0件なら INVALID_INPUT。",
             {
                 "batch_id": {"type": "string", "minLength": 1},
-                "fields": {"type": "object", "additionalProperties": True},
+                "name": {"type": "string", "minLength": 1},
+                "type": {"type": "string", "minLength": 1},
+                "output_dir": {"type": "string"},
+                "enabled": {"type": "boolean"},
+                "items": {"type": "array", "items": {"type": "object"}},
             },
-            required=["batch_id", "fields"],
+            required=["batch_id"],
         ),
         _tool(
             "batch_remove",
@@ -241,8 +252,18 @@ def list_tools() -> list[types.Tool]:
         ),
         _tool(
             "quality_run_integrity",
-            "整合性監査を実行する(既定は DB 非更新)。",
-            {"update_db": {"type": "boolean"}},
+            "整合性監査を読取専用で実行する(DB は更新しない)。",
+            {},
+        ),
+        _tool(
+            "quality_apply_integrity_updates",
+            "整合性監査の DB 更新を適用する。confirmed 無しは preview(読取)のみ。"
+            "適用時は confirmed=true と confirm_action='apply_integrity_updates' が必要。",
+            {
+                "confirmed": {"type": "boolean"},
+                "confirm_action": {"type": "string"},
+            },
+            destructive=True,
         ),
         _tool(
             "quality_run_duplicates",
@@ -251,12 +272,19 @@ def list_tools() -> list[types.Tool]:
         ),
         _tool("quality_run_contradictions", "矛盾候補監査を実行する。", {}),
         _tool(
-            "quality_run_backfill_metadata",
-            "メタデータ補完監査。既定は dry-run。apply=true は confirmed=true が必要。",
+            "quality_preview_backfill_metadata",
+            "メタデータ補完の dry-run(ファイル/DB へ書かない)。",
+            {},
+        ),
+        _tool(
+            "quality_apply_backfill_metadata",
+            "メタデータ補完を適用する。confirmed 無しは preview(dry-run)のみ。"
+            "適用時は confirmed=true と confirm_action='apply_backfill_metadata' が必要。",
             {
-                "apply": {"type": "boolean"},
                 "confirmed": {"type": "boolean"},
+                "confirm_action": {"type": "string"},
             },
+            destructive=True,
         ),
         _tool(
             "visualization_validate",
@@ -317,6 +345,27 @@ def _require_confirm_match(
     return None
 
 
+_SOURCE_EDIT_KEYS = ("display_name", "connection", "output_dir", "enabled")
+_BATCH_EDIT_KEYS = ("name", "type", "output_dir", "enabled", "items")
+_CONFIRM_INTEGRITY = "apply_integrity_updates"
+_CONFIRM_BACKFILL = "apply_backfill_metadata"
+
+
+def _pick_named_updates(
+    arguments: dict[str, Any], keys: tuple[str, ...]
+) -> dict[str, Any] | types.CallToolResult:
+    fields = {key: arguments[key] for key in keys if key in arguments}
+    if not fields:
+        return app_error_result(
+            AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message="更新する項目がありません。"
+                f"次のいずれかを指定してください: {', '.join(keys)}",
+            )
+        )
+    return fields
+
+
 class KbAdminTools:
     """kb-admin ツール実装。Application Service を直接呼ぶ。"""
 
@@ -342,8 +391,11 @@ class KbAdminTools:
         return ok_result({"ok": True, "source": source})
 
     def source_edit(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        fields = _pick_named_updates(arguments, _SOURCE_EDIT_KEYS)
+        if isinstance(fields, types.CallToolResult):
+            return fields
         try:
-            source = self._c.sources.edit(arguments["source_id"], **arguments["fields"])
+            source = self._c.sources.edit(arguments["source_id"], **fields)
         except AppError as exc:
             return app_error_result(exc)
         return ok_result({"ok": True, "source": source})
@@ -413,8 +465,11 @@ class KbAdminTools:
         return ok_result({"ok": True, "batch": batch})
 
     def batch_edit(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        fields = _pick_named_updates(arguments, _BATCH_EDIT_KEYS)
+        if isinstance(fields, types.CallToolResult):
+            return fields
         try:
-            batch = self._c.batches.edit(arguments["batch_id"], **arguments["fields"])
+            batch = self._c.batches.edit(arguments["batch_id"], **fields)
         except AppError as exc:
             return app_error_result(exc)
         return ok_result({"ok": True, "batch": batch})
@@ -653,14 +708,53 @@ class KbAdminTools:
 
     # -- quality --------------------------------------------------------------
 
-    def quality_run_integrity(self, arguments: dict[str, Any]) -> types.CallToolResult:
-        update_db = bool(arguments.get("update_db", False))
+    def quality_run_integrity(self, _arguments: dict[str, Any]) -> types.CallToolResult:
         result = VerifyIntegrityService(self._c.conn, docs_dir=self._c.settings.docs_dir).run(
-            update_db=update_db
+            update_db=False
         )
         return ok_result(
             {
                 "ok": True,
+                "run_id": result.run_id,
+                "totals": result.totals.as_dict(),
+                "findings": result.findings,
+            }
+        )
+
+    def quality_apply_integrity_updates(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        confirmed = bool(arguments.get("confirmed"))
+        if not confirmed:
+            preview = VerifyIntegrityService(self._c.conn, docs_dir=self._c.settings.docs_dir).run(
+                update_db=False
+            )
+            return ok_result(
+                {
+                    "ok": True,
+                    "preview": True,
+                    "run_id": preview.run_id,
+                    "totals": preview.totals.as_dict(),
+                    "findings": preview.findings,
+                    "message": (
+                        "DB を更新するには confirmed=true と "
+                        f"confirm_action='{_CONFIRM_INTEGRITY}' を指定してください。"
+                    ),
+                }
+            )
+        mismatch = _require_confirm_match(
+            confirmed=confirmed,
+            target=_CONFIRM_INTEGRITY,
+            confirm_value=arguments.get("confirm_action"),
+            confirm_field="confirm_action",
+        )
+        if mismatch is not None:
+            return mismatch
+        result = VerifyIntegrityService(self._c.conn, docs_dir=self._c.settings.docs_dir).run(
+            update_db=True
+        )
+        return ok_result(
+            {
+                "ok": True,
+                "applied": True,
                 "run_id": result.run_id,
                 "totals": result.totals.as_dict(),
                 "findings": result.findings,
@@ -710,22 +804,54 @@ class KbAdminTools:
             }
         )
 
-    def quality_run_backfill_metadata(self, arguments: dict[str, Any]) -> types.CallToolResult:
-        apply = bool(arguments.get("apply", False))
-        confirmed = bool(arguments.get("confirmed", False))
-        if apply and not confirmed:
-            return app_error_result(
-                AppError(
-                    code=ErrorCode.INVALID_INPUT,
-                    message="apply=true には confirmed=true が必要です(破壊的なメタデータ書込)。",
-                )
-            )
+    def quality_preview_backfill_metadata(self, _arguments: dict[str, Any]) -> types.CallToolResult:
         result = BackfillMetadataService(self._c.conn, docs_dir=self._c.settings.docs_dir).run(
-            apply=apply
+            apply=False
         )
         return ok_result(
             {
                 "ok": True,
+                "preview": True,
+                "run_id": result.run_id,
+                "mode": result.mode,
+                "totals": result.totals.as_dict(),
+            }
+        )
+
+    def quality_apply_backfill_metadata(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        confirmed = bool(arguments.get("confirmed"))
+        if not confirmed:
+            preview = BackfillMetadataService(self._c.conn, docs_dir=self._c.settings.docs_dir).run(
+                apply=False
+            )
+            return ok_result(
+                {
+                    "ok": True,
+                    "preview": True,
+                    "run_id": preview.run_id,
+                    "mode": preview.mode,
+                    "totals": preview.totals.as_dict(),
+                    "message": (
+                        "適用するには confirmed=true と "
+                        f"confirm_action='{_CONFIRM_BACKFILL}' を指定してください。"
+                    ),
+                }
+            )
+        mismatch = _require_confirm_match(
+            confirmed=confirmed,
+            target=_CONFIRM_BACKFILL,
+            confirm_value=arguments.get("confirm_action"),
+            confirm_field="confirm_action",
+        )
+        if mismatch is not None:
+            return mismatch
+        result = BackfillMetadataService(self._c.conn, docs_dir=self._c.settings.docs_dir).run(
+            apply=True
+        )
+        return ok_result(
+            {
+                "ok": True,
+                "applied": True,
                 "run_id": result.run_id,
                 "mode": result.mode,
                 "totals": result.totals.as_dict(),
@@ -797,9 +923,11 @@ def handlers_for(tools: KbAdminTools) -> dict[str, Any]:
         "chat_ask": tools.chat_ask,
         "chat_history": tools.chat_history,
         "quality_run_integrity": tools.quality_run_integrity,
+        "quality_apply_integrity_updates": tools.quality_apply_integrity_updates,
         "quality_run_duplicates": tools.quality_run_duplicates,
         "quality_run_contradictions": tools.quality_run_contradictions,
-        "quality_run_backfill_metadata": tools.quality_run_backfill_metadata,
+        "quality_preview_backfill_metadata": tools.quality_preview_backfill_metadata,
+        "quality_apply_backfill_metadata": tools.quality_apply_backfill_metadata,
         "visualization_validate": tools.visualization_validate,
     }
 

@@ -51,9 +51,11 @@ MCP_TOOL_BY_ACTION: dict[str, str] = {
     "visualization_submit_render": "start_render_scene",
     "visualization_deps": "check_visualize_deps",
     "quality_run_integrity": "quality_run_integrity",
+    "quality_apply_integrity_updates": "quality_apply_integrity_updates",
     "quality_run_duplicates": "quality_run_duplicates",
     "quality_run_contradictions": "quality_run_contradictions",
-    "quality_run_backfill_metadata": "quality_run_backfill_metadata",
+    "quality_preview_backfill_metadata": "quality_preview_backfill_metadata",
+    "quality_apply_backfill_metadata": "quality_apply_backfill_metadata",
 }
 
 

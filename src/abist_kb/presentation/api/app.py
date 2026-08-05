@@ -268,9 +268,7 @@ def register_api_routes(
 
     @app.post(f"{router_prefix}/batches/{{batch_id}}/run")
     async def run_batch(batch_id: str, request: Request) -> dict[str, Any]:
-        return await run_locked(
-            request, lambda: facade.batch_run(get_container(request), batch_id)
-        )
+        return await run_locked(request, lambda: facade.batch_run(get_container(request), batch_id))
 
     @app.get(f"{router_prefix}/jobs")
     async def list_jobs(request: Request, state: str | None = None) -> dict[str, Any]:

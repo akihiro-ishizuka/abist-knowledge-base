@@ -15,6 +15,7 @@ from typing import Annotated
 import anyio
 import typer
 
+from abist_kb.config import Settings
 from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.presentation.cli.context import AppTyper, get_context
 from abist_kb.presentation.console.output import OutputMode
@@ -38,50 +39,13 @@ def _stderr_presenter() -> Presenter:
     return Presenter(OutputMode.PLAIN, stdout=sys.stderr, stderr=sys.stderr)
 
 
-async def _serve_stdio(
-    server_name: str,
-    docs_dir,
-    work_index_path,
-    reference_index_path,
-    app_db_path,
-    root_dir,
-    reports_dir,
-    missing_threshold,
-) -> None:  # type: ignore[no-untyped-def]
-    server = build_server(
-        server_name,
-        docs_dir=docs_dir,
-        work_index_path=work_index_path,
-        reference_index_path=reference_index_path,
-        app_db_path=app_db_path,
-        root_dir=root_dir,
-        reports_dir=reports_dir,
-        missing_threshold=missing_threshold,
-    )
+async def _serve_stdio(server_name: str, settings: Settings) -> None:
+    server = build_server(server_name, settings=settings)
     await run_stdio(server)
 
 
-async def _serve_http(
-    server_name: str,
-    docs_dir,
-    work_index_path,
-    reference_index_path,
-    app_db_path,
-    root_dir,
-    reports_dir,
-    missing_threshold,
-    port: int,  # type: ignore[no-untyped-def]
-) -> None:
-    server = build_server(
-        server_name,
-        docs_dir=docs_dir,
-        work_index_path=work_index_path,
-        reference_index_path=reference_index_path,
-        app_db_path=app_db_path,
-        root_dir=root_dir,
-        reports_dir=reports_dir,
-        missing_threshold=missing_threshold,
-    )
+async def _serve_http(server_name: str, settings: Settings, port: int) -> None:
+    server = build_server(server_name, settings=settings)
     await run_http(server, port=port)
 
 
@@ -118,30 +82,9 @@ def serve(
 
     try:
         if transport == "http":
-            anyio.run(
-                _serve_http,
-                server,
-                settings.docs_dir,
-                settings.work_index_path,
-                settings.reference_index_path,
-                settings.app_db_path,
-                settings.root_dir,
-                settings.reports_dir,
-                settings.missing_threshold,
-                port,
-            )
+            anyio.run(_serve_http, server, settings, port)
         else:
-            anyio.run(
-                _serve_stdio,
-                server,
-                settings.docs_dir,
-                settings.work_index_path,
-                settings.reference_index_path,
-                settings.app_db_path,
-                settings.root_dir,
-                settings.reports_dir,
-                settings.missing_threshold,
-            )
+            anyio.run(_serve_stdio, server, settings)
     except NotImplementedError as exc:
         raise AppError(code=ErrorCode.INVALID_INPUT, message=str(exc)) from exc
 

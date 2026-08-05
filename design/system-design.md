@@ -218,7 +218,8 @@ FastAPIで`/api/v1`を提供する。起動は`abist-kb api serve`（uvicorn）�
 
 | 用途 | サーバーキー | 起動 |
 |---|---|---|
-| エージェント管理（推奨） | `kb-admin` または `all` | `abist-kb mcp serve kb-admin`／`all` |
+| エージェント（推奨） | **`all`** | `abist-kb mcp serve all`（検索 + 管理 + jobs） |
+| 管理のみ | `kb-admin` | `search_kb` なし。KB 回答は `chat_ask` 経由 |
 | 既存スキル互換 | `kb-download`／`kb-search`／`kb-visualize` | `abist-kb mcp serve <name>` |
 | REST | — | `abist-kb api serve` |
 | 長時間ジョブ | — | `abist-kb worker run` |
@@ -258,7 +259,7 @@ Python移植前に現行3サーバーへ固定リクエストfixtureを送って
 
 第1段階は`.mcp.json`の3キーを変えず、実行コマンドだけNode.jsからPythonの各互換エントリポイントへ差し替える。`searching-kb`、`downloading-kb-docs`、`visualizing-kb`の既存手順は変更しない。
 
-エージェント新規接続は`kb-admin`（または`all`）を推奨する。互換3キーの削除は別リリースの破壊的変更とし、移行ガイド、設定差分、ロールバック手順を提示する。それまでは3サーバー構成を正式サポートする。
+エージェント新規接続は**`all`**を推奨する（検索と管理を同一エージェントで使うため）。管理操作だけなら`kb-admin`でもよいが、`search_kb`は含まれない。互換3キーの削除は別リリースの破壊的変更とし、移行ガイド、設定差分、ロールバック手順を提示する。それまでは3サーバー構成を正式サポートする。
 
 ### 7.3 CLI
 
