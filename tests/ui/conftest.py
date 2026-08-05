@@ -14,9 +14,8 @@ def container(tmp_root: Path) -> Iterator[ServiceContainer]:
     settings = Settings(root_dir=tmp_root, _env_file=None)
     settings.ensure_directories()
     settings.docs_dir.mkdir(parents=True, exist_ok=True)
-    # `check_same_thread=False`: `tests/ui/test_api.py` drives this fixture through
-    # FastAPI's `TestClient`, whose ASGI portal runs requests on a worker thread
-    # different from the one that created this fixture's connection.
+    # `check_same_thread=False`: FastAPI `TestClient` 経由の API 契約テストでも
+    # この fixture を共有するため(ASGI portal が別スレッドでリクエスト処理する)。
     cont = ServiceContainer(settings, check_same_thread=False)
     try:
         yield cont

@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi.testclient import TestClient
 
 from abist_kb.domain.job import JobState
 from abist_kb.infrastructure.jobs.repository import JobRepository
 from abist_kb.presentation.api.app import create_api_app
-from abist_kb.presentation.web.viewmodels.container import ServiceContainer
+from abist_kb.presentation.common.container import ServiceContainer
 
 
 @pytest.fixture
@@ -377,3 +379,200 @@ def test_non_loopback_bind_health_check_does_not_require_token(
 def test_loopback_bind_does_not_require_token(client: TestClient) -> None:
     response = client.get("/api/v1/dashboard")
     assert response.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# スタンドアロン `api serve` / クロスプロセス SSE
+# ---------------------------------------------------------------------------
+
+
+def _abist_kb_argv(*args: str) -> list[str]:
+    import shutil
+
+    exe = shutil.which("abist-kb")
+    if exe is None:
+        raise RuntimeError("abist-kb が PATH にありません(uv sync / editable install を確認)。")
+    return [exe, *args]
+
+
+def _free_port() -> int:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _wait_healthy(base_url: str, *, timeout_sec: float = 30.0) -> None:
+    import time
+    import urllib.error
+    import urllib.request
+
+    deadline = time.monotonic() + timeout_sec
+    last_error: Exception | None = None
+    while time.monotonic() < deadline:
+        try:
+            with urllib.request.urlopen(f"{base_url}/api/v1/health", timeout=1.0) as resp:
+                if resp.status == 200:
+                    return
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            last_error = exc
+        time.sleep(0.1)
+    raise AssertionError(f"API が起動しませんでした: {last_error}")
+
+
+def test_api_serve_subprocess_health(tmp_root: Path) -> None:
+    """実プロセスの `abist-kb api serve` が /api/v1/health を返すこと。"""
+    import subprocess
+    import urllib.request
+
+    port = _free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    proc = subprocess.Popen(
+        _abist_kb_argv(
+            "--root",
+            str(tmp_root),
+            "api",
+            "serve",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    try:
+        _wait_healthy(base_url)
+        with urllib.request.urlopen(f"{base_url}/api/v1/health", timeout=5.0) as resp:
+            assert resp.status == 200
+            assert resp.read() == b'{"status":"ok"}'
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            proc.wait(timeout=5)
+
+
+def test_sse_cross_process_db_poll_sees_worker_terminal(tmp_root: Path) -> None:
+    """API プロセスの SSE が、別プロセス worker の DB 書き込みを受け取ること。"""
+    import json
+    import subprocess
+    import threading
+    import time
+    import urllib.request
+    import uuid
+
+    from abist_kb.application.job_service import JobService
+    from abist_kb.config import Settings
+    from abist_kb.domain.job import TERMINAL_STATES, JobState
+    from abist_kb.infrastructure.db.schema import open_app_db
+    from abist_kb.infrastructure.jobs.builtin_registry import (
+        build_builtin_handlers,
+        build_builtin_resources,
+    )
+
+    settings = Settings(root_dir=tmp_root, _env_file=None)
+    settings.ensure_directories()
+
+    port = _free_port()
+    base_url = f"http://127.0.0.1:{port}"
+    api_proc = subprocess.Popen(
+        _abist_kb_argv(
+            "--root",
+            str(tmp_root),
+            "api",
+            "serve",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    try:
+        _wait_healthy(base_url)
+
+        conn = open_app_db(settings.app_db_path)
+        try:
+            handlers = build_builtin_handlers(settings=settings, conn=conn)
+            service = JobService(
+                conn,
+                owner_id=str(uuid.uuid4()),
+                handlers=handlers,
+                resource_for_kind=build_builtin_resources(),
+            )
+            job = service.submit("noop", {})
+            job_id = job.id
+            assert job.state is JobState.QUEUED
+        finally:
+            conn.close()
+
+        sse_lines: list[str] = []
+        sse_error: list[BaseException] = []
+
+        def _read_sse() -> None:
+            try:
+                req = urllib.request.Request(f"{base_url}/api/v1/jobs/{job_id}/events")
+                with urllib.request.urlopen(req, timeout=60.0) as resp:
+                    assert resp.status == 200
+                    while True:
+                        raw = resp.readline()
+                        if not raw:
+                            break
+                        line = raw.decode("utf-8").rstrip("\n")
+                        sse_lines.append(line)
+            except BaseException as exc:  # noqa: BLE001 — スレッドへ運ぶ
+                sse_error.append(exc)
+
+        reader = threading.Thread(target=_read_sse, daemon=True)
+        reader.start()
+        # SSE が queued 状態のポーリングに入ってから worker を回す
+        time.sleep(0.5)
+
+        worker = subprocess.run(
+            _abist_kb_argv("--root", str(tmp_root), "worker", "run", "--once"),
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=60,
+        )
+        assert worker.returncode == 0, worker.stderr or worker.stdout
+
+        reader.join(timeout=30)
+        assert not reader.is_alive(), "SSE ストリームが終端で閉じませんでした"
+        assert not sse_error, sse_error
+
+        data_payloads: list[dict[str, object]] = []
+        for line in sse_lines:
+            if line.startswith("data: "):
+                data_payloads.append(json.loads(line[len("data: ") :]))
+
+        assert data_payloads, f"進捗イベントが届きませんでした: {sse_lines!r}"
+        assert any(p.get("phase") == "noop" for p in data_payloads)
+
+        conn = open_app_db(settings.app_db_path)
+        try:
+            final = JobService(conn, owner_id="check").get(job_id)
+        finally:
+            conn.close()
+        assert final.state in TERMINAL_STATES
+        assert final.state is JobState.SUCCEEDED
+    finally:
+        api_proc.terminate()
+        try:
+            api_proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            api_proc.kill()
+            api_proc.wait(timeout=5)

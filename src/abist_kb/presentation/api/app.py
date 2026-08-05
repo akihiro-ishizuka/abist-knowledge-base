@@ -1,12 +1,15 @@
-"""FastAPI `/api/v1` 層(設計書 §7.1, §10.3): NiceGUI 内蔵アプリへ統合する。
+"""FastAPI `/api/v1` 層(設計書 §7.1, §10.3)。
 
-CLI/MCP と同じ `ServiceContainer`(`presentation/web/viewmodels/container.py`)
-の上に薄い HTTP 層を被せるだけで、業務ロジックはここに一切書かない。
-ジョブ進捗は `ProgressEvent` バス(`infrastructure/jobs/events.py`)を購読する
-SSE で配信する。
+スタンドアロン起動は `abist-kb api serve`(`presentation/cli/api_cmd.py` +
+uvicorn)。NiceGUI Web は `register_api_routes()` で同一アプリへマウントする
+(Phase 2b まで)。業務操作は `presentation/api/facade.py` 経由で Application
+Service を呼び、`web.viewmodels.screens` には依存しない。
 
-既定バインドは呼び出し側(`presentation/cli/ui_cmd.py`)が `127.0.0.1` を渡す。
-`0.0.0.0` 等の非ループバック公開時はアクセストークンを必須にする
+ジョブ進捗 SSE は DB の job history をポーリングして配信する(別プロセスの
+`worker run` が書いたイベントも届く)。in-process `event_bus` には依存しない。
+
+既定バインドは呼び出し側が `127.0.0.1` を渡す。`0.0.0.0` 等の非ループバック
+公開時はアクセストークンを必須にする
 (`presentation/api/auth.py::require_token_when_exposed`)。
 """
 
@@ -22,12 +25,17 @@ from pydantic import BaseModel, ConfigDict
 
 from abist_kb.domain.errors import AppError, ErrorCode, http_status_for
 from abist_kb.domain.job import TERMINAL_STATES
+from abist_kb.presentation.api import facade
 from abist_kb.presentation.api.auth import AccessTokenMiddleware, require_token_when_exposed
-from abist_kb.presentation.web.viewmodels import screens
-from abist_kb.presentation.web.viewmodels.container import ServiceContainer
-from abist_kb.presentation.web.viewmodels.serialize import error_to_dict, event_to_dict
+from abist_kb.presentation.common.container import ServiceContainer
+from abist_kb.presentation.common.serialize import error_to_dict, event_to_dict
 
 T = TypeVar("T")
+
+#: SSE が DB history を再読込する間隔(秒)。クロスプロセス配信のソース・オブ・トゥルース。
+_SSE_POLL_INTERVAL_SEC = 0.3
+#: 新規イベントが無い間に keep-alive コメントを送る間隔(秒)。
+_SSE_KEEPALIVE_SEC = 15.0
 
 
 class BatchCreateRequest(BaseModel):
@@ -148,7 +156,7 @@ def register_api_routes(
     # `await` をまたぐ処理(SSE のポーリングループ)が挟まると別リクエストの
     # DB アクセスと論理的に交互実行されうる。`transaction()`(`BEGIN IMMEDIATE`)
     # の途中に他リクエストの SELECT が割り込まないよう、DB へ触れる区間はこの
-    # ロックで直列化する(`presentation/web/viewmodels/container.py` の
+    # ロックで直列化する(`presentation/common/container.py` の
     # `check_same_thread=False` の docstring と対になる対策)。
     app.state.db_lock = asyncio.Lock()
     app.add_middleware(AccessTokenMiddleware, bind_host=bind_host, access_token=access_token)
@@ -161,10 +169,10 @@ def register_api_routes(
         return request.app.state.container  # type: ignore[no-any-return]
 
     async def run_locked(request: Request, fn: Callable[[], T]) -> T | JSONResponse:
-        """`fn()` を DB ロック配下で実行し、view-model の `{"error": ...}` 規約を
+        """`fn()` を DB ロック配下で実行し、facade の `{"error": ...}` 規約を
         HTTP ステータスへ変換する。
 
-        `screens.py` の各関数は `AppError` を re-raise せず `{"error":
+        facade/`actions` の各関数は `AppError` を re-raise せず `{"error":
         error_to_dict(exc)}` へ変換して返す(NiceGUI の画面側がそのまま
         エラーメッセージを描画できるようにするため)。そのため FastAPI の
         `AppError` 例外ハンドラだけでは NOT_FOUND 等を検知できず、ここで
@@ -189,17 +197,17 @@ def register_api_routes(
 
     @app.get(f"{router_prefix}/dashboard")
     async def get_dashboard(request: Request) -> dict[str, Any]:
-        return await run_locked(request, lambda: screens.dashboard(get_container(request)))
+        return await run_locked(request, lambda: facade.dashboard(get_container(request)))
 
     @app.get(f"{router_prefix}/sources")
     async def list_sources(request: Request) -> dict[str, Any]:
-        return await run_locked(request, lambda: screens.sources_list(get_container(request)))
+        return await run_locked(request, lambda: facade.sources_list(get_container(request)))
 
     @app.post(f"{router_prefix}/sources")
     async def add_source(body: SourceCreateRequest, request: Request) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.source_add(get_container(request), **body.model_dump()),
+            lambda: facade.source_add(get_container(request), **body.model_dump()),
         )
 
     @app.patch(f"{router_prefix}/sources/{{source_id}}")
@@ -208,7 +216,7 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.source_edit(
+            lambda: facade.source_edit(
                 get_container(request),
                 source_id,
                 body.model_dump(exclude_unset=True),
@@ -221,31 +229,31 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.source_remove(get_container(request), source_id, confirmed=confirmed),
+            lambda: facade.source_remove(get_container(request), source_id, confirmed=confirmed),
         )
 
     @app.post(f"{router_prefix}/sources/{{source_id}}/test")
     async def test_source(source_id: str, request: Request) -> dict[str, Any]:
         return await run_locked(
-            request, lambda: screens.source_test_connection(get_container(request), source_id)
+            request, lambda: facade.source_test_connection(get_container(request), source_id)
         )
 
     @app.get(f"{router_prefix}/batches")
     async def list_batches(request: Request) -> dict[str, Any]:
-        return await run_locked(request, lambda: screens.batches_list(get_container(request)))
+        return await run_locked(request, lambda: facade.batches_list(get_container(request)))
 
     @app.post(f"{router_prefix}/batches")
     async def add_batch(body: BatchCreateRequest, request: Request) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.batch_add(get_container(request), **body.model_dump()),
+            lambda: facade.batch_add(get_container(request), **body.model_dump()),
         )
 
     @app.patch(f"{router_prefix}/batches/{{batch_id}}")
     async def edit_batch(batch_id: str, body: BatchEditRequest, request: Request) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.batch_edit(
+            lambda: facade.batch_edit(
                 get_container(request),
                 batch_id,
                 body.model_dump(exclude_unset=True),
@@ -258,78 +266,68 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.batch_remove(get_container(request), batch_id, confirmed=confirmed),
+            lambda: facade.batch_remove(get_container(request), batch_id, confirmed=confirmed),
         )
 
     @app.post(f"{router_prefix}/batches/{{batch_id}}/run")
     async def run_batch(batch_id: str, request: Request) -> dict[str, Any]:
         return await run_locked(
-            request, lambda: screens.batch_run(get_container(request), batch_id)
+            request, lambda: facade.batch_run(get_container(request), batch_id)
         )
 
     @app.get(f"{router_prefix}/jobs")
     async def list_jobs(request: Request, state: str | None = None) -> dict[str, Any]:
         return await run_locked(
-            request, lambda: screens.jobs_list(get_container(request), state=state)
+            request, lambda: facade.jobs_list(get_container(request), state=state)
         )
 
     @app.get(f"{router_prefix}/jobs/{{job_id}}")
     async def get_job(job_id: str, request: Request) -> dict[str, Any]:
-        return await run_locked(request, lambda: screens.job_detail(get_container(request), job_id))
+        return await run_locked(request, lambda: facade.job_detail(get_container(request), job_id))
 
     @app.post(f"{router_prefix}/jobs/{{job_id}}/cancel")
     async def cancel_job(job_id: str, request: Request, confirmed: bool = False) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.job_cancel(get_container(request), job_id, confirmed=confirmed),
+            lambda: facade.job_cancel(get_container(request), job_id, confirmed=confirmed),
         )
 
     @app.post(f"{router_prefix}/jobs/{{job_id}}/retry")
     async def retry_job(job_id: str, request: Request) -> dict[str, Any]:
-        return await run_locked(request, lambda: screens.job_retry(get_container(request), job_id))
+        return await run_locked(request, lambda: facade.job_retry(get_container(request), job_id))
 
     @app.get(f"{router_prefix}/jobs/{{job_id}}/events")
     async def stream_job_events(job_id: str, request: Request) -> StreamingResponse:
-        """SSE: `ProgressEvent` バス(§10.3)を購読し、既存履歴 → ライブ更新の順で流す。"""
+        """SSE: DB の job history を初期送信し、終端までポーリングで追記配信する。
+
+        別プロセスの worker が書いた進捗も届く(ソース・オブ・トゥルースは DB)。
+        """
         cont = get_container(request)
         lock: asyncio.Lock = request.app.state.db_lock
         async with lock:
             cont.jobs.get(job_id)  # NOT_FOUND を先に出す(AppError -> exception handler)
 
-        queue: asyncio.Queue[Any] = asyncio.Queue()
-        loop = asyncio.get_running_loop()
-
-        def on_event(event: Any) -> None:
-            if event.job_id == job_id:
-                loop.call_soon_threadsafe(queue.put_nowait, event)
-
-        unsubscribe = cont.event_bus.subscribe(on_event)
-
         async def generator() -> Any:
-            try:
+            seen = 0
+            idle_for = 0.0
+            while True:
+                if await request.is_disconnected():
+                    break
                 async with lock:
                     history = cont.jobs.history(job_id)
-                for evt in history:
-                    yield _sse_line(event_to_dict(evt))
-                async with lock:
                     job = cont.jobs.get(job_id)
-                if job.state in TERMINAL_STATES:
-                    return
-                while True:
-                    if await request.is_disconnected():
-                        break
-                    try:
-                        evt = await asyncio.wait_for(queue.get(), timeout=15.0)
-                    except TimeoutError:
-                        yield ": keep-alive\n\n"
-                        continue
+                new_events = history[seen:]
+                for evt in new_events:
                     yield _sse_line(event_to_dict(evt))
-                    async with lock:
-                        job = cont.jobs.get(job_id)
-                    if job.state in TERMINAL_STATES:
-                        break
-            finally:
-                unsubscribe()
+                    idle_for = 0.0
+                seen = len(history)
+                if job.state in TERMINAL_STATES:
+                    break
+                await asyncio.sleep(_SSE_POLL_INTERVAL_SEC)
+                idle_for += _SSE_POLL_INTERVAL_SEC
+                if idle_for >= _SSE_KEEPALIVE_SEC:
+                    yield ": keep-alive\n\n"
+                    idle_for = 0.0
 
         return StreamingResponse(generator(), media_type="text/event-stream")
 
@@ -343,7 +341,7 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.documents_list(
+            lambda: facade.documents_list(
                 get_container(request),
                 source=source,
                 sync_status=sync_status,
@@ -355,7 +353,7 @@ def register_api_routes(
     @app.get(f"{router_prefix}/documents/{{path:path}}")
     async def get_document(path: str, request: Request) -> dict[str, Any]:
         return await run_locked(
-            request, lambda: screens.document_detail(get_container(request), path)
+            request, lambda: facade.document_detail(get_container(request), path)
         )
 
     @app.patch(f"{router_prefix}/documents/{{path:path}}")
@@ -364,7 +362,7 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.document_update_metadata(
+            lambda: facade.document_update_metadata(
                 get_container(request),
                 path,
                 body.model_dump(exclude_unset=True),
@@ -377,7 +375,7 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.document_delete(get_container(request), path, confirmed=confirmed),
+            lambda: facade.document_delete(get_container(request), path, confirmed=confirmed),
         )
 
     @app.get(f"{router_prefix}/search")
@@ -393,7 +391,7 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.search(
+            lambda: facade.search(
                 get_container(request),
                 q,
                 corpus=corpus,
@@ -407,20 +405,20 @@ def register_api_routes(
 
     @app.get(f"{router_prefix}/chat")
     async def chat(request: Request) -> dict[str, Any]:
-        return await run_locked(request, lambda: screens.chat_stub(get_container(request)))
+        return await run_locked(request, lambda: facade.chat_stub(get_container(request)))
 
     @app.post(f"{router_prefix}/chat/start")
     async def start_chat(body: ChatStartRequest, request: Request) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.chat_start(get_container(request), title=body.title),
+            lambda: facade.chat_start(get_container(request), title=body.title),
         )
 
     @app.post(f"{router_prefix}/chat/ask")
     async def ask_chat(body: ChatAskRequest, request: Request) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.chat_ask(
+            lambda: facade.chat_ask(
                 get_container(request),
                 conversation_id=body.conversation_id,
                 question=body.question,
@@ -431,7 +429,7 @@ def register_api_routes(
     async def chat_history(conversation_id: str, request: Request) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.chat_history(
+            lambda: facade.chat_history(
                 get_container(request),
                 conversation_id=conversation_id,
             ),
@@ -439,7 +437,7 @@ def register_api_routes(
 
     @app.get(f"{router_prefix}/visualization/deps")
     async def visualization_deps(request: Request) -> dict[str, Any]:
-        return await run_locked(request, lambda: screens.visualization_deps(get_container(request)))
+        return await run_locked(request, lambda: facade.visualization_deps(get_container(request)))
 
     @app.post(f"{router_prefix}/visualization/validate")
     async def visualization_validate(
@@ -447,7 +445,7 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.visualization_validate(get_container(request), body.scene_spec),
+            lambda: facade.visualization_validate(get_container(request), body.scene_spec),
         )
 
     @app.post(f"{router_prefix}/visualization/render")
@@ -456,14 +454,14 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.visualization_submit_render(
+            lambda: facade.visualization_submit_render(
                 get_container(request), body.scene_spec, slug=body.slug
             ),
         )
 
     @app.get(f"{router_prefix}/quality")
     async def quality(request: Request) -> dict[str, Any]:
-        return await run_locked(request, lambda: screens.quality_stub(get_container(request)))
+        return await run_locked(request, lambda: facade.quality_stub(get_container(request)))
 
     @app.post(f"{router_prefix}/quality/integrity")
     async def run_quality_integrity(
@@ -471,7 +469,7 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.quality_run_integrity(
+            lambda: facade.quality_run_integrity(
                 get_container(request),
                 update_db=body.update_db,
             ),
@@ -483,7 +481,7 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.quality_run_duplicates(
+            lambda: facade.quality_run_duplicates(
                 get_container(request),
                 corpus=body.corpus,
             ),
@@ -495,7 +493,7 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.quality_run_contradictions(get_container(request)),
+            lambda: facade.quality_run_contradictions(get_container(request)),
         )
 
     @app.post(f"{router_prefix}/quality/backfill-metadata")
@@ -504,7 +502,7 @@ def register_api_routes(
     ) -> dict[str, Any]:
         return await run_locked(
             request,
-            lambda: screens.quality_run_backfill_metadata(
+            lambda: facade.quality_run_backfill_metadata(
                 get_container(request),
                 apply=body.apply,
             ),
@@ -513,7 +511,7 @@ def register_api_routes(
     @app.get(f"{router_prefix}/settings/diagnostics")
     async def diagnostics(request: Request) -> dict[str, Any]:
         return await run_locked(
-            request, lambda: screens.settings_diagnostics(get_container(request))
+            request, lambda: facade.settings_diagnostics(get_container(request))
         )
 
     return app
@@ -526,7 +524,10 @@ def create_api_app(
     access_token: str | None = None,
     enforce_token_requirement: bool = True,
 ) -> FastAPI:
-    """スタンドアロンの `/api/v1` FastAPI アプリ(テスト・独立起動用)。"""
+    """スタンドアロンの `/api/v1` FastAPI アプリ。
+
+    `abist-kb api serve` およびテストから使う。NiceGUI 非依存で起動できる。
+    """
     app = FastAPI(title="ABIST Knowledge Base API", version="1.0.0")
     return register_api_routes(
         app,

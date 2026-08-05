@@ -21,6 +21,7 @@ from abist_kb import identity
 from abist_kb.config import load_settings
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode, wrap
 from abist_kb.infrastructure.observability.logging import configure_logging
+from abist_kb.presentation.cli.api_cmd import api_app
 from abist_kb.presentation.cli.audit_cmd import audit_app
 from abist_kb.presentation.cli.batch_cmd import batch_app
 from abist_kb.presentation.cli.config_cmd import config_app
@@ -76,6 +77,7 @@ app.add_typer(curate_app, name="curate")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(migrate_app, name="migrate")
 app.add_typer(ui_app, name="ui")
+app.add_typer(api_app, name="api")
 app.command("search")(search)
 app.command("doctor")(doctor)
 
