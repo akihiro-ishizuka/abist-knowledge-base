@@ -101,6 +101,15 @@ def test_batch_run_not_found_returns_error_dict(container: ServiceContainer) -> 
     assert outcome["error"]["code"] == "NOT_FOUND"
 
 
+def test_quality_run_backfill_metadata_apply_returns_invalid_input_error(
+    container: ServiceContainer,
+) -> None:
+    """Web からの `apply=True` はハード拒否(§12)。`code` を持つエラー封筒で
+    返らないと、API 層(`run_locked`)が 400 ではなく 500 に変換してしまう。"""
+    outcome = screens.quality_run_backfill_metadata(container, apply=True)
+    assert outcome["error"]["code"] == "INVALID_INPUT"
+
+
 def test_document_update_metadata_rejects_empty_fields(container: ServiceContainer) -> None:
     outcome = screens.document_update_metadata(container, "missing.md", {})
     assert outcome["error"]["code"] == "INVALID_INPUT"

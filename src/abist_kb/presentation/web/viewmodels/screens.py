@@ -574,12 +574,13 @@ def quality_run_backfill_metadata(
     from abist_kb.application.audit.backfill_metadata import BackfillMetadataService
 
     if apply:
-        return {
-            "error": {
-                "message": "Web からの --apply 実行は未対応です。CLI の `abist-kb audit "
-                "backfill-metadata --apply` を使ってください。"
-            }
-        }
+        return _err(
+            AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message="Web からの --apply 実行は未対応です。CLI の `abist-kb audit "
+                "backfill-metadata --apply` を使ってください。",
+            )
+        )
     result = BackfillMetadataService(container.conn, docs_dir=container.settings.docs_dir).run(
         apply=False
     )

@@ -387,19 +387,38 @@ class KbApp(App[None]):
         *,
         result_key: tuple[str, str] | None = None,
         sources_batches_result: bool = False,
+        run_in_thread: bool = False,
     ) -> None:
-        """確認モーダルを経由して操作し、対象に対応する領域へ結果を保存する。"""
+        """確認モーダルを経由して操作し、対象に対応する領域へ結果を保存する。
+
+        `run_in_thread=True` の場合、確認後の `action()` 呼び出しをワーカー
+        スレッドで実行し UI イベントループをブロックしない(バッチ実行は
+        `run_inline` で完了までジョブを同期的に処理するため長時間かかりうる)。
+        結果の反映(ウィジェット更新)は `call_from_thread` で UI スレッドへ
+        戻して行う。
+        """
+
+        def _apply_result(result: Any) -> None:
+            formatted = self._format_action_result(result)
+            if result_key is not None:
+                self._action_results[result_key] = formatted
+            if sources_batches_result:
+                self._show_sources_batches_result(formatted)
+            else:
+                self.render_area(self.current_area)
 
         def _after(confirmed: bool | None) -> None:
-            if confirmed:
-                result = action()
-                formatted = self._format_action_result(result)
-                if result_key is not None:
-                    self._action_results[result_key] = formatted
-                if sources_batches_result:
-                    self._show_sources_batches_result(formatted)
-                else:
-                    self.render_area(self.current_area)
+            if not confirmed:
+                return
+            if run_in_thread:
+
+                def _run_off_thread() -> None:
+                    result = action()
+                    self.call_from_thread(_apply_result, result)
+
+                self.run_worker(_run_off_thread, thread=True)
+            else:
+                _apply_result(action())
 
         self.push_screen(ConfirmModal(message), _after)
 
@@ -508,7 +527,9 @@ class KbApp(App[None]):
         message = (
             f"バッチ {batch['name']} を実行しますか?\n出力先: {batch.get('output_dir') or '未設定'}"
         )
-        self.run_worker(self.confirm_and_run(message, _do, sources_batches_result=True))
+        self.run_worker(
+            self.confirm_and_run(message, _do, sources_batches_result=True, run_in_thread=True)
+        )
 
     def action_remove_selected(self) -> None:
         if self.current_area != "sources_batches":

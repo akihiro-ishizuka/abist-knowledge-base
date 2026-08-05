@@ -215,6 +215,17 @@ def test_quality_action_routes_smoke(
     assert "run_id" in response.json()
 
 
+def test_quality_backfill_metadata_apply_returns_400_invalid_input(client: TestClient) -> None:
+    """Web からの `apply=True` はハード拒否(§12)。エラー封筒に `code` が
+    無いと `run_locked` が `ErrorCode.FAILURE`(500)へ落ちてしまうため、
+    `INVALID_INPUT`(400)を明示的に確認する。"""
+    response = client.post("/api/v1/quality/backfill-metadata", json={"apply": True})
+
+    assert response.status_code == 400
+    body = response.json()
+    assert body["code"] == "INVALID_INPUT"
+
+
 # ---------------------------------------------------------------------------
 # 可視化(設計書 §10: render_scene をジョブとして実行する)
 # ---------------------------------------------------------------------------
