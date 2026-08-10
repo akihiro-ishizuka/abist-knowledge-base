@@ -4,6 +4,16 @@ Python 移植版。設計の正は [`design/system-design.md`](design/system-des
 
 ## 初回セットアップ
 
+Windows では `scripts\bootstrap.bat` で一括実行できます（先に `docs\` へ `.md` を置いてから実行）。
+
+```bat
+scripts\bootstrap.bat
+scripts\bootstrap.bat --dry-run-register
+scripts\bootstrap.bat --skip-embed
+```
+
+手動で進める場合:
+
 ```bash
 uv sync
 abist-kb init                        # ディレクトリ・設定雛形・app.sqlite を作成

@@ -42,7 +42,9 @@ reports/
 # tools/ は tools/visualize/(このプロジェクトのソース)と旧システムの
 # コンテンツが混在するため、旧コンテンツのパスだけを個別に無視する。
 bk/
-scripts/
+# Keep scripts/ ignored for cutover scratch, but track the Windows bootstrap.
+scripts/*
+!scripts/bootstrap.bat
 work/
 tools/*.md
 tools/issue_bodies/
