@@ -20,8 +20,6 @@ def exercise(p: Presenter) -> None:
     p.info("情報")
     p.muted("補助")
     p.table("表", ["列A", "列B"], [["値1", "値2"]])
-    p.panel("見出し", "本文")
-    p.markdown("# 見出し\n\n本文\n")
     with progress_scope(p, description="処理中", total=3) as handle:
         handle.advance(item="docs/a.md")
         handle.advance(item="docs/b.md")

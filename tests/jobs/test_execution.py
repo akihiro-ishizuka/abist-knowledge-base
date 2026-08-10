@@ -247,3 +247,64 @@ def test_run_job_renews_worker_lease_when_requested(conn) -> None:
     assert expires_after > expires_before, (
         "ハンドラ実行中に worker_leases の expires_at が更新されなかった"
     )
+
+
+def test_progress_snapshot_is_persisted_during_and_after_the_run(conn) -> None:
+    """`jobs.progress` に最新の `emit()` 内容が保存されること。
+
+    `job_events` は履歴、`jobs.progress` は最新状態という役割分担
+    (設計書 §10.3)。`progress` は `job_to_dict()` 経由で `jobs show`／API／MCP が
+    既に公開しているフィールドだが、以前は書き手が一人もおらず恒久的に
+    `null` のままだった(読み手だけが存在する未配線)。実行中(ハンドラの中から
+    別接続で観測)と終了後の両方で、直前の `emit()` と一致することを固定する。
+    """
+    repo = JobRepository(conn)
+    job = repo.submit("sync")
+    claimed = repo.claim("A", ttl_seconds=30.0)
+    assert claimed is not None
+
+    observed_mid_run: list[dict] = []
+
+    def handler(run: JobRunContext) -> None:
+        run.emit(phase="index-build", current=1, total=3, message="1件目", item="docs/a.md")
+        # 実行中に別接続から観測する(finish 時にまとめて書いているのではなく、
+        # emit のたびに最新状態が見えることの確認)。
+        observer = connect(conn.execute("PRAGMA database_list").fetchone()[2])
+        try:
+            observed_mid_run.append(JobRepository(observer).get(job.id).progress)
+        finally:
+            observer.close()
+        run.emit(phase="index-build", current=3, total=3, message="完了", item="docs/c.md")
+
+    finished = run_job(
+        conn,
+        repo,
+        events_mod.EventBus(),
+        claimed,
+        handler,
+        owner_id="A",
+        ttl_seconds=30.0,
+        resource=None,
+    )
+    assert finished.state is JobState.SUCCEEDED
+
+    assert observed_mid_run[0] is not None, "実行中に progress が書かれていない"
+    assert observed_mid_run[0]["current"] == 1
+    assert observed_mid_run[0]["message"] == "1件目"
+
+    # 終了後は最後の emit の内容が残る(finish() は progress を消さない)。
+    progress = finished.progress
+    assert progress is not None
+    assert progress["job_id"] == job.id
+    assert progress["phase"] == "index-build"
+    assert progress["current"] == 3
+    assert progress["total"] == 3
+    assert progress["message"] == "完了"
+    assert progress["item"] == "docs/c.md"
+    assert progress["severity"] == "info"
+    assert progress["timestamp"]
+
+    # 履歴(job_events)は全件、スナップショットは最新1件という役割分担。
+    events = events_mod.list_events(conn, job.id)
+    assert [e.current for e in events] == [1, 3]
+    assert events[-1].to_dict() == progress

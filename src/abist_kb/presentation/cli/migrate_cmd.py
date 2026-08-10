@@ -14,7 +14,7 @@ from typing import Annotated
 import typer
 
 from abist_kb.domain.errors import AppError, ErrorCode
-from abist_kb.migration.inventory import inspect_source
+from abist_kb.migration.inventory import inspect_source, write_inspect_report
 from abist_kb.migration.manifest import Manifest, load_manifest, save_manifest
 from abist_kb.migration.plan import assert_safe_roots, build_plan, load_plan, write_plan
 from abist_kb.migration.runner import run_migration, swap_into_place
@@ -43,10 +43,7 @@ def migrate_inspect(
     with tempfile.TemporaryDirectory(prefix="abist-migrate-sandbox-") as sandbox:
         report = inspect_source(from_root, Path(sandbox))
     if output is not None:
-        output.write_text(
-            __import__("json").dumps(report.to_dict(), indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        write_inspect_report(report, output)
     if cli_ctx.presenter.is_json:
         cli_ctx.presenter.json_result(report.to_dict())
         return

@@ -31,7 +31,7 @@
 
 - 現行のesa／Web／Git収集、差分同期、検索、チャット、可視化、監査、MCP機能をPython版で代替できる。
 - 人間向けターミナル出力から素の`print()`を排除し、共通Presenter経由にする。
-- TTYでは色、表、パネル、スピナー、進捗バー、Markdown、構文ハイライトを使用する。
+- TTYでは色、表、スピナー、進捗バーを使用する。
 - 非TTY、`NO_COLOR`、`TERM=dumb`、`--output json`ではANSI制御文字やアニメーションを出さない。
 - MCP stdioの標準出力はJSON-RPC専用とし、ログやRich出力を混入させない。
 - 現行データを変更せずに移行診断でき、実行前後の件数・ハッシュ・検索品質を比較できる。
@@ -152,31 +152,29 @@ design/
 
 ## 6. 共通UIデザイン
 
-CLI（Rich）とAPI／MCPの状態ラベルで共通のセマンティックトークンを使う。色だけで状態を伝えず、必ずラベルまたは記号を併記する。
+セマンティックトークンはCLI（Rich）の表示語彙であり、`presentation/console/theme.py` が唯一の定義箇所である。API／MCPはトークンではなく状態文字列（`queued`／`running` 等）を返すが、いずれの面でも色だけで状態を伝えず、必ずラベルまたは記号を併記する。
 
 ### 6.1 セマンティックトークン
 
 | トークン | Rich | 記号 | 用途 |
 |---|---|---|---|
-| `primary` | `bold cyan` | `●` | 選択、主要操作 |
 | `success` | `bold green` | `✓` | 完了、正常 |
 | `warning` | `bold yellow` | `!` | 注意、競合、部分成功 |
 | `danger` | `bold red` | `×` | 失敗、破壊的操作 |
 | `info` | `blue` | `i` | 補足、進行中 |
 | `muted` | `dim` | `-` | 補助情報、未実行 |
-| `accent` | `magenta` | `◆` | AI、可視化、特別表示 |
 
-> **歴史メモ:** 初版では Web hex（NiceGUI）と Textual 向けスタイル列も定義していた。コード上の`web_hex`フィールドはトークン定義の名残として残るが、画面ホストは存在しない。
+> **歴史メモ（削除済み）:** 初版では Web hex（NiceGUI）と Textual 向けスタイル列、および `primary`（選択・主要操作）／`accent`（AI・可視化）トークンも定義していた。画面ホスト削除後は `primary`／`accent` を発行する経路が無くなったため、`TokenStyle.web_hex` フィールドとともにコードから削除した。トークンは Presenter が実際に発行する5種のみとする。
 
 Richは端末背景を尊重する。日本語と英数字の混在を前提に、罫線はRichの`safe_box`相当でフォールバック可能にする。絵文字は装飾としてのみ使い、絵文字なしでも意味が通る文言にする。
 
 ### 6.2 表示部品
 
 - 一覧: Rich `Table`を使い、列順と状態ラベルを共通化する。
-- 単一結果: タイトル付きPanel、要約、主要値、次の操作の順に表示する。
+- 単一結果: Rich `Table`の「項目／値」2列形式で表示し、続けて要約行と次の操作を出す。
 - 長時間処理: 全体・現在項目・完了数・失敗数・経過時間・残り時間を表示する。
 - 不定長処理: Spinner + 現在の工程を表示し、完了時は静的な最終行へ置換する。
-- 文書: Markdownとコードハイライトを使用し、出典パスと行番号を常時表示する。
+- 文書本文: CLIはメタデータのみ表示し、本文はレンダリングしない（原文パスを示す）。本文のレンダリングはREST APIの `body_html`（`render_markdown_safe` でサニタイズ済み）が担う。
 - エラー: エラーコード、概要、原因、回復手順、`--debug`案内を同じ順序で表示する。
 - 破壊的操作: 対象件数とパスを先に提示し、対話CLI／MCP／APIでは確認（`confirmed` 等）を必須とする。非対話CLIは`--yes`必須とする。
 
@@ -362,6 +360,8 @@ SQLiteはWALを使い、`PRAGMA foreign_keys=ON`、`busy_timeout=5000`を設定�
 
 MCPや`api serve`はApplication Serviceとジョブ投入・照会を提供するが、埋め込みワーカーとしては起動しない。常駐ワーカーが必要なヘッドレス環境では`abist-kb worker run`を明示起動する。複数の`worker run`を同時起動しても1プロセスだけがキューを消費する。
 
+停止手段は`KeyboardInterrupt`のみとし、`worker run`が捕捉してDB接続を閉じる。`WorkerSupervisor`に停止用の公開APIは持たせない（呼び出し元ゼロの`request_stop()`／`_stop_requested`フラグは削除済み）。将来サービスホストからの停止が必要になった場合は、バックオフ待機中も中断できる`threading.Event`等として設計し直す。
+
 > **歴史メモ:** 初版では Web／デスクトップ／TUI／MCP の各長時間エントリが起動時に`WorkerSupervisor`を開始する想定だった。MCP-only cutover後は`worker run`が正の起動主体。
 
 一回実行CLIは既定で処理をそのプロセス内で同期実行し、完了までRich進捗を表示する。`--detach`指定時だけキューへ投入して終了するが、有効なworker heartbeatが無ければ`WORKER_UNAVAILABLE`で失敗し、実行されないジョブを放置しない。
@@ -380,7 +380,9 @@ MCPや`api serve`はApplication Serviceとジョブ投入・照会を提供す�
 
 I/O処理はAnyIOのタスクグループ、CPU負荷の高い埋め込みとManimは子プロセスで実行する。アプリ異常終了時、heartbeatとresource leaseが期限切れになった`running`ジョブは次回リーダーが`interrupted`へ変更し、安全に再試行できるジョブだけを利用者確認後に再投入する。
 
-`ProgressEvent`は`job_id`、`phase`、`current`、`total`、`message`、`percent`、`item`、`timestamp`を持つ。APIはSSE、CLIはインプロセス購読、MCPは`job_status`で同じイベントを参照する。
+`ProgressEvent`は`job_id`、`phase`、`current`、`total`、`message`、`severity`、`item`、`timestamp`を持つ。APIはSSE、CLIはインプロセス購読、MCPは`job_status`で同じイベントを参照する。辞書化は`ProgressEvent.to_dict()`が唯一の定義であり、提示層の`event_to_dict()`はこれに委譲する。
+
+進捗の永続化は役割を2つに分ける。`job_events`は全イベントの**履歴**（`seq`昇順、`jobs show`の進捗履歴とSSEの再生に使う）、`jobs.progress`は直近1件の**最新スナップショット**（`emit()`のたびに上書き）とする。`jobs.progress`は`job_to_dict()`経由でCLI・API・MCPが公開するため、履歴を全件読まずにジョブ一覧へ現在位置を表示できる。ジョブ終了時も最後のスナップショットは消さない（`finish()`は`state`・`result`・`error`のみ更新する）。
 
 ## 11. 既存データ移行
 

@@ -13,8 +13,6 @@ import sys
 from typing import IO, Any
 
 from rich.console import Console
-from rich.markdown import Markdown
-from rich.panel import Panel
 from rich.prompt import Confirm
 from rich.table import Table
 from rich.text import Text
@@ -292,23 +290,6 @@ class Presenter:
         for row in rows:
             rendered.add_row(*(str(cell) for cell in row))
         self._target().print(rendered)
-
-    def panel(self, title: str, body: str) -> None:
-        if self._quiet:
-            return
-        # `Panel._title` calls `Text.from_markup(title)` internally *whenever title is
-        # a plain `str`*, with its own hardcoded `emoji=True` default — this bypasses
-        # the Console's `emoji=False` entirely (Console-level settings only govern
-        # `render_str()`, and Panel never routes the title through it). Pre-wrapping
-        # the title in `Text(...)` (which does not parse markup/emoji codes) is the
-        # only way to keep the title byte-identical; the body is unaffected because it
-        # is rendered via `console.render_lines()`, which does honour `emoji=False`.
-        self._target().print(Panel(body, title=Text(title), safe_box=True))
-
-    def markdown(self, text: str) -> None:
-        if self._quiet:
-            return
-        self._target().print(Markdown(text))
 
     # -- 機械可読出力 -----------------------------------------------------
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-import platform
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -229,10 +228,6 @@ def ffmpeg_version() -> str | None:
     except (OSError, subprocess.SubprocessError):
         _cached_ffmpeg_version = None
     return _cached_ffmpeg_version  # type: ignore[return-value]
-
-
-def platform_python_version() -> str:
-    return platform.python_version()
 
 
 __all__ = [

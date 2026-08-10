@@ -266,7 +266,14 @@ def run_job(
             severity=severity,
             item=item,
         )
+        # `job_events` は履歴、`jobs.progress` は最新状態という役割分担。
+        # 後者は `jobs show`／API／MCP が `job_to_dict()` 経由で既に公開している
+        # フィールドであり、ここで書かないと恒久的に null のままになる。
+        # 購読者への publish は両方の永続化が終わってから行う(購読側が
+        # 通知を受けて DB を読み直したときに、その時点の最新状態が既に
+        # 反映されているようにするため)。
         events_mod.append_event(conn, event)
+        repo.update_progress(job.id, event.to_dict())
         event_bus.publish(event)
 
     resource_cm = (

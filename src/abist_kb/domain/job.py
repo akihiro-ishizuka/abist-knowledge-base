@@ -90,6 +90,24 @@ class ProgressEvent:
     item: str | None = None
     timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
+    def to_dict(self) -> dict[str, Any]:
+        """JSON化可能な辞書。`jobs.progress` スナップショットと各面の応答で共用する。
+
+        `infrastructure.jobs.execution` が `jobs.progress` へ最新スナップショットを
+        保存するために使うため、提示層(`presentation.common.serialize`)ではなく
+        ドメイン側に置く(インフラから提示層を import しないため)。
+        """
+        return {
+            "job_id": self.job_id,
+            "phase": self.phase,
+            "current": self.current,
+            "total": self.total,
+            "message": self.message,
+            "severity": str(self.severity),
+            "item": self.item,
+            "timestamp": self.timestamp.isoformat(),
+        }
+
 
 @dataclass(slots=True)
 class Job:
