@@ -266,12 +266,14 @@ Python移植前に現行3サーバーへ固定リクエストfixtureを送って
 コマンド体系:
 
 ```text
+abist-kb init
 abist-kb source list|add|edit|remove|test
 abist-kb batch list|show|add|edit|remove|run
 abist-kb sync source|batch|all
 abist-kb index build|embed|status
 abist-kb search <query>
 abist-kb document show <path>
+abist-kb document register-disk [--apply]
 abist-kb chat
 abist-kb visualize kinds|check|render
 abist-kb audit integrity|duplicates|contradictions|search-quality
@@ -286,6 +288,19 @@ abist-kb doctor
 ```
 
 > **歴史メモ:** 初版の`<cli> ui web|desktop|tui`は削除済み。画面ホストは提供しない。
+
+初回セットアップは次の順で行う。
+
+```bash
+uv sync
+abist-kb init                        # ディレクトリ・設定雛形・app.sqlite を作成
+# docs/ に .md を置く（参照コーパスは docs/knowledge/B32doc/）
+abist-kb document register-disk --apply
+abist-kb index build --corpus work
+abist-kb index embed --corpus work   # 意味検索が要る場合
+```
+
+`init`が作るのは`Settings`が解決したパスだけで、既存のファイル・DB行は変更しない（再実行は冪等）。work索引の対象は`documents`テーブルの行であるため、**手置きした`.md`は`document register-disk`で台帳へ登録しない限り、`index build`を実行しても索引されない**（未登録ファイルは`disk_only_paths`として報告されるだけになる）。`register-disk`は未登録パスのみを`classify_document`の分類結果で登録し、esa／web／gitが管理する既存行と参照コーパス配下（`knowledge/B32doc`、`knowledge/catiadoc`、`knowledge/generated`）には触れない。
 
 ## 8. アプリケーション境界
 
