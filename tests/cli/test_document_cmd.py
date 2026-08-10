@@ -51,3 +51,45 @@ def test_document_show_normalizes_windows_path(tmp_root):
     )
     assert result.exit_code == 0, result.output
     assert json.loads(result.stdout)["title"] == "A"
+
+
+def _write_doc(tmp_root, relative: str, content: str) -> None:
+    target = tmp_root / "docs" / relative
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(content, encoding="utf-8")
+
+
+def test_document_register_disk_defaults_to_dry_run(tmp_root):
+    _write_doc(tmp_root, "notes/hello.md", "# こんにちは\n\n本文\n")
+
+    result = runner.invoke(
+        app, _root_args(tmp_root, "--output", "json", "document", "register-disk")
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["applied"] is False
+    assert payload["paths"] == ["notes/hello.md"]
+
+    shown = runner.invoke(app, _root_args(tmp_root, "document", "show", "notes/hello.md"))
+    assert shown.exit_code != 0
+    assert ErrorCode.NOT_FOUND.value in shown.output
+
+
+def test_document_register_disk_apply_writes_documents(tmp_root):
+    _write_doc(tmp_root, "notes/hello.md", "# こんにちは\n\n本文\n")
+
+    result = runner.invoke(
+        app, _root_args(tmp_root, "--output", "json", "document", "register-disk", "--apply")
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.stdout)
+    assert payload["applied"] is True
+    assert payload["registered"] == 1
+
+    shown = runner.invoke(
+        app, _root_args(tmp_root, "--output", "json", "document", "show", "notes/hello.md")
+    )
+    assert shown.exit_code == 0, shown.output
+    assert json.loads(shown.stdout)["source"] == "manual"
