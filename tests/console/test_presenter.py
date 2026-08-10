@@ -205,9 +205,9 @@ def test_error_json_mode_does_not_substitute_rich_emoji_codes():
     assert "💯" not in p.stderr_value()
 
 
-def test_panel_does_not_substitute_rich_emoji_codes():
+def test_table_does_not_substitute_rich_emoji_codes():
     p = make(OutputMode.PLAIN)
-    p.panel("release :100:", "path docs/:cd:/a.md")
+    p.table("release :100:", ["path"], [["docs/:cd:/a.md"]])
     out = p.stdout_value()
     assert "release :100:" in out
     assert "docs/:cd:/a.md" in out

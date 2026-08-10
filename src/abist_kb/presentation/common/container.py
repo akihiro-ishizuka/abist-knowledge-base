@@ -22,11 +22,10 @@ from typing import Any
 from abist_kb.application.batch_service import BatchService
 from abist_kb.application.chat_service import ChatService
 from abist_kb.application.document_service import DocumentService
-from abist_kb.application.index_service import IndexService, run_index_inline
+from abist_kb.application.index_service import IndexService
 from abist_kb.application.job_service import JobService
 from abist_kb.application.search_service import SearchService
 from abist_kb.application.source_service import SourceService
-from abist_kb.application.sync_service import run_sync_inline
 from abist_kb.config import Settings
 from abist_kb.infrastructure.ai.chat_provider import OpenAIChatProvider
 from abist_kb.infrastructure.db.schema import open_app_db
@@ -106,36 +105,6 @@ class ServiceContainer:
             docs_dir=self.settings.docs_dir,
         )
         return self._chat
-
-    def run_sync(
-        self,
-        *,
-        target: str,
-        target_id: str | None = None,
-        categories: list[str] | None = None,
-        force: bool = False,
-        dry_run: bool = False,
-        prune_orphans: bool = False,
-    ) -> dict[str, Any]:
-        return run_sync_inline(
-            self.conn,
-            root_dir=self.settings.root_dir,
-            docs_dir=self.settings.docs_dir,
-            reports_dir=self.settings.reports_dir,
-            missing_threshold=self.settings.missing_threshold,
-            target=target,
-            target_id=target_id,
-            categories=categories,
-            force=force,
-            dry_run=dry_run,
-            prune_orphans=prune_orphans,
-            owner_id=self.owner_id,
-        )
-
-    def run_index(self, *, action: str, corpus: str) -> dict[str, Any]:
-        return run_index_inline(
-            self.index, self.conn, action=action, corpus=corpus, owner_id=self.owner_id
-        )
 
     def close(self) -> None:
         self.conn.close()

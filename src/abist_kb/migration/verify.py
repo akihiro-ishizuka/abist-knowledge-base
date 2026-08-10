@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
@@ -264,10 +263,3 @@ def verify_migration(
         _check_search_quality(recall_before, recall_after, citation_agreement),
     ]
     return VerifyResult(conditions=tuple(conditions))
-
-
-def write_verify_result(result: VerifyResult, output_path: Path) -> None:
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(
-        json.dumps(result.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8"
-    )

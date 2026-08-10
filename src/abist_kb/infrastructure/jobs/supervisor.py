@@ -139,7 +139,6 @@ class WorkerSupervisor:
         self._event_bus = event_bus or events_mod.EventBus()
         self._repo = JobRepository(conn)
         self._is_leader = False
-        self._stop_requested = False
         self._last_error: BaseException | None = None
 
     @property
@@ -162,9 +161,6 @@ class WorkerSupervisor:
 
     def register(self, kind: str, handler: JobHandler) -> None:
         self._handlers[kind] = handler
-
-    def request_stop(self) -> None:
-        self._stop_requested = True
 
     def _become_or_stay_leader(self) -> None:
         if self._is_leader:
@@ -250,10 +246,16 @@ class WorkerSupervisor:
         `max_backoff_seconds` まで)し、ログも初回とその後は間引いて出す
         (毎tickではなく30回に1回)ことで、原因調査に必要な情報は残しつつ
         フラッディングを防ぐ。
+
+        停止手段は `KeyboardInterrupt`(`worker run` が捕捉して接続を閉じる)
+        のみとする。以前は呼び出し元ゼロの `request_stop()`／`_stop_requested`
+        フラグを持っていたが、常駐主体が `worker run` だけである以上、
+        使われないフラグを将来用に残さない。サービスホストからの停止が
+        必要になった時点で、`sleep` 中も中断できる `threading.Event` 等として
+        設計し直す(フラグ方式では最大 `max_backoff_seconds` 待たされる)。
         """
-        self._stop_requested = False
         consecutive_failures = 0
-        while not self._stop_requested:
+        while True:
             try:
                 did_work = self.tick()
             except Exception as exc:  # noqa: BLE001 - ホストUIを巻き込まないための最終防衛線

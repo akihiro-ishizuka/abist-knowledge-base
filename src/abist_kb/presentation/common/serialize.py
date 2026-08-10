@@ -46,16 +46,12 @@ def job_to_dict(job: Job) -> dict[str, Any]:
 
 
 def event_to_dict(event: ProgressEvent) -> dict[str, Any]:
-    return {
-        "job_id": event.job_id,
-        "phase": event.phase,
-        "current": event.current,
-        "total": event.total,
-        "message": event.message,
-        "severity": str(event.severity),
-        "item": event.item,
-        "timestamp": event.timestamp.isoformat(),
-    }
+    """`ProgressEvent.to_dict()` に委譲する。
+
+    `jobs.progress` の最新スナップショット(`execution.run_job` が保存)と
+    `job_events` の履歴で同一の形を保つため、定義はドメイン側の1箇所に置く。
+    """
+    return event.to_dict()
 
 
 def error_to_dict(err: AppError) -> dict[str, Any]:
