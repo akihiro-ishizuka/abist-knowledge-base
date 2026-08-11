@@ -19,6 +19,9 @@ htmlcov/
 # Virtual environments / uv
 # .python-version is tracked on purpose: uv uses it to pin the interpreter.
 .venv/
+# 可視化用の別インタープリタ(Python 3.11 + manim)。`.venv/` は
+# ディレクトリ名完全一致なのでこの行が無いとコミット対象に入る。
+.venv-visualize/
 venv/
 .env/
 
@@ -45,6 +48,7 @@ bk/
 # Keep scripts/ ignored for cutover scratch, but track the Windows bootstrap.
 scripts/*
 !scripts/bootstrap.bat
+!scripts/bootstrap-visualize.bat
 work/
 tools/*.md
 tools/issue_bodies/

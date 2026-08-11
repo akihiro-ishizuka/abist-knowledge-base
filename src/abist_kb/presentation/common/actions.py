@@ -16,6 +16,7 @@ from typing import Any
 
 from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.domain.job import JobState
+from abist_kb.infrastructure.visualization.artifact_store import visualizations_dir
 from abist_kb.presentation.common.container import ServiceContainer
 from abist_kb.presentation.common.markdown_render import render_markdown_safe
 from abist_kb.presentation.common.serialize import error_to_dict, event_to_dict, job_to_dict
@@ -486,7 +487,7 @@ def visualization_submit_render(
     params: dict[str, Any] = {
         "scene_spec": spec,
         "docs_dir": str(container.settings.docs_dir),
-        "reports_dir": str(container.settings.reports_dir / "visualizations"),
+        "reports_dir": str(visualizations_dir(container.settings.reports_dir)),
         "repo_root": str(container.settings.root_dir),
     }
     if slug:

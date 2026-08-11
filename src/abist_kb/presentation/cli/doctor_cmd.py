@@ -10,8 +10,8 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
 import sys
-from importlib.util import find_spec
 from typing import Literal, TypedDict
 
 import typer
@@ -22,6 +22,7 @@ from abist_kb.infrastructure.db.connection import (
     MIN_SQLITE_VERSION,
     check_sqlite_capabilities,
 )
+from abist_kb.infrastructure.visualization.manim_runner import visualize_python_path
 from abist_kb.presentation.cli.context import get_context
 from abist_kb.presentation.console.presenter import Presenter
 from abist_kb.presentation.console.theme import TOKEN_STYLES, SemanticToken
@@ -202,14 +203,50 @@ def _check_ffmpeg() -> CheckResult:
     )
 
 
+#: 可視化用 venv の import 検査に許す時間。通常は1〜2秒で返る。壊れた venv
+#: (site-packages 破損・インストール途中で失敗)がぶら下がる場合の保険。
+_MANIM_PROBE_TIMEOUT_SECONDS = 10.0
+
+_MANIM_HINT = (
+    "scripts\\bootstrap-visualize.bat を実行してください(図解の自動生成機能が制限されます)。"
+)
+
+
 def _check_manim() -> CheckResult:
-    if find_spec("manim") is not None:
-        return _result("manim", "ok", "Manim を検出しました。")
+    """可視化用 venv で manim が実際に import できるかを見る。
+
+    主 venv の `find_spec("manim")` は見ない。manim は主 venv(Python 3.12・uv 管理)
+    ではなく `.venv-visualize`(Python 3.11)に入るため、主 venv を見ると構造的に
+    必ず NG になる。逆に `python.exe` の存在だけでは、venv が壊れていても(manim が
+    入っていない・pip install が途中で落ちた)「OK」と報告してしまう。import が
+    通ることまで確認するのが唯一正しい判定。
+
+    `check_visualize_deps` は使わない -- 診断スクリプト全体(ffmpeg・フォント照会を
+    含む)を最大30秒かけて回すのは doctor には重い。ここは import 1つに絞る。
+    """
+    python_path = visualize_python_path()
+    if python_path is None:
+        return _result("manim", "warn", "可視化用の venv がありません。", hint=_MANIM_HINT)
+    try:
+        completed = subprocess.run(  # noqa: S603
+            [str(python_path), "-c", "import manim; print(manim.__version__)"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_MANIM_PROBE_TIMEOUT_SECONDS,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired:
+        return _result(
+            "manim", "warn", "可視化用の venv が応答しません(タイムアウト)。", hint=_MANIM_HINT
+        )
+    except OSError:
+        return _result("manim", "warn", "可視化用の venv を実行できません。", hint=_MANIM_HINT)
+    if completed.returncode == 0:
+        version = completed.stdout.strip() or "(版不明)"
+        return _result("manim", "ok", f"Manim {version} を検出しました。")
     return _result(
-        "manim",
-        "warn",
-        "Manim が見つかりません。",
-        hint="`uv add manim` 等でインストールしてください(図解の自動生成機能が制限されます)。",
+        "manim", "warn", "venv はありますが manim を import できません。", hint=_MANIM_HINT
     )
 
 

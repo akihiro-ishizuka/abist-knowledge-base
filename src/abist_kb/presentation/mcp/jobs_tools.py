@@ -56,6 +56,7 @@ from abist_kb.domain.job import JobState as _JobState
 from abist_kb.infrastructure.db.batches_repo import BatchRepository
 from abist_kb.infrastructure.jobs import leases
 from abist_kb.infrastructure.sources.base import with_docs_prefix
+from abist_kb.infrastructure.visualization.artifact_store import visualizations_dir
 from abist_kb.presentation.mcp.kb_download import _camelize_batch
 from abist_kb.presentation.mcp.payloads import app_error_result, error_result, ok_result
 
@@ -367,6 +368,13 @@ def _app_error_result(exc: AppError) -> types.CallToolResult:
 
 
 def _job_to_status_payload(job: Job) -> dict[str, Any]:
+    """`job_status` の応答。
+
+    キー名 `job_id`(`id` ではない)は既存クライアント互換のため維持する。
+    `progress` は設計書 §10.3 が「CLI・API・MCP が公開する」としているのに
+    MCP だけ欠けていた。30秒を超える処理に進捗を求める §15 の受入条件に
+    直結するため補う。
+    """
     return {
         "ok": True,
         "job_id": job.id,
@@ -375,6 +383,7 @@ def _job_to_status_payload(job: Job) -> dict[str, Any]:
         "params": job.params,
         "result": job.result,
         "error": job.error,
+        "progress": job.progress,
         "cancel_requested": job.cancel_requested,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "started_at": job.started_at.isoformat() if job.started_at else None,
@@ -516,7 +525,7 @@ class JobTools:
         params: dict[str, Any] = {
             "scene_spec": spec,
             "docs_dir": str(self._docs_dir),
-            "reports_dir": str(self._reports_dir / "visualizations"),
+            "reports_dir": str(visualizations_dir(self._reports_dir)),
             "repo_root": str(self._repo_root),
         }
         slug = arguments.get("slug")

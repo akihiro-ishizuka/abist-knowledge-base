@@ -42,6 +42,21 @@ def tail(text: str) -> str:
     return joined[-_TAIL_MAX_CHARS:] if len(joined) > _TAIL_MAX_CHARS else joined
 
 
+def visualize_python_path(*, root: Path | None = None) -> Path | None:
+    """可視化用 venv の python 実行ファイルの実パスを返す(無ければ None)。
+
+    `resolve_python` と違い、フォールバックの `py`/`python3` は返さない。
+    「専用 venv が用意されているか」だけを知りたい呼び出し側(doctor 等)が使う。
+    """
+    root = root or _REPO_ROOT
+    candidate = (
+        root / ".venv-visualize" / "Scripts" / "python.exe"
+        if os.name == "nt"
+        else root / ".venv-visualize" / "bin" / "python"
+    )
+    return candidate if candidate.exists() else None
+
+
 def resolve_python(*, root: Path | None = None, env: dict[str, str] | None = None) -> str | None:
     """解決順: KB_VISUALIZE_PYTHON → <root>/.venv-visualize の python → py ランチャー。
 

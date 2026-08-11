@@ -22,6 +22,7 @@ import mcp.types as types
 from abist_kb.application.visualization.renderer import render_scene as run_render_scene
 from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.domain.job import ResourceKind
+from abist_kb.domain.scene_spec import RESERVED_KINDS
 from abist_kb.infrastructure.jobs.leases import acquire_resource_lease
 from abist_kb.infrastructure.visualization.manim_runner import (
     check_visualize_deps as run_check_visualize_deps,
@@ -29,13 +30,21 @@ from abist_kb.infrastructure.visualization.manim_runner import (
 from abist_kb.infrastructure.visualization.manim_runner import default_timeout_seconds
 from abist_kb.presentation.mcp.payloads import ok_result, tool_result
 
+#: 予約済み(未実装)kind の案内文。`RESERVED_KINDS` から自動生成するので、
+#: kind を実装して `SCENE_KINDS` へ移すたびに文言が自動で追随する。
+#: 全て実装し終えたら空文字になる。
+_RESERVED_NOTE = f"予約済み（未実装）: {' / '.join(RESERVED_KINDS)}。" if RESERVED_KINDS else ""
+
 #: `list_scene_kinds`/`check_visualize_deps`/`render_scene` の docstring は
 #: `tools/list` fixture(`tests/fixtures/mcp/tools-list.json`)から一字一句転記する。
+#: 例外は `list_scene_kinds` の予約 kind の一文で、旧実装に無い kind を実装した
+#: ことによる意図的な逸脱。fixture は手編集できないため、
+#: `tests/mcp/test_contract_visualize.py` の
+#: `_INTENTIONAL_DESCRIPTION_DIVERGENCE` に理由付きで登録して許可する。
 TOOL_DESCRIPTIONS: dict[str, str] = {
     "list_scene_kinds": (
         "利用可能なシーン種別（テンプレート・必須フィールド・beat 種別）を JSON で返す。"
-        "render_scene の前に必ず呼び、SceneSpec の組み立てに使うこと。"
-        "予約済み（未実装）: timeline / comparison / domain。"
+        "render_scene の前に必ず呼び、SceneSpec の組み立てに使うこと。" + _RESERVED_NOTE
     ),
     "check_visualize_deps": (
         "Python / Manim / ffmpeg / 日本語フォントの有無とバージョンを診断する。初回利用時や "

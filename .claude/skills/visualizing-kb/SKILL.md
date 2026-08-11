@@ -29,8 +29,19 @@ description: Use when turning knowledge-base content into a Manim 図解・ア�
 | `render_scene` | SceneSpec を検証してレンダリング（最長10分ブロック） | 成功 `{ok, visualizationId, outputDir, outputs, manifestPath, warnings}` / 失敗 `{ok:false, code, errors}` |
 | `check_visualize_deps` | Python / Manim / ffmpeg / フォントの診断 | `{ok, ready, python, manim, ffmpeg, fonts, messages}` |
 
-現在の scene_kind: `explain`（解説アニメ）/ `flow`（データフロー図）。
-`timeline` / `comparison` / `domain` は予約済み・未実装。出力は `mp4`（アニメ）か `png`（静止画）。
+現在の scene_kind: `explain`（解説アニメ）/ `flow`（データフロー図）/ `timeline`（時系列）。
+`comparison` / `domain` は予約済み・未実装。出力は `mp4`（アニメ）か `png`（静止画）。
+
+| scene_kind | 使いどころ | 主な beat |
+| --- | --- | --- |
+| `explain` | 箇条書きの解説 | `statement` / `metric` / `transition` |
+| `flow` | 処理・作業フロー。分岐は `decision` + ラベル付き `transition` | `flow_step` / `decision` / `transition` |
+| `timeline` | 議事録の経緯・決定事項の推移。`at` は原文表記のままでよい | `timeline_point` |
+
+任意フィールド: `transition.label`（矢印ラベル。**出典必須**）/ `emphasis`（`normal`/`key`/`warn`）/
+`quality`（`draft`/`standard`/`high`。既定 standard = 1920x1080）/ `metric.unit`（8文字以内）。
+上限: `timeline_point` は 2〜10 件、`decision.label` は 16 文字、`transition.label` は 40 文字。
+長文は自動で折り返されるので `text` に手で改行を入れる必要はない。
 
 ## 手順
 
@@ -60,7 +71,9 @@ description: Use when turning knowledge-base content into a Manim 図解・ア�
 - クライアント側タイムアウトで応答が切れてもレンダリングは完走しうる。
   再レンダリングの前に `reports/visualizations/` の最新ディレクトリと manifest.json を確認する
 - `render_from_script`（任意 Python 実行）は無効。SceneSpec + 固定テンプレート経由のみ
-- レンダリング環境: `.venv-visualize/`（`requirements-visualize.txt`、manim==0.19.0）。
-  セットアップは `py -3.11 -m venv .venv-visualize` → `.venv-visualize\Scripts\python.exe -m pip install -r requirements-visualize.txt`
-  （`python` は Store スタブなので必ず `py`）
+- レンダリング環境: `.venv-visualize/`（`requirements-visualize.txt`、manim==0.19.0、Python 3.11）。
+  セットアップは **`scripts\bootstrap-visualize.bat` 一発**。
+  リポジトリ直下に作れば `KB_VISUALIZE_PYTHON` の指定は不要
+  （手動なら `py -3.11 -m venv .venv-visualize` → `.venv-visualize\Scripts\python.exe -m pip install -r requirements-visualize.txt`。
+  `python` は Store スタブなので必ず `py`）
 - 日本語フォントは既定 Yu Gothic UI（`spec.font` か env `KB_VISUALIZE_FONT` で変更可）

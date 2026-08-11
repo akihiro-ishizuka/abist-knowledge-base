@@ -20,6 +20,7 @@ from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 
 from abist_kb.config import Settings, load_settings
+from abist_kb.infrastructure.visualization.artifact_store import visualizations_dir
 from abist_kb.presentation.mcp.jobs_tools import JobTools
 from abist_kb.presentation.mcp.jobs_tools import list_tools as jobs_list_tools
 from abist_kb.presentation.mcp.jobs_tools import validate_arguments as validate_jobs_arguments
@@ -174,9 +175,9 @@ def build_kb_visualize_server(
     server: Server[Any, Any] = Server("kb-visualize", version=_SERVER_VERSION)
     conn: sqlite3.Connection = open_app_db(app_db_path)
     resolved_root = repo_root if repo_root is not None else Path.cwd()
-    resolved_reports = (
+    resolved_reports = visualizations_dir(
         reports_dir if reports_dir is not None else (resolved_root / "reports")
-    ) / "visualizations"
+    )
     tools = KbVisualizeTools(
         conn, docs_dir=docs_dir, reports_dir=resolved_reports, repo_root=resolved_root
     )
@@ -326,7 +327,7 @@ def build_all_server(
     visualize_tools = KbVisualizeTools(
         conn,
         docs_dir=resolved.docs_dir,  # type: ignore[arg-type]
-        reports_dir=resolved.reports_dir / "visualizations",  # type: ignore[operator]
+        reports_dir=visualizations_dir(resolved.reports_dir),
         repo_root=resolved.root_dir,
     )
     job_tools = JobTools(

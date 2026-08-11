@@ -137,17 +137,54 @@ def test_render_scene_source_hash_mismatch_matches_fixture_shape(env: Env) -> No
 # ---------------------------------------------------------------------------
 
 
+#: 旧 Node 実装に無く、このリポジトリで追加した kb-visualize のツール名。
+#:
+#: `tests/fixtures/mcp/tools-list.json` は旧実装からの実測キャプチャで、SHA-256 が
+#: `tests/fixtures/capture-manifest.json` に固定されている(`tests/fixtures_check/
+#: test_capture_manifest.py` が照合)。`tests/fixtures/PROVENANCE.md` も fixture の
+#: 手編集を禁じている。したがって新ツールは fixture を書き換えるのではなく、
+#: `tests/mcp/test_all_server_tools_list_diff.py` の `_NEW_TOOL_NAMES` と同じ
+#: 「純増分の明示宣言」で表現する。
+_NEW_VISUALIZE_TOOL_NAMES: set[str] = set()
+
+#: 旧実装に無い機能を追加したことに伴う、fixture の description からの意図的な逸脱。
+#: fixture は手編集できないので、「fixture と違ってよい理由」を1件ずつ人間が
+#: 書き下すことで許可する(`replay.py` の `_STATIC_VALUE_FIELDS` と同じ発想の逆向き)。
+#: キーはツール名、値は現行の期待 description。
+_INTENTIONAL_DESCRIPTION_DIVERGENCE: dict[str, str] = {
+    # timeline を実装したため、予約 kind の一覧から timeline を外した。
+    # 文言は RESERVED_KINDS から自動生成される(kb_visualize._RESERVED_NOTE)ので、
+    # comparison / domain を実装したらここも追随させること。
+    "list_scene_kinds": (
+        "利用可能なシーン種別（テンプレート・必須フィールド・beat 種別）を JSON で返す。"
+        "render_scene の前に必ず呼び、SceneSpec の組み立てに使うこと。"
+        "予約済み（未実装）: comparison / domain。"
+    ),
+}
+
+
 def test_tools_list_matches_fixture_descriptions_and_schemas() -> None:
+    """旧3ツールの契約は不変。新ツールは allowlist で純増分として許可する。
+
+    fixture の `count` や配列要素が増えても replay が壊れないのは、
+    `tests/mcp/replay.py::_structural_mismatch` がキー集合と型だけを比較し、
+    値を見ず、list は先頭要素だけを見るため(同ファイルの docstring 参照)。
+    したがって `list_scene_kinds` の応答に scene_kind を足しても
+    fixture の更新は不要。**反射的に fixture を書き換えないこと。**
+    """
     tools_list_fixture = json.loads(TOOLS_LIST_FIXTURE.read_text(encoding="utf-8"))
     expected_tools = {
         tool["name"]: tool for tool in tools_list_fixture["servers"]["kb-visualize"]["tools"]
     }
     actual_tools = {tool.name: tool for tool in list_tools()}
 
-    assert set(actual_tools) == set(expected_tools)
+    assert set(actual_tools) == set(expected_tools) | _NEW_VISUALIZE_TOOL_NAMES
+    # allowlist が「純増分」であること(既存ツール名を紛れ込ませていないこと)。
+    assert _NEW_VISUALIZE_TOOL_NAMES.isdisjoint(expected_tools)
     for name, expected in expected_tools.items():
         actual = actual_tools[name]
-        assert actual.description == expected["description"], name
+        want_description = _INTENTIONAL_DESCRIPTION_DIVERGENCE.get(name, expected["description"])
+        assert actual.description == want_description, name
         assert actual.inputSchema == expected["inputSchema"], name
         expected_task_support = expected.get("execution", {}).get("taskSupport")
         actual_task_support = actual.execution.taskSupport if actual.execution else None

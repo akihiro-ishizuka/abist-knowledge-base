@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 from abist_kb.domain.line_range import range_hash
+from abist_kb.domain.scene_spec import composition_reason
 
 SourceStatus = Literal["ok", "not_found", "hash_mismatch"]
 
@@ -71,6 +72,12 @@ def _check_source(docs_dir: Path, src: dict[str, Any]) -> SourceStatus:
     return "ok"
 
 
+#: 不良出典で剪定しうる beat type(事実を述べうるもの)。
+#: 新しく出典を要求するフィールドを追加したら、ここへの登録も必ず見直すこと。
+#: `tests/visualize/test_source_verifier.py` の網羅テストが漏れを検出する。
+_PRUNABLE_BEAT_TYPES = ("statement", "flow_step", "transition", "decision", "timeline_point")
+
+
 def _status_message(src: dict[str, Any], status: SourceStatus) -> str:
     if status == "not_found":
         return f'出典 "{src["id"]}"（{src["path"]}）が見つかりません'
@@ -85,6 +92,12 @@ def _beat_label(beat: dict[str, Any]) -> str:
         return f"statement「{beat.get('text')}」"
     if beat["type"] == "flow_step":
         return f"flow_step「{beat.get('label')}」"
+    if beat["type"] == "decision":
+        return f"decision「{beat.get('label')}」"
+    if beat["type"] == "timeline_point":
+        return f"timeline_point「{beat.get('at')} {beat.get('label')}」"
+    if beat["type"] == "transition":
+        return f"transition「{beat.get('from')} → {beat.get('to')}」のラベル"
     return str(beat["type"])
 
 
@@ -123,14 +136,24 @@ def verify_sources(spec: dict[str, Any], docs_dir: Path) -> VerifyResult:
         )
         return VerifyResult(ok=False, code=code, errors=errors, warnings=warnings)
 
-    # statement / flow_step description の不良出典は警告して除外
+    # 事実を述べる beat の不良出典は警告して除外する。
+    #
+    # ここが実ファイル照合の唯一の関門であり、`scene_spec` の構文検証(source_refs が
+    # sources[].id に存在するか)では「出典ファイルが消えた・content_hash が変わった」
+    # を捕まえられない。**出典を要求するフィールドを追加したら必ずここにも足すこと。**
+    # 足し忘れると出典必須ポリシーがレンダリング時に迂回される。
     dropped_flow_labels: set[str] = set()
     beats: list[dict[str, Any]] = []
     for beat in spec["beats"]:
         if beat.get("decorative") is True:
             beats.append(beat)
             continue
-        if beat["type"] not in ("statement", "flow_step"):
+        if beat["type"] not in _PRUNABLE_BEAT_TYPES:
+            beats.append(beat)
+            continue
+        # transition は label を持つときだけ出典を要する(from/to は宣言済みノード
+        # 同士の順序でしかない)。
+        if beat["type"] == "transition" and beat.get("label") is None:
             beats.append(beat)
             continue
         bad = bad_refs_of(beat)
@@ -139,10 +162,21 @@ def verify_sources(spec: dict[str, Any], docs_dir: Path) -> VerifyResult:
             continue
         src = source_by_id[bad[0]]
         status = source_status[bad[0]]
+        if beat["type"] == "transition":
+            # 矢印そのものは出典と無関係なので残し、出典の無い主張(label)だけを外す。
+            # 矢印ごと消すとグラフ構造が黙って壊れ、剪定後の構成制約まで割れうる。
+            stripped = {k: v for k, v in beat.items() if k not in ("label", "source_refs")}
+            beats.append(stripped)
+            warnings.append(
+                f"{_beat_label(beat)}は{_status_message(src, status)}。"
+                "ラベルのみ描画から除外しました（矢印は残ります）"
+            )
+            continue
         warnings.append(
             f"{_beat_label(beat)}は{_status_message(src, status)}。描画から除外しました"
         )
-        if beat["type"] == "flow_step":
+        if beat["type"] in ("flow_step", "decision"):
+            # 除外したノードを指す transition は矢印の接続先を失うので連鎖除外する。
             dropped_flow_labels.add(beat["label"])
 
     # 除外した flow_step を参照する transition も連鎖除外
@@ -161,38 +195,23 @@ def verify_sources(spec: dict[str, Any], docs_dir: Path) -> VerifyResult:
             kept.append(beat)
         beats = kept
 
-    # 剪定後の構成制約
-    if spec["scene_kind"] == "explain":
-        substantive = [b for b in beats if b["type"] in ("statement", "metric")]
-        if len(substantive) < 1:
-            return VerifyResult(
-                ok=False,
-                code="INVALID_SCENE_SPEC",
-                errors=[
-                    VerifyError(
-                        "beats",
-                        "invalid",
-                        "出典検証の結果、描画可能な beat が残りません"
-                        "（statement / metric が 0 件）",
-                    )
-                ],
-                warnings=warnings,
-            )
-    if spec["scene_kind"] == "flow":
-        steps = [b for b in beats if b["type"] == "flow_step"]
-        if len(steps) < 2:
-            return VerifyResult(
-                ok=False,
-                code="INVALID_SCENE_SPEC",
-                errors=[
-                    VerifyError(
-                        "beats",
-                        "invalid",
-                        "出典検証の結果、描画可能な flow_step が 2 件未満になり残りません",
-                    )
-                ],
-                warnings=warnings,
-            )
+    # 剪定後の構成制約。規則の定義は domain.scene_spec.composition_reason に一本化
+    # してあるので、kind を増やしてもここは変更不要。
+    reason = composition_reason(spec["scene_kind"], beats)
+    if reason is not None:
+        return VerifyResult(
+            ok=False,
+            code="INVALID_SCENE_SPEC",
+            errors=[
+                VerifyError(
+                    "beats",
+                    "invalid",
+                    f"出典検証の結果、描画可能な beat が残りません（{reason}）",
+                )
+            ],
+            warnings=warnings,
+            source_status=source_status,
+        )
 
     new_spec = {**spec, "beats": beats}
     return VerifyResult(ok=True, spec=new_spec, warnings=warnings, source_status=source_status)

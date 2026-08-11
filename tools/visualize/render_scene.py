@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import shutil
 import sys
@@ -27,6 +28,7 @@ sys.path.insert(0, str(HERE))
 TEMPLATES = {
     "step_explanation": "templates.step_explanation",
     "data_flow_v1": "templates.data_flow_v1",
+    "timeline_v1": "templates.timeline_v1",
 }
 
 
@@ -48,6 +50,28 @@ def build_scene_class(spec_path: str | Path):
     module = import_module(TEMPLATES[spec["template"]])
     anim, static = module.make_scene_classes(spec)
     return static if spec.get("output_format") == "png" else anim
+
+
+#: 出力品質。Manim の quality プリセット名ではなく寸法と fps を直接指定する。
+#: `high_quality` は 60fps でレンダリング時間が倍増するため使わない。
+#: 3つとも 16:9 なので `config.frame_width`(14.222) は変わらず、
+#: **既存 spec のレイアウトは一切変わらないまま解像度だけ上がる**。
+QUALITY_PRESETS = {
+    "draft": {"pixel_width": 1280, "pixel_height": 720, "frame_rate": 30},
+    "standard": {"pixel_width": 1920, "pixel_height": 1080, "frame_rate": 30},
+    "high": {"pixel_width": 2560, "pixel_height": 1440, "frame_rate": 60},
+}
+DEFAULT_QUALITY = "standard"
+
+
+def _quality_preset(spec: dict) -> dict:
+    """spec > 環境変数 > 既定 の順で品質を決める(`resolve_font` と同じ流儀)。
+
+    従来は mp4 が medium_quality(1280x720) 固定、png が 1920x1080 固定で、
+    **静止画のほうが動画より高解像度**という逆転があった。
+    """
+    requested = spec.get("quality") or os.environ.get("KB_VISUALIZE_QUALITY") or DEFAULT_QUALITY
+    return dict(QUALITY_PRESETS.get(requested, QUALITY_PRESETS[DEFAULT_QUALITY]))
 
 
 def _find_output(media_dir: Path, ext: str) -> Path | None:
@@ -85,12 +109,20 @@ def main() -> int:
             "progress_bar": "none",
             "verbosity": "ERROR",
         }
+        preset = _quality_preset(spec)
         if is_png:
             # 静的専用シーン + 最終フレーム保存（アニメ途中フレームに依存しない）
-            conf.update({"save_last_frame": True, "format": "png", "pixel_width": 1920, "pixel_height": 1080})
+            conf.update(
+                {
+                    "save_last_frame": True,
+                    "format": "png",
+                    "pixel_width": preset["pixel_width"],
+                    "pixel_height": preset["pixel_height"],
+                }
+            )
             scene_cls = static_cls
         else:
-            conf.update({"quality": "medium_quality"})
+            conf.update(preset)
             scene_cls = anim_cls
 
         with tempconfig(conf):

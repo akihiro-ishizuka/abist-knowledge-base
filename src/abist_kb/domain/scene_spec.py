@@ -39,7 +39,10 @@ SCENE_KINDS: list[dict[str, Any]] = [
     },
     {
         "kind": "flow",
-        "description": "処理・判断・データフロー図。flow_step と transition で流れを示す",
+        "description": (
+            "処理・判断・データフロー図。flow_step と transition で流れを示す。"
+            "decision（ひし形の条件分岐）と transition.label（矢印ラベル）も使える"
+        ),
         "template": "data_flow_v1",
         "required": [
             "schema_version",
@@ -50,16 +53,37 @@ SCENE_KINDS: list[dict[str, Any]] = [
             "sources",
             "beats",
         ],
-        "beat_types": ["flow_step", "transition", "statement", "metric"],
+        "beat_types": ["flow_step", "transition", "statement", "metric", "decision"],
+    },
+    {
+        "kind": "timeline",
+        "description": (
+            "時系列の図解。決定事項や経緯を timeline_point で上から順に並べる。"
+            "at は原文の表記のまま書いてよい（日付として解釈しない）"
+        ),
+        "template": "timeline_v1",
+        "required": [
+            "schema_version",
+            "scene_kind",
+            "output_format",
+            "template",
+            "title",
+            "sources",
+            "beats",
+        ],
+        "beat_types": ["timeline_point", "statement", "metric"],
     },
 ]
 
 #: スキーマ予約のみ(未実装)。指定されたら専用エラーで案内する
-RESERVED_KINDS: list[str] = ["timeline", "comparison", "domain"]
+RESERVED_KINDS: list[str] = ["comparison", "domain"]
 
 OUTPUT_FORMATS: list[str] = ["mp4", "png"]
 
 MAX_BEATS = 30
+#: timeline の点数上限。11件目以降は fit_to_frame の等比縮小で判読不能になるため、
+#: 描いてから潰れるのではなく検証で弾いてエージェントに即フィードバックする。
+MAX_TIMELINE_POINTS = 10
 _SOURCE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,32}$")
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -193,6 +217,61 @@ def _validate_sources(sources: Any, errors: list[SceneSpecError]) -> set[str]:
     return ids
 
 
+#: label でノードとして参照される beat type。transition の from/to はこの名前空間を
+#: 引くため、種別が違っても同名は許されない。
+_NODE_BEAT_TYPES = ("flow_step", "decision")
+
+
+#: beat の強調表現。自由な色は受け付けず閉じた列挙にする(読めない配色を防ぎ、
+#: base.py の統一配色と「固定テンプレートのみ」というセキュリティ姿勢を保つ)。
+EMPHASIS_VALUES: tuple[str, ...] = ("normal", "key", "warn")
+
+#: 出力品質。png/mp4 とも同じ 16:9 の寸法を使うので、レイアウトは変わらない。
+QUALITY_VALUES: tuple[str, ...] = ("draft", "standard", "high")
+
+
+def _validate_emphasis(beat: dict[str, Any], at: str, errors: list[SceneSpecError]) -> None:
+    """emphasis は表現であって事実ではないので、出典要件には影響しない。"""
+    emphasis = beat.get("emphasis")
+    if emphasis is None:
+        return
+    if emphasis not in EMPHASIS_VALUES:
+        errors.append(
+            SceneSpecError(
+                f"{at}.emphasis",
+                "invalid",
+                f"emphasis は {' / '.join(EMPHASIS_VALUES)} のいずれかを指定してください"
+                f"(指定: {emphasis})",
+            )
+        )
+
+
+def _validate_unique_node_label(
+    label: str,
+    index: int,
+    first_index: dict[str, int],
+    at: str,
+    errors: list[SceneSpecError],
+) -> None:
+    """ノードの label が spec 内で一意であることを検証する。
+
+    重複を許すと `data_flow_v1` の `boxes[label]` が後勝ちで上書きされ、前の
+    ノードには矢印が繋がらない(描画は成功してしまうので気づけない)。エラー形は
+    `sources[].id` の重複検査(`duplicate_id`)と対称にする。
+    """
+    seen_at = first_index.get(label)
+    if seen_at is not None and seen_at != index:
+        errors.append(
+            SceneSpecError(
+                f"{at}.label",
+                "duplicate_label",
+                f'flow_step の label "{label}" が beats[{seen_at}] と重複しています。'
+                "label は transition の接続先を一意に指すため、"
+                f'"{label}(1次)" のように区別してください',
+            )
+        )
+
+
 def _validate_source_refs(
     refs: Any,
     at: str,
@@ -247,11 +326,18 @@ def _validate_beats(
         )
         return
 
-    flow_labels = {
-        b["label"]
-        for b in beats
-        if _is_plain_object(b) and b.get("type") == "flow_step" and isinstance(b.get("label"), str)
-    }
+    # label -> 最初に出現した beats の index。集合ではなく dict で持つのは、
+    # transition の接続先解決(unknown_label)に加えて重複検出(duplicate_label)にも
+    # 使うため。data_flow_v1 は `boxes[label] = box` でノードを引くので、重複を
+    # 通すと後勝ちで上書きされ、前のノードには矢印が繋がらない。
+    flow_label_first_index: dict[str, int] = {}
+    for index, b in enumerate(beats):
+        if not _is_plain_object(b) or b.get("type") not in _NODE_BEAT_TYPES:
+            continue
+        label = b.get("label")
+        if isinstance(label, str) and label not in flow_label_first_index:
+            flow_label_first_index[label] = index
+    flow_labels = flow_label_first_index.keys()
 
     for i, beat in enumerate(beats):
         at = f"beats[{i}]"
@@ -259,6 +345,7 @@ def _validate_beats(
             errors.append(SceneSpecError(at, "invalid", "beat はオブジェクトで指定してください"))
             continue
         beat_type = beat.get("type")
+        _validate_emphasis(beat, at, errors)
         if beat_type not in kind_info["beat_types"]:
             errors.append(
                 SceneSpecError(
@@ -298,6 +385,16 @@ def _validate_beats(
                         f"{at}.value", "invalid", "value は数値または文字列で指定してください"
                     )
                 )
+            # unit はテンプレート(step_explanation / data_flow_v1)が値の直後へ
+            # そのまま連結する。1.0 当初から検証が無く、任意の文字列で数値の意味を
+            # 書き換えられる抜け穴になっていた。
+            unit = beat.get("unit")
+            if unit is not None and (not isinstance(unit, str) or len(unit) > 8):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.unit", "invalid", "unit は 8 文字以内の文字列で指定してください"
+                    )
+                )
             _validate_source_refs(
                 beat.get("source_refs"),
                 at,
@@ -324,10 +421,36 @@ def _validate_beats(
                             "flow_step の label がありません",
                         )
                     )
+            # 矢印ラベル。分岐条件・データ名・トリガを示す。
+            # from/to は「宣言済みノード同士の順序」でしかないので出典不要だが、
+            # label は独立した事実主張(「スコア80以上」など)なので出典を要求する。
+            label = beat.get("label")
+            if label is not None:
+                if not isinstance(label, str) or not (1 <= len(label) <= 40):
+                    errors.append(
+                        SceneSpecError(
+                            f"{at}.label",
+                            "invalid",
+                            "transition の label は 1〜40 文字で指定してください",
+                        )
+                    )
+                _validate_source_refs(
+                    beat.get("source_refs"),
+                    at,
+                    source_ids,
+                    errors,
+                    required=beat.get("decorative") is not True,
+                    require_hint=(
+                        "label で条件や事実を述べる transition には出典(source_refs)が"
+                        "必要です。装飾なら decorative:true を付けてください"
+                    ),
+                )
         elif beat_type == "flow_step":
             label = beat.get("label")
             if not isinstance(label, str) or len(label) < 1:
                 errors.append(SceneSpecError(f"{at}.label", "invalid", "label を指定してください"))
+            else:
+                _validate_unique_node_label(label, i, flow_label_first_index, at, errors)
             description = beat.get("description")
             if description is not None:
                 if not isinstance(description, str) or len(description) > 200:
@@ -353,28 +476,124 @@ def _validate_beats(
                 _validate_source_refs(
                     beat.get("source_refs"), at, source_ids, errors, required=False
                 )
+        elif beat_type == "timeline_point":
+            at_value = beat.get("at")
+            if not isinstance(at_value, str) or not (1 <= len(at_value) <= 24):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.at",
+                        "invalid",
+                        "at は 1〜24 文字で指定してください"
+                        "(日付として解釈しないので「6/11 定例」のような原文表記でよい)",
+                    )
+                )
+            label = beat.get("label")
+            if not isinstance(label, str) or not (1 <= len(label) <= 40):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.label", "invalid", "label は 1〜40 文字で指定してください"
+                    )
+                )
+            description = beat.get("description")
+            if description is not None and (
+                not isinstance(description, str) or len(description) > 200
+            ):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.description",
+                        "invalid",
+                        "description は 200 文字以内の文字列で指定してください",
+                    )
+                )
+            # timeline_point は「この時点でこれが起きた/決まった」という時制付きの
+            # 事実主張そのもの。flow_step の label(構造上のノード名)より強い主張なので、
+            # description の有無に関わらず出典を要求する。
+            _validate_source_refs(
+                beat.get("source_refs"),
+                at,
+                source_ids,
+                errors,
+                required=beat.get("decorative") is not True,
+                require_hint=(
+                    "timeline_point は時点付きの事実を述べるため出典(source_refs)が"
+                    "必要です。装飾なら decorative:true を付けてください"
+                ),
+            )
+        elif beat_type == "decision":
+            # ひし形の条件分岐ノード。分岐は「decision 1個 + ラベル付き transition n本」
+            # で表し、合流は複数の transition が同じ to を指すだけで表現できる。
+            label = beat.get("label")
+            if not isinstance(label, str) or not (1 <= len(label) <= 16):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.label",
+                        "invalid",
+                        "decision の label は 1〜16 文字で指定してください"
+                        "(ひし形は同じ文字数でも矩形の約1.8倍の面積を要するため)",
+                    )
+                )
+            else:
+                _validate_unique_node_label(label, i, flow_label_first_index, at, errors)
+            if beat.get("description") is not None:
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.description",
+                        "invalid",
+                        "decision に description は指定できません"
+                        "(条件はラベルに、根拠は transition.label に書いてください)",
+                    )
+                )
+            _validate_source_refs(
+                beat.get("source_refs"),
+                at,
+                source_ids,
+                errors,
+                required=beat.get("decorative") is not True,
+                require_hint=(
+                    "条件を述べる decision には出典(source_refs)が必要です。"
+                    "装飾なら decorative:true を付けてください"
+                ),
+            )
 
     # kind ごとの構成制約
-    if kind_info["kind"] == "explain":
-        substantive = [
-            b for b in beats if _is_plain_object(b) and b.get("type") in ("statement", "metric")
-        ]
-        if len(substantive) < 1:
-            errors.append(
-                SceneSpecError(
-                    "beats",
-                    "invalid",
-                    "explain には statement または metric の beat が 1 件以上必要です",
-                )
-            )
-    if kind_info["kind"] == "flow":
-        steps = [b for b in beats if _is_plain_object(b) and b.get("type") == "flow_step"]
-        if len(steps) < 2:
-            errors.append(
-                SceneSpecError(
-                    "beats", "invalid", "flow には flow_step の beat が 2 件以上必要です"
-                )
-            )
+    reason = composition_reason(kind_info["kind"], [b for b in beats if _is_plain_object(b)])
+    if reason is not None:
+        errors.append(SceneSpecError("beats", "invalid", f"{kind_info['kind']} には{reason}"))
+
+
+def composition_reason(scene_kind: str, beats: list[dict[str, Any]]) -> str | None:
+    """kind ごとの構成制約を満たさない理由を短文で返す(満たすなら None)。
+
+    剪定前(`scene_spec._validate_beats`)と剪定後(`source_verifier.verify_sources`)の
+    双方が同じ規則を検査する必要があり、以前は同じルールが別文言で二重に書かれていた。
+    kind を増やすたびに二重化が広がるので、規則の定義はここ1箇所に集約する。
+
+    呼び出し側がそれぞれの文脈を付ける:
+      - scene_spec:      f"{kind} には{reason}"
+      - source_verifier: f"出典検証の結果、描画可能な beat が残りません（{reason}）"
+    """
+    counts: dict[str, int] = {}
+    for beat in beats:
+        beat_type = beat.get("type")
+        if isinstance(beat_type, str):
+            counts[beat_type] = counts.get(beat_type, 0) + 1
+
+    if scene_kind == "explain":
+        if counts.get("statement", 0) + counts.get("metric", 0) < 1:
+            return "statement または metric の beat が 1 件以上必要です"
+        return None
+    if scene_kind == "flow":
+        if counts.get("flow_step", 0) < 2:
+            return "flow_step の beat が 2 件以上必要です"
+        return None
+    if scene_kind == "timeline":
+        points = counts.get("timeline_point", 0)
+        if points < 2:
+            return "timeline_point の beat が 2 件以上必要です"
+        if points > MAX_TIMELINE_POINTS:
+            return f"timeline_point の beat は {MAX_TIMELINE_POINTS} 件以内にしてください"
+        return None
+    return None
 
 
 def validate_scene_spec(spec: Any) -> SceneSpecResult:
@@ -433,6 +652,17 @@ def validate_scene_spec(spec: Any) -> SceneSpecResult:
     query = spec.get("query")
     if query is not None and not isinstance(query, str):
         errors.append(SceneSpecError("query", "invalid", "query は文字列で指定してください"))
+    quality = spec.get("quality")
+    if quality is not None and quality not in QUALITY_VALUES:
+        errors.append(
+            SceneSpecError(
+                "quality",
+                "invalid",
+                f"quality は {' / '.join(QUALITY_VALUES)} のいずれかを指定してください"
+                f"(指定: {quality})",
+            )
+        )
+
     font = spec.get("font")
     if font is not None and (not isinstance(font, str) or len(font) < 1):
         errors.append(
