@@ -75,7 +75,14 @@ def _check_source(docs_dir: Path, src: dict[str, Any]) -> SourceStatus:
 #: 不良出典で剪定しうる beat type(事実を述べうるもの)。
 #: 新しく出典を要求するフィールドを追加したら、ここへの登録も必ず見直すこと。
 #: `tests/visualize/test_source_verifier.py` の網羅テストが漏れを検出する。
-_PRUNABLE_BEAT_TYPES = ("statement", "flow_step", "transition", "decision", "timeline_point")
+_PRUNABLE_BEAT_TYPES = (
+    "statement",
+    "flow_step",
+    "transition",
+    "decision",
+    "timeline_point",
+    "comparison_item",
+)
 
 
 def _status_message(src: dict[str, Any], status: SourceStatus) -> str:
@@ -96,6 +103,8 @@ def _beat_label(beat: dict[str, Any]) -> str:
         return f"decision「{beat.get('label')}」"
     if beat["type"] == "timeline_point":
         return f"timeline_point「{beat.get('at')} {beat.get('label')}」"
+    if beat["type"] == "comparison_item":
+        return f"comparison_item「{beat.get('aspect')} x {beat.get('side')}」"
     if beat["type"] == "transition":
         return f"transition「{beat.get('from')} → {beat.get('to')}」のラベル"
     return str(beat["type"])

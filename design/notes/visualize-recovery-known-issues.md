@@ -27,8 +27,8 @@ queued を取るため、ジョブ側では回避できない。
 `finish(FAILED)` ではなく queued へ差し戻す（`JobRepository.requeue`）。
 恒久策は `claim` に「保持中のリソースを要求する kind をスキップする」条件を足すこと。
 
-## 2. `test_handler_writes_stop_after_resource_lease_is_stolen_mid_run` が
-   タイミング依存なのにマークされていない
+## 2. `test_handler_writes_stop_after_resource_lease_is_stolen_mid_run` の
+   タイミング依存（Phase 5 で修正済み）
 
 `tests/jobs/test_multiprocess_leases.py:727`。実プロセス2つを跨ぎ、
 「0.1秒間隔で20回書き込む間に t=0.35秒でリースを奪う」という壁時計前提で動く。
@@ -42,10 +42,17 @@ queued を取るため、ジョブ側では回避できない。
 - 本ブランチの jobs 系変更は presentation 層の直列化のみで、
   lease / execution の経路に触れていない
 
-同ファイル `:424` の `test_corpus_write_different_corpora_do_not_contend` は
-同種のリスクを認めて `@pytest.mark.timing_sensitive` を付けている。
-このテストにも同じマークを付けるのが一貫するが、マークすると本物の回帰を
-見逃す可能性もあるため、判断は保留して記録に留める。
+**Phase 5 で修正した。** `timing_sensitive` マーカーは
+`pyproject.toml` で宣言されているだけで deselect には使われておらず
+（CI も `pytest -q` を素で実行する）、マークしても失敗は消えない。
+
+原因は「奪取 → 検知」に使える時間が書き込み間隔 0.1 秒しかなく、
+フルスイート実行時の CPU 高負荷下では次の書き込みが1回すり抜けること。
+`--interval` を 0.25 秒・`--count` を 8 に変更し（総実行時間 2 秒は据え置き）、
+検知の余裕を 2.5 倍に広げた。**`writes_after == []` の assert は緩めていない。**
+
+検証: 単体で成功、かつ `tests/search tests/mcp` を並行実行して負荷をかけた状態で
+3 回連続成功。
 
 ## 3. `scripts/bootstrap.bat` の `echo ==>` がリダイレクトだった（本ブランチで修正済み）
 

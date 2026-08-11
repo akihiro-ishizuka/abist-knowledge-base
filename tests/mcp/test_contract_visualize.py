@@ -152,13 +152,13 @@ _NEW_VISUALIZE_TOOL_NAMES: set[str] = set()
 #: 書き下すことで許可する(`replay.py` の `_STATIC_VALUE_FIELDS` と同じ発想の逆向き)。
 #: キーはツール名、値は現行の期待 description。
 _INTENTIONAL_DESCRIPTION_DIVERGENCE: dict[str, str] = {
-    # timeline を実装したため、予約 kind の一覧から timeline を外した。
+    # timeline / comparison を実装したため、予約 kind の一覧から外した。
     # 文言は RESERVED_KINDS から自動生成される(kb_visualize._RESERVED_NOTE)ので、
-    # comparison / domain を実装したらここも追随させること。
+    # domain を実装したらここも追随させること。
     "list_scene_kinds": (
         "利用可能なシーン種別（テンプレート・必須フィールド・beat 種別）を JSON で返す。"
         "render_scene の前に必ず呼び、SceneSpec の組み立てに使うこと。"
-        "予約済み（未実装）: comparison / domain。"
+        "予約済み（未実装）: domain。"
     ),
 }
 

@@ -73,10 +73,29 @@ SCENE_KINDS: list[dict[str, Any]] = [
         ],
         "beat_types": ["timeline_point", "statement", "metric"],
     },
+    {
+        "kind": "comparison",
+        "description": (
+            "観点 x 対象のマトリクス比較。現行版/次期版、案A/案B、Before/After を"
+            "comparison_item（side=列見出し・aspect=行見出し・text=セル）で表す。"
+            "該当のない組み合わせは書かなくてよい（表では「—」として描かれる）"
+        ),
+        "template": "comparison_v1",
+        "required": [
+            "schema_version",
+            "scene_kind",
+            "output_format",
+            "template",
+            "title",
+            "sources",
+            "beats",
+        ],
+        "beat_types": ["comparison_item", "statement", "metric"],
+    },
 ]
 
 #: スキーマ予約のみ(未実装)。指定されたら専用エラーで案内する
-RESERVED_KINDS: list[str] = ["comparison", "domain"]
+RESERVED_KINDS: list[str] = ["domain"]
 
 OUTPUT_FORMATS: list[str] = ["mp4", "png"]
 
@@ -84,6 +103,10 @@ MAX_BEATS = 30
 #: timeline の点数上限。11件目以降は fit_to_frame の等比縮小で判読不能になるため、
 #: 描いてから潰れるのではなく検証で弾いてエージェントに即フィードバックする。
 MAX_TIMELINE_POINTS = 10
+#: comparison の列数(distinct side)上限。16:9 に日本語で並べられる実用上の限界。
+MAX_COMPARISON_SIDES = 3
+#: comparison の行数(distinct aspect)上限。
+MAX_COMPARISON_ASPECTS = 6
 _SOURCE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,32}$")
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -339,6 +362,15 @@ def _validate_beats(
             flow_label_first_index[label] = index
     flow_labels = flow_label_first_index.keys()
 
+    # (aspect, side) -> 最初に出現した index。comparison のセル重複検出に使う。
+    comparison_cell_first_index: dict[tuple[str, str], int] = {}
+    for index, b in enumerate(beats):
+        if not _is_plain_object(b) or b.get("type") != "comparison_item":
+            continue
+        cell = (b.get("aspect"), b.get("side"))
+        if all(isinstance(v, str) for v in cell) and cell not in comparison_cell_first_index:
+            comparison_cell_first_index[cell] = index  # type: ignore[index]
+
     for i, beat in enumerate(beats):
         at = f"beats[{i}]"
         if not _is_plain_object(beat):
@@ -476,6 +508,41 @@ def _validate_beats(
                 _validate_source_refs(
                     beat.get("source_refs"), at, source_ids, errors, required=False
                 )
+        elif beat_type == "comparison_item":
+            for key, limit in (("side", 20), ("aspect", 20), ("text", 60)):
+                value = beat.get(key)
+                if not isinstance(value, str) or not (1 <= len(value) <= limit):
+                    errors.append(
+                        SceneSpecError(
+                            f"{at}.{key}",
+                            "invalid",
+                            f"{key} は 1〜{limit} 文字で指定してください",
+                        )
+                    )
+            # 同じ (aspect, side) が2件あるとセルが上書きされ、片方が黙って消える。
+            cell = (beat.get("aspect"), beat.get("side"))
+            if all(isinstance(v, str) for v in cell):
+                seen_at = comparison_cell_first_index.get(cell)
+                if seen_at is not None and seen_at != i:
+                    errors.append(
+                        SceneSpecError(
+                            f"{at}.aspect",
+                            "duplicate_cell",
+                            f'aspect "{cell[0]}" x side "{cell[1]}" のセルが '
+                            f"beats[{seen_at}] と重複しています",
+                        )
+                    )
+            _validate_source_refs(
+                beat.get("source_refs"),
+                at,
+                source_ids,
+                errors,
+                required=beat.get("decorative") is not True,
+                require_hint=(
+                    "comparison_item は対比という事実を述べるため出典(source_refs)が"
+                    "必要です。装飾なら decorative:true を付けてください"
+                ),
+            )
         elif beat_type == "timeline_point":
             at_value = beat.get("at")
             if not isinstance(at_value, str) or not (1 <= len(at_value) <= 24):
@@ -561,6 +628,18 @@ def _validate_beats(
         errors.append(SceneSpecError("beats", "invalid", f"{kind_info['kind']} には{reason}"))
 
 
+def _distinct_in_order(beats: list[dict[str, Any]], beat_type: str, key: str) -> list[str]:
+    """指定 beat type の `key` の値を初出順で重複なく返す(列・行の並び順の正本)。"""
+    seen: list[str] = []
+    for beat in beats:
+        if beat.get("type") != beat_type:
+            continue
+        value = beat.get(key)
+        if isinstance(value, str) and value not in seen:
+            seen.append(value)
+    return seen
+
+
 def composition_reason(scene_kind: str, beats: list[dict[str, Any]]) -> str | None:
     """kind ごとの構成制約を満たさない理由を短文で返す(満たすなら None)。
 
@@ -585,6 +664,18 @@ def composition_reason(scene_kind: str, beats: list[dict[str, Any]]) -> str | No
     if scene_kind == "flow":
         if counts.get("flow_step", 0) < 2:
             return "flow_step の beat が 2 件以上必要です"
+        return None
+    if scene_kind == "comparison":
+        if counts.get("comparison_item", 0) < 2:
+            return "comparison_item の beat が 2 件以上必要です"
+        sides = _distinct_in_order(beats, "comparison_item", "side")
+        aspects = _distinct_in_order(beats, "comparison_item", "aspect")
+        if len(sides) < 2:
+            return "比較には 2 つ以上の side（列見出し）が必要です"
+        if len(sides) > MAX_COMPARISON_SIDES:
+            return f"side（列見出し）は {MAX_COMPARISON_SIDES} 種類以内にしてください"
+        if len(aspects) > MAX_COMPARISON_ASPECTS:
+            return f"aspect（行見出し）は {MAX_COMPARISON_ASPECTS} 種類以内にしてください"
         return None
     if scene_kind == "timeline":
         points = counts.get("timeline_point", 0)

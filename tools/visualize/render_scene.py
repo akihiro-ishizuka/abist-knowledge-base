@@ -29,6 +29,7 @@ TEMPLATES = {
     "step_explanation": "templates.step_explanation",
     "data_flow_v1": "templates.data_flow_v1",
     "timeline_v1": "templates.timeline_v1",
+    "comparison_v1": "templates.comparison_v1",
 }
 
 

@@ -29,18 +29,21 @@ description: Use when turning knowledge-base content into a Manim 図解・ア�
 | `render_scene` | SceneSpec を検証してレンダリング（最長10分ブロック） | 成功 `{ok, visualizationId, outputDir, outputs, manifestPath, warnings}` / 失敗 `{ok:false, code, errors}` |
 | `check_visualize_deps` | Python / Manim / ffmpeg / フォントの診断 | `{ok, ready, python, manim, ffmpeg, fonts, messages}` |
 
-現在の scene_kind: `explain`（解説アニメ）/ `flow`（データフロー図）/ `timeline`（時系列）。
-`comparison` / `domain` は予約済み・未実装。出力は `mp4`（アニメ）か `png`（静止画）。
+現在の scene_kind: `explain`（解説アニメ）/ `flow`（データフロー図）/ `timeline`（時系列）/ `comparison`（比較表）。
+`domain` は予約済み・未実装。出力は `mp4`（アニメ）か `png`（静止画）。
 
 | scene_kind | 使いどころ | 主な beat |
 | --- | --- | --- |
 | `explain` | 箇条書きの解説 | `statement` / `metric` / `transition` |
 | `flow` | 処理・作業フロー。分岐は `decision` + ラベル付き `transition` | `flow_step` / `decision` / `transition` |
 | `timeline` | 議事録の経緯・決定事項の推移。`at` は原文表記のままでよい | `timeline_point` |
+| `comparison` | 新旧・案の比較。観点 x 対象のマトリクス表 | `comparison_item` |
 
 任意フィールド: `transition.label`（矢印ラベル。**出典必須**）/ `emphasis`（`normal`/`key`/`warn`）/
 `quality`（`draft`/`standard`/`high`。既定 standard = 1920x1080）/ `metric.unit`（8文字以内）。
-上限: `timeline_point` は 2〜10 件、`decision.label` は 16 文字、`transition.label` は 40 文字。
+上限: `timeline_point` は 2〜10 件、`comparison` は side 2〜3 種・aspect 6 種以内・`text` 60 文字、
+`decision.label` は 16 文字、`transition.label` は 40 文字。
+`comparison` で該当のない組み合わせは書かなくてよい（表では「—」になる）。
 長文は自動で折り返されるので `text` に手で改行を入れる必要はない。
 
 ## 手順

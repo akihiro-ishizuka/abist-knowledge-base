@@ -747,17 +747,22 @@ def test_handler_writes_stop_after_resource_lease_is_stolen_mid_run(db_path: Pat
         "--resource",
         "docs-write",
         "--ttl",
-        "0.05",  # 更新間隔 ~0.017秒: 書き込み間隔(0.1秒)より十分短くし、
-        # 奪取から次の書き込みまでの間に高確率で検知できるようにする。
+        "0.05",  # 更新間隔 ~0.017秒: 書き込み間隔より十分短くし、
+        # 奪取から次の書き込みまでの間に確実に検知できるようにする。
         "--count",
-        "20",
+        "8",
+        # 書き込み間隔は 0.25 秒。以前は 0.1 秒だったが、フルスイート実行時の
+        # CPU 高負荷下では「奪取 -> 検知」に 0.1 秒では足りず、次の書き込みが
+        # 1回すり抜けてフレークしていた(単体実行・低負荷では常に成功していた)。
+        # 総実行時間は 8x0.25 = 2秒で従来(20x0.1)と同じまま、検知の余裕だけを
+        # 2.5倍に広げる。assert は「奪取後の書き込みは0件」のまま緩めない。
         "--interval",
-        "0.1",
+        "0.25",
     )
     reader_writer = _LineReader(proc_writer.stdout)
 
-    # 4回目の書き込み(index=3, 理論上 t≈0.3秒)まで見届けてから奪う
-    # (レビューの再現条件 t=0.35秒 相当のタイミング)。書き込み間隔(0.1秒)の
+    # 4回目の書き込み(index=3, 理論上 t≈0.75秒)まで見届けてから奪う
+    # (レビューの再現条件 t=0.35秒 相当のタイミング)。書き込み間隔の
     # ちょうど中間まで少し待ってから奪うことで、次の書き込み(index=4, t≈0.4秒)
     # までの間に更新スレッドが確実に何周期か回る余裕を作る(でなければ「奪った
     # 直後」と「次の確認」がほぼ同時に競合し、確認が単なるノイズで1回だけ
@@ -770,7 +775,7 @@ def test_handler_writes_stop_after_resource_lease_is_stolen_mid_run(db_path: Pat
         )
         assert payload is not None, "A が書き込みを開始できなかった"
         writes_before_steal.append(payload)
-    time.sleep(0.05)
+    time.sleep(0.125)  # 書き込み間隔(0.25秒)のちょうど中間
 
     proc_stealer = _spawn(
         "steal-resource-lease",

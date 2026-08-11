@@ -366,3 +366,32 @@ def test_timeline_point_with_bad_source_is_dropped_with_warning(tmp_path: Path) 
     labels = [b["label"] for b in result.spec["beats"]]
     assert "落ちる" not in labels
     assert result.warnings and "timeline_point" in result.warnings[0]
+
+
+def test_comparison_item_with_bad_source_is_dropped_with_warning(tmp_path: Path) -> None:
+    """comparison_item の剪定対象への登録漏れを検出する。"""
+    docs, _ = _docs_with_doc(tmp_path)
+
+    def cell(side, aspect, **kw):
+        return {"type": "comparison_item", "side": side, "aspect": aspect, "text": "内容", **kw}
+
+    spec = {
+        "schema_version": "1.0",
+        "scene_kind": "comparison",
+        "output_format": "png",
+        "template": "comparison_v1",
+        "title": "比較",
+        "sources": [
+            {"id": "s1", "path": "doc.md", "start_line": 1, "end_line": 1, "content_hash": "b" * 64}
+        ],
+        "beats": [
+            cell("A", "落ちる観点", source_refs=["s1"]),
+            cell("A", "残る", decorative=True),
+            cell("B", "残る", decorative=True),
+        ],
+    }
+    result = verify_sources(spec, docs)
+    assert result.ok, result.errors
+    aspects = [b["aspect"] for b in result.spec["beats"]]
+    assert "落ちる観点" not in aspects
+    assert result.warnings and "comparison_item" in result.warnings[0]

@@ -82,11 +82,11 @@ def test_empty_object_reports_multiple_errors():
 def test_reserved_kind_reports_reserved_kind_error():
     """未実装の予約 kind は `reserved_kind`(タイポの `unknown_kind` と区別)。
 
-    timeline は実装済みになったので、まだ予約中の comparison を使う。
+    timeline / comparison は実装済みになったので、まだ予約中の domain を使う。
     RESERVED_KINDS が空になったらこのテストは削除し、
     `test_reserved_and_implemented_kinds_are_disjoint` に役割を移すこと。
     """
-    result = validate_scene_spec(_explain_spec(scene_kind="comparison", template="comparison"))
+    result = validate_scene_spec(_explain_spec(scene_kind="domain", template="domain"))
     assert result.ok is False
     assert any(e.code == "reserved_kind" for e in result.errors)
 
@@ -227,7 +227,7 @@ def test_scene_kinds_match_list_scene_kinds_contract():
     list を先頭要素だけ構造比較するため、先頭が変わらない限り kind を追加しても
     fixture は無風でいられる(値は比較されないので count も自由)。
     """
-    assert [k["kind"] for k in SCENE_KINDS] == ["explain", "flow", "timeline"]
+    assert [k["kind"] for k in SCENE_KINDS] == ["explain", "flow", "timeline", "comparison"]
     for info in SCENE_KINDS:
         assert set(info.keys()) == {"kind", "description", "template", "required", "beat_types"}
 
@@ -271,6 +271,7 @@ def test_every_beat_type_is_validated():
         "flow_step",
         "decision",
         "timeline_point",
+        "comparison_item",
     }
     for info in SCENE_KINDS:
         for beat_type in info["beat_types"]:
@@ -664,3 +665,107 @@ def test_timeline_allows_statement_and_metric() -> None:
         ]
     )
     assert validate_scene_spec(spec).ok
+
+
+# ---------------------------------------------------------------------------
+# Phase 5: comparison
+# ---------------------------------------------------------------------------
+
+
+def _comparison_spec(beats: list[dict]) -> dict:
+    return {
+        "schema_version": "1.0",
+        "scene_kind": "comparison",
+        "output_format": "png",
+        "template": "comparison_v1",
+        "title": "比較",
+        "sources": [
+            {"id": "s1", "path": "a.md", "start_line": 1, "end_line": 1, "content_hash": "0" * 64}
+        ],
+        "beats": beats,
+    }
+
+
+def _cell(side: str, aspect: str, text: str = "内容", **extra) -> dict:
+    beat = {
+        "type": "comparison_item",
+        "side": side,
+        "aspect": aspect,
+        "text": text,
+        "source_refs": ["s1"],
+    }
+    beat.update(extra)
+    return beat
+
+
+def test_valid_comparison_spec_is_ok() -> None:
+    spec = _comparison_spec([_cell("現行版", "UI"), _cell("次期版", "UI")])
+    result = validate_scene_spec(spec)
+    assert result.ok, result.errors
+
+
+def test_comparison_missing_cell_is_valid() -> None:
+    """該当のない組み合わせは正常系（表では「—」として描かれる）。"""
+    spec = _comparison_spec([_cell("現行版", "UI"), _cell("次期版", "UI"), _cell("次期版", "配布")])
+    assert validate_scene_spec(spec).ok
+
+
+def test_comparison_requires_two_distinct_sides() -> None:
+    spec = _comparison_spec([_cell("現行版", "UI"), _cell("現行版", "配布")])
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    assert any(e.path == "beats" for e in result.errors)
+
+
+def test_comparison_rejects_four_sides() -> None:
+    spec = _comparison_spec([_cell(f"案{i}", "UI") for i in range(4)])
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    assert any(e.path == "beats" for e in result.errors)
+
+
+def test_comparison_rejects_seven_aspects() -> None:
+    beats = [_cell("A", f"観点{i}") for i in range(7)] + [_cell("B", "観点0")]
+    result = validate_scene_spec(_comparison_spec(beats))
+    assert not result.ok
+    assert any(e.path == "beats" for e in result.errors)
+
+
+def test_comparison_duplicate_aspect_side_cell_is_invalid() -> None:
+    """同じ (aspect, side) が2件あるとセルが上書きされ片方が黙って消える。"""
+    spec = _comparison_spec(
+        [_cell("現行版", "UI", "A"), _cell("次期版", "UI"), _cell("現行版", "UI", "B")]
+    )
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    dup = [e for e in result.errors if e.code == "duplicate_cell"]
+    assert len(dup) == 1
+    assert dup[0].path == "beats[2].aspect"
+
+
+def test_comparison_item_requires_source_refs() -> None:
+    spec = _comparison_spec(
+        [
+            {"type": "comparison_item", "side": "現行版", "aspect": "UI", "text": "x"},
+            _cell("次期版", "UI"),
+        ]
+    )
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    assert any(e.code == "missing_source_refs" for e in result.errors)
+
+
+def test_comparison_item_text_over_60_chars_is_invalid() -> None:
+    spec = _comparison_spec([_cell("A", "UI", "あ" * 61), _cell("B", "UI")])
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    assert any(e.path == "beats[0].text" for e in result.errors)
+
+
+def test_comparison_rejects_flow_step_beat_type() -> None:
+    spec = _comparison_spec(
+        [_cell("A", "UI"), _cell("B", "UI"), {"type": "flow_step", "label": "X"}]
+    )
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    assert any(e.code == "unknown_beat_type" for e in result.errors)
