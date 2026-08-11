@@ -454,6 +454,38 @@ def register_api_routes(
             ),
         )
 
+    @app.get(f"{router_prefix}/visualizations")
+    async def visualizations_list(
+        request: Request,
+        limit: int = 20,
+        offset: int = 0,
+        state: str | None = None,
+        scene_kind: str | None = None,
+        output_format: str | None = None,
+        query: str | None = None,
+        source_path: str | None = None,
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: facade.visualization_list(
+                get_container(request),
+                limit=limit,
+                offset=offset,
+                state=state,
+                scene_kind=scene_kind,
+                output_format=output_format,
+                query=query,
+                source_path=source_path,
+            ),
+        )
+
+    @app.get(f"{router_prefix}/visualizations/{{visualization_id}}")
+    async def visualization_detail(request: Request, visualization_id: str) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: facade.visualization_detail(get_container(request), visualization_id),
+        )
+
     @app.get(f"{router_prefix}/quality")
     async def quality(request: Request) -> dict[str, Any]:
         return await run_locked(request, lambda: facade.quality_stub(get_container(request)))

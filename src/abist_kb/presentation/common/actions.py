@@ -472,6 +472,49 @@ def visualization_deps(container: ServiceContainer) -> dict[str, Any]:
     return check_visualize_deps(root=container.settings.root_dir)
 
 
+def visualization_list(container: ServiceContainer, **filters: Any) -> dict[str, Any]:
+    """成果物カタログの一覧（ディスクとの差分があれば自動整合してから返す）。"""
+    from abist_kb.application.visualization import catalog
+    from abist_kb.infrastructure.db.visualizations_repo import VisualizationRepository
+
+    viz_dir = visualizations_dir(container.settings.reports_dir)
+    root = container.settings.root_dir
+    repo = VisualizationRepository(container.conn)
+    if catalog.disk_ids(viz_dir) != repo.all_ids():
+        catalog.reconcile_from_disk(container.conn, viz_dir, root_dir=root)
+    rows, total = repo.list(
+        state=filters.get("state"),
+        scene_kind=filters.get("scene_kind"),
+        output_format=filters.get("output_format"),
+        query=filters.get("query"),
+        source_path=filters.get("source_path"),
+        limit=int(filters.get("limit") or 20),
+        offset=int(filters.get("offset") or 0),
+    )
+    return {"count": len(rows), "total": total, "visualizations": rows}
+
+
+def visualization_detail(container: ServiceContainer, visualization_id: str) -> dict[str, Any]:
+    """成果物1件の詳細（manifest のドリフト検知つき）。"""
+    from abist_kb.application.visualization import catalog
+    from abist_kb.infrastructure.db.visualizations_repo import VisualizationRepository
+
+    repo = VisualizationRepository(container.conn)
+    record = repo.get(visualization_id)
+    if record is None:
+        raise AppError(
+            code=ErrorCode.NOT_FOUND,
+            message=f"可視化 {visualization_id} は見つかりません",
+        )
+    drifted, manifest = catalog.manifest_drifted(record, container.settings.root_dir)
+    return {
+        "visualization": record,
+        "sources": repo.get_sources(visualization_id),
+        "manifest": manifest,
+        "manifest_drift": drifted,
+    }
+
+
 def visualization_submit_render(
     container: ServiceContainer, spec: dict[str, Any], *, slug: str | None = None
 ) -> dict[str, Any]:

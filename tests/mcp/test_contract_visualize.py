@@ -145,7 +145,7 @@ def test_render_scene_source_hash_mismatch_matches_fixture_shape(env: Env) -> No
 #: 手編集を禁じている。したがって新ツールは fixture を書き換えるのではなく、
 #: `tests/mcp/test_all_server_tools_list_diff.py` の `_NEW_TOOL_NAMES` と同じ
 #: 「純増分の明示宣言」で表現する。
-_NEW_VISUALIZE_TOOL_NAMES: set[str] = set()
+_NEW_VISUALIZE_TOOL_NAMES: set[str] = {"list_visualizations", "get_visualization"}
 
 #: 旧実装に無い機能を追加したことに伴う、fixture の description からの意図的な逸脱。
 #: fixture は手編集できないので、「fixture と違ってよい理由」を1件ずつ人間が

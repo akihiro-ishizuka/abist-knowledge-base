@@ -161,7 +161,15 @@ def verify_sources(spec: dict[str, Any], docs_dir: Path) -> VerifyResult:
             if any(e.code == "not_found" for e in errors)
             else "SOURCE_HASH_MISMATCH"
         )
-        return VerifyResult(ok=False, code=code, errors=errors, warnings=warnings)
+        return VerifyResult(
+            ok=False,
+            code=code,
+            errors=errors,
+            warnings=warnings,
+            # 失敗時も出典の判定結果を返す。カタログが「どの出典が壊れていたか」を
+            # 記録できるようにするため(以前は成功時しか埋まらず捨てられていた)。
+            source_status=source_status,
+        )
 
     # 事実を述べる beat の不良出典は警告して除外する。
     #

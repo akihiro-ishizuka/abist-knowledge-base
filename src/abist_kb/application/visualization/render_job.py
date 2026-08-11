@@ -20,9 +20,12 @@ visualization_submit_render`/`presentation/mcp/jobs_tools.start_render_scene`)�
 
 from __future__ import annotations
 
+import contextlib
+import sqlite3
 from pathlib import Path
 from typing import Any
 
+from abist_kb.application.visualization import catalog
 from abist_kb.application.visualization.renderer import RenderOutcome, render_scene
 from abist_kb.domain.job import JobState, ResourceKind, Severity
 from abist_kb.infrastructure.jobs.supervisor import JobRunContext
@@ -62,6 +65,10 @@ def render_scene_job_handler(run: JobRunContext) -> None:
     繰り返すループではないため `run.check_lease()` の協調的ポーリングは不要
     (`infrastructure.jobs.supervisor.JobRunContext` docstring参照: 一度きりの
     操作は `run_job` の事後検知バックストップで十分)。
+
+    ただし**キャンセル要求は別概念**なので `run.cancel_requested` を
+    `should_cancel` として子プロセス側へ渡す。子プロセスは木ごと終了させられ、
+    孫の ffmpeg も残らない(`manim_runner._kill_process_tree`)。
     """
     params = run.job.params
     spec = params["scene_spec"]
@@ -78,7 +85,26 @@ def render_scene_job_handler(run: JobRunContext) -> None:
         reports_dir=reports_dir,
         repo_root=repo_root,
         slug=slug,
+        should_cancel=run.cancel_requested,
     )
+
+    # カタログへ記録する。索引であって正本ではないので、失敗してもジョブの
+    # 成否には影響させない(取りこぼしは list_visualizations の自己修復で回復)。
+    if run.conn is not None:
+        with contextlib.suppress(sqlite3.Error):
+            catalog.record_render(run.conn, outcome, root_dir=repo_root, job_id=run.job.id)
+
+    if outcome.code == "RENDER_CANCELLED":
+        error = _outcome_to_error(outcome)
+        run.finish_as(JobState.CANCELLED, error=error)
+        run.emit(
+            phase="render",
+            current=1,
+            total=1,
+            message="レンダリングを中止しました",
+            severity=Severity.WARNING,
+        )
+        return
 
     if not outcome.ok:
         error = _outcome_to_error(outcome)

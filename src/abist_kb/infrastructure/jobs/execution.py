@@ -42,9 +42,11 @@ from abist_kb.domain.job import (
     Job,
     JobState,
     ProgressEvent,
+    ResourceKind,
     ResourceRequirement,
     Severity,
 )
+from abist_kb.domain.job import resource_key as build_resource_key
 from abist_kb.infrastructure.db.connection import connect
 from abist_kb.infrastructure.jobs import events as events_mod
 from abist_kb.infrastructure.jobs import leases
@@ -183,6 +185,51 @@ def _lease_renewal(
         renewer.raise_if_failed()
 
 
+@contextmanager
+def held_resource_lease(
+    conn: sqlite3.Connection,
+    kind: ResourceKind,
+    *,
+    key: str | None = None,
+    owner_id: str,
+    ttl_seconds: float,
+    wait: bool = True,
+    timeout: float | None = None,
+    job_id: str | None = None,
+) -> Iterator[str]:
+    """resource lease を取得し、保持中は TTL の 1/3 ごとに自動更新する。
+
+    `run_job` が非同期ジョブに対して行っているのと同じ生存維持を、ジョブ基盤を
+    経由しない同期パス(`presentation.mcp.kb_visualize.render_scene`)にも提供する。
+
+    これが無いと TTL は「処理が取りうる最大時間」以上でなければならず
+    (単発取得のまま TTL を短くすると保持中に横取りされ Manim が2本走る)、
+    プロセスが異常終了したとき次の実行が TTL 分ブロックされる。
+
+    **`with` を正常に抜ける際、更新が一度でも失敗していれば `AppError(CONFLICT)`
+    を送出する。** 呼び出し側は「取得できなかった(本来の busy)」と
+    「保持中に喪失した(処理は完了しているかもしれない)」を区別すること。
+    """
+    resource_key_value = build_resource_key(kind, key)
+    with leases.acquire_resource_lease(
+        conn,
+        kind,
+        key=key,
+        owner_id=owner_id,
+        ttl_seconds=ttl_seconds,
+        job_id=job_id,
+        wait=wait,
+        timeout=timeout,
+    ):
+        renew_fns: list[RenewFn] = [
+            lambda c: leases.renew_resource_lease(
+                c, resource_key_value, owner_id, ttl_seconds=ttl_seconds
+            )
+        ]
+        with _lease_renewal(conn, ttl_seconds=ttl_seconds, renew_fns=renew_fns):
+            yield resource_key_value
+
+
 def _build_renew_fns(
     *,
     job_id: str,
@@ -289,7 +336,16 @@ def run_job(
         else _no_resource_lease()
     )
 
-    run_ctx = JobRunContext(job=job, emit=emit)
+    def _cancel_requested() -> bool:
+        """`jobs.cancel_requested` を都度読む。
+
+        `check_lease()`(リース喪失)とは別概念。長時間動く子プロセスを持つ
+        ハンドラが `should_cancel` として子へ渡せるようにする。
+        """
+        current = repo.get(job.id)
+        return bool(current is not None and current.cancel_requested)
+
+    run_ctx = JobRunContext(job=job, emit=emit, _cancel_requested=_cancel_requested, _conn=conn)
     try:
         with resource_cm as resource_key_value:
             renew_fns = _build_renew_fns(

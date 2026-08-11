@@ -164,7 +164,7 @@ def build_kb_visualize_server(
     repo_root: Path | None = None,
     reports_dir: Path | None = None,
 ) -> Server[Any, Any]:
-    """kb-visualize サーバー(list_scene_kinds/check_visualize_deps/render_scene)を組み立てる。
+    """kb-visualize サーバー(scene_kinds/deps/render + カタログ2ツール)を組み立てる。
 
     `render` リソースリースの直列化(`CONCURRENT_RENDER` 互換)には SQLite 接続が
     必要なため、`app_db_path` を kb-download と同じ `app.sqlite` に向ける。出力は
@@ -195,6 +195,8 @@ def build_kb_visualize_server(
             "list_scene_kinds": tools.list_scene_kinds,
             "check_visualize_deps": tools.check_visualize_deps,
             "render_scene": tools.render_scene,
+            "list_visualizations": tools.list_visualizations,
+            "get_visualization": tools.get_visualization,
         }.get(name)
         if handler is None:
             return error_result(f"未知のツールです: {name}")
@@ -357,6 +359,8 @@ def build_all_server(
         "list_scene_kinds": visualize_tools.list_scene_kinds,
         "check_visualize_deps": visualize_tools.check_visualize_deps,
         "render_scene": visualize_tools.render_scene,
+        "list_visualizations": visualize_tools.list_visualizations,
+        "get_visualization": visualize_tools.get_visualization,
         "start_run_batch": job_tools.start_run_batch,
         "start_download_esa_post": job_tools.start_download_esa_post,
         "start_download_esa_category": job_tools.start_download_esa_category,

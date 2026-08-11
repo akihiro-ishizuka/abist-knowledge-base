@@ -108,6 +108,14 @@ screens:
         label: 可視化依存関係診断
         destructive: false
         surfaces: [mcp, api]
+      visualization_list:
+        label: 成果物一覧
+        destructive: false
+        surfaces: [mcp, api]
+      visualization_detail:
+        label: 成果物詳細
+        destructive: false
+        surfaces: [mcp, api]
 
   quality:
     label: 品質

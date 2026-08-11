@@ -28,6 +28,8 @@ description: Use when turning knowledge-base content into a Manim 図解・ア�
 | `list_scene_kinds` | シーン種別・テンプレ・必須フィールドの確認 | `{ok, count, scene_kinds}` |
 | `render_scene` | SceneSpec を検証してレンダリング（最長10分ブロック） | 成功 `{ok, visualizationId, outputDir, outputs, manifestPath, warnings}` / 失敗 `{ok:false, code, errors}` |
 | `check_visualize_deps` | Python / Manim / ffmpeg / フォントの診断 | `{ok, ready, python, manim, ffmpeg, fonts, messages}` |
+| `list_visualizations` | 過去の成果物を新しい順に一覧（自己修復つき） | `{ok, count, total, visualizations}` |
+| `get_visualization` | 成果物1件の詳細・出典検証結果・manifest | `{ok, visualization, sources, artifacts, manifest_drift}` |
 
 現在の scene_kind: `explain`（解説アニメ）/ `flow`（データフロー図）/ `timeline`（時系列）/
 `comparison`（比較表）/ `domain`（関係図）。予約済み・未実装の kind は無い。出力は `mp4`（アニメ）か `png`（静止画）。
@@ -76,7 +78,8 @@ description: Use when turning knowledge-base content into a Manim 図解・ア�
 
 - `warnings` は「出典不正で除外した beat」の一覧。空でないときは必ずユーザーに伝える
 - クライアント側タイムアウトで応答が切れてもレンダリングは完走しうる。
-  再レンダリングの前に `reports/visualizations/` の最新ディレクトリと manifest.json を確認する
+  再レンダリングの前に **`list_visualizations`** で直近の成果物を確認する
+  （ディスクと DB の差分は呼び出し時に自動整合される。詳細は `get_visualization`）
 - `render_from_script`（任意 Python 実行）は無効。SceneSpec + 固定テンプレート経由のみ
 - レンダリング環境: `.venv-visualize/`（`requirements-visualize.txt`、manim==0.19.0、Python 3.11）。
   セットアップは **`scripts\bootstrap-visualize.bat` 一発**。

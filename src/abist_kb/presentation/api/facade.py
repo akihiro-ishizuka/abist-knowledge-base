@@ -39,6 +39,8 @@ from abist_kb.presentation.common.actions import (
     source_test_connection,
     sources_list,
     visualization_deps,
+    visualization_detail,
+    visualization_list,
     visualization_submit_render,
     visualization_validate,
 )
@@ -75,6 +77,8 @@ __all__ = [
     "source_test_connection",
     "sources_list",
     "visualization_deps",
+    "visualization_detail",
+    "visualization_list",
     "visualization_submit_render",
     "visualization_validate",
 ]
