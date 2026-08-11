@@ -395,3 +395,95 @@ def test_comparison_item_with_bad_source_is_dropped_with_warning(tmp_path: Path)
     aspects = [b["aspect"] for b in result.spec["beats"]]
     assert "落ちる観点" not in aspects
     assert result.warnings and "comparison_item" in result.warnings[0]
+
+
+def test_domain_entity_dropped_cascades_to_its_relations(tmp_path: Path) -> None:
+    """⚠ domain は3 kind の中で唯一、連鎖除外が必須。
+
+    entity が出典不良で除外されたのに relation が残ると、`boxes.get(name)` が
+    None になって矢印が黙って消え、警告なしに図が崩れる。
+    """
+    docs, good = _docs_with_doc(tmp_path)
+    spec = {
+        "schema_version": "1.0",
+        "scene_kind": "domain",
+        "output_format": "png",
+        "template": "domain_map_v1",
+        "title": "構成",
+        "sources": [
+            {
+                "id": "bad",
+                "path": "doc.md",
+                "start_line": 1,
+                "end_line": 1,
+                "content_hash": "b" * 64,
+            },
+            {"id": "ok", "path": "doc.md", "start_line": 1, "end_line": 1, "content_hash": good},
+        ],
+        "beats": [
+            {"type": "domain_entity", "name": "落ちる", "source_refs": ["bad"]},
+            {"type": "domain_entity", "name": "残るA", "source_refs": ["ok"]},
+            {"type": "domain_entity", "name": "残るB", "source_refs": ["ok"]},
+            {
+                "type": "domain_relation",
+                "from": "落ちる",
+                "to": "残るA",
+                "label": "連鎖で消える",
+                "source_refs": ["ok"],
+            },
+            {
+                "type": "domain_relation",
+                "from": "残るA",
+                "to": "残るB",
+                "label": "残る",
+                "source_refs": ["ok"],
+            },
+        ],
+    }
+    result = verify_sources(spec, docs)
+    assert result.ok, result.errors
+
+    names = [b.get("name") for b in result.spec["beats"] if b["type"] == "domain_entity"]
+    assert "落ちる" not in names
+
+    relations = [b for b in result.spec["beats"] if b["type"] == "domain_relation"]
+    assert len(relations) == 1, f"除外済み entity を指す relation が残っている: {relations}"
+    assert relations[0]["from"] == "残るA"
+
+    joined = " / ".join(result.warnings)
+    assert "domain_entity" in joined
+    assert "domain_relation" in joined, "連鎖除外の警告が出ていない"
+
+
+def test_domain_relation_with_bad_source_is_dropped_but_entities_remain(
+    tmp_path: Path,
+) -> None:
+    docs, good = _docs_with_doc(tmp_path)
+    spec = {
+        "schema_version": "1.0",
+        "scene_kind": "domain",
+        "output_format": "png",
+        "template": "domain_map_v1",
+        "title": "構成",
+        "sources": [
+            {
+                "id": "bad",
+                "path": "doc.md",
+                "start_line": 1,
+                "end_line": 1,
+                "content_hash": "b" * 64,
+            },
+            {"id": "ok", "path": "doc.md", "start_line": 1, "end_line": 1, "content_hash": good},
+        ],
+        "beats": [
+            {"type": "domain_entity", "name": "A", "source_refs": ["ok"]},
+            {"type": "domain_entity", "name": "B", "source_refs": ["ok"]},
+            {"type": "domain_relation", "from": "A", "to": "B", "source_refs": ["bad"]},
+        ],
+    }
+    result = verify_sources(spec, docs)
+    assert result.ok, result.errors
+    names = [b.get("name") for b in result.spec["beats"] if b["type"] == "domain_entity"]
+    assert names == ["A", "B"], "entity は残ること"
+    assert not [b for b in result.spec["beats"] if b["type"] == "domain_relation"]
+    assert result.warnings

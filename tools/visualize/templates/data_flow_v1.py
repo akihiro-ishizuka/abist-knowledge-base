@@ -43,7 +43,9 @@ from templates.layout import (
     EDGE_BACK,
     EDGE_CROSS_BAND_BACK,
     EDGE_SKIP_FORWARD,
+    assign_ranks,
     classify_edge,
+    layout_grid,
 )
 
 MAX_STEPS_PER_ROW = 4
@@ -203,28 +205,54 @@ def build_final_layout(spec: dict) -> VGroup:
     extras = [b for b in spec["beats"] if b["type"] in ("statement", "metric")]
 
     boxes: dict[str, VGroup] = {}
+    labels: list[str] = []
+    for beat in steps:
+        label = beat["label"]
+        if label in boxes:
+            # 検証層(scene_spec の duplicate_label)で弾かれているはずだが、
+            # scene.py 経由の再描画は validate_scene_spec を通らないため、
+            # ここでも黙って上書きさせない。
+            raise ValueError(
+                f'flow_step の label "{label}" が重複しています。'
+                "SceneSpec 側で一意にしてください"
+                "(scene-spec.json を手編集した場合はここで検出されます)"
+            )
+        boxes[label] = (
+            _decision_node(beat, font) if beat["type"] == "decision" else _step_box(beat, font)
+        )
+        labels.append(label)
+
+    # transition のグラフ構造から列(rank)を決める。beat 順に4個ずつ折り返す従来方式は
+    # グラフを一切見ないため、decision の分岐先が横一列に並んで分岐に見えなかった。
+    #
+    # **直線フロー A->B->C->D->E では rank が 0,1,2,3,4 と1個ずつ増え、layout_grid が
+    # (0,0),(0,1),(0,2),(0,3),(1,0) を返す = 従来の MAX_STEPS_PER_ROW=4 と同一の配置**
+    # になる(配置互換はこの性質に依る)。分岐・合流・循環・孤立ノードを含む spec の
+    # 配置は変わる。
+    edges = [(t["from"], t["to"]) for t in transitions]
+    ranks = assign_ranks(labels, edges)
+    placement = layout_grid(labels, ranks, max_ranks_per_band=MAX_STEPS_PER_ROW)
+
     # label -> (band, col)。矢印の描き分け(classify_edge)に使う。
-    positions: dict[str, tuple[int, int]] = {}
+    positions: dict[str, tuple[int, int]] = {
+        label: (band, col) for label, (band, col, _slot) in placement.items()
+    }
+
+    # band -> col -> [(slot, label)] に畳んでから Mobject を組む。
+    bands: dict[int, dict[int, list[tuple[int, str]]]] = {}
+    for label in labels:
+        band, col, slot = placement[label]
+        bands.setdefault(band, {}).setdefault(col, []).append((slot, label))
+
     rows = VGroup()
-    for i in range(0, len(steps), MAX_STEPS_PER_ROW):
-        band = i // MAX_STEPS_PER_ROW
+    for band in sorted(bands):
         row = VGroup()
-        for col, beat in enumerate(steps[i : i + MAX_STEPS_PER_ROW]):
-            label = beat["label"]
-            if label in boxes:
-                # 検証層(scene_spec の duplicate_label)で弾かれているはずだが、
-                # scene.py 経由の再描画は validate_scene_spec を通らないため、
-                # ここでも黙って上書きさせない。
-                raise ValueError(
-                    f'flow_step の label "{label}" が重複しています。'
-                    "SceneSpec 側で一意にしてください"
-                    "(scene-spec.json を手編集した場合はここで検出されます)"
-                )
-            box = _decision_node(beat, font) if beat["type"] == "decision" else _step_box(beat, font)
-            boxes[label] = box
-            positions[label] = (band, col)
-            row.add(box)
-        row.arrange(RIGHT, buff=1.1)
+        for col in sorted(bands[band]):
+            column = VGroup(*[boxes[label] for _slot, label in sorted(bands[band][col])])
+            # 同じ rank の複数ノード(=分岐先)は縦に積む。
+            column.arrange(DOWN, buff=0.5)
+            row.add(column)
+        row.arrange(RIGHT, buff=1.1, aligned_edge=UP)
         rows.add(row)
     rows.arrange(DOWN, buff=0.9, aligned_edge=LEFT)
 

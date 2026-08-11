@@ -154,3 +154,99 @@ def test_timeline_renders_to_png_with_verified_sha256(tmp_path: Path) -> None:
         produced = Path(outcome.output_dir) / entry["path"]
         digest = hashlib.sha256(produced.read_bytes()).hexdigest()
         assert digest == entry["sha256"]
+
+
+@pytestmark_manim
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("scene_kind", "template", "beats"),
+    [
+        (
+            "comparison",
+            "comparison_v1",
+            [
+                {
+                    "type": "comparison_item",
+                    "side": "現行版",
+                    "aspect": "UI",
+                    "text": "Excel/VBA",
+                    "source_refs": ["s1"],
+                },
+                {
+                    "type": "comparison_item",
+                    "side": "次期版",
+                    "aspect": "UI",
+                    "text": "単一アプリ",
+                    "source_refs": ["s1"],
+                },
+                {
+                    "type": "comparison_item",
+                    "side": "次期版",
+                    "aspect": "配布",
+                    "text": "onedir",
+                    "source_refs": ["s1"],
+                },
+            ],
+        ),
+        (
+            "domain",
+            "domain_map_v1",
+            [
+                {
+                    "type": "domain_entity",
+                    "name": "extractor",
+                    "group": "抽出",
+                    "source_refs": ["s1"],
+                },
+                {
+                    "type": "domain_entity",
+                    "name": "editor",
+                    "group": "編集",
+                    "description": "単一アプリの中核",
+                    "source_refs": ["s1"],
+                },
+                {
+                    "type": "domain_relation",
+                    "from": "extractor",
+                    "to": "editor",
+                    "label": "抽出データ",
+                    "source_refs": ["s1"],
+                },
+            ],
+        ),
+    ],
+    ids=["comparison", "domain"],
+)
+def test_new_scene_kinds_render_to_png_with_verified_sha256(
+    tmp_path: Path, scene_kind: str, template: str, beats: list
+) -> None:
+    """comparison / domain の実レンダリング smoke。"""
+    doc_text = "行1\n行2\n行3\n"
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "t.md").write_text(doc_text, encoding="utf-8")
+    spec = {
+        "schema_version": "1.0",
+        "scene_kind": scene_kind,
+        "output_format": "png",
+        "template": template,
+        "title": f"{scene_kind} の実レンダリング",
+        "sources": [
+            {
+                "id": "s1",
+                "path": "t.md",
+                "start_line": 1,
+                "end_line": 2,
+                "content_hash": range_hash(doc_text, 1, 2).hash,
+            }
+        ],
+        "beats": beats,
+    }
+    outcome = render_scene(
+        spec, docs_dir=docs_dir, reports_dir=tmp_path / "out", repo_root=REPO_ROOT
+    )
+    assert outcome.ok, (outcome.code, outcome.errors, outcome.stderr_tail)
+    manifest = json.loads(Path(outcome.manifest_path).read_text(encoding="utf-8"))
+    for entry in manifest["outputs"]:
+        produced = Path(outcome.output_dir) / entry["path"]
+        assert hashlib.sha256(produced.read_bytes()).hexdigest() == entry["sha256"]

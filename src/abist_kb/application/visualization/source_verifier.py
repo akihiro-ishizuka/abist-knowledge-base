@@ -82,7 +82,21 @@ _PRUNABLE_BEAT_TYPES = (
     "decision",
     "timeline_point",
     "comparison_item",
+    "domain_entity",
+    "domain_relation",
 )
+
+#: 「ノードを名乗る beat type」-> 「それを参照するエッジの beat type」。
+#: ノードが出典不良で除外されたら、それを指すエッジも道連れにしないと
+#: 接続先を失った矢印が黙って消え、警告なしに図が崩れる。
+_NODE_TO_EDGE_TYPE: dict[str, str] = {
+    "flow_step": "transition",
+    "decision": "transition",
+    "domain_entity": "domain_relation",
+}
+
+#: エッジ beat type -> 接続先を指すフィールド名。
+_EDGE_ENDPOINT_KEYS: tuple[str, str] = ("from", "to")
 
 
 def _status_message(src: dict[str, Any], status: SourceStatus) -> str:
@@ -105,6 +119,10 @@ def _beat_label(beat: dict[str, Any]) -> str:
         return f"timeline_point「{beat.get('at')} {beat.get('label')}」"
     if beat["type"] == "comparison_item":
         return f"comparison_item「{beat.get('aspect')} x {beat.get('side')}」"
+    if beat["type"] == "domain_entity":
+        return f"domain_entity「{beat.get('name')}」"
+    if beat["type"] == "domain_relation":
+        return f"domain_relation「{beat.get('from')} → {beat.get('to')}」"
     if beat["type"] == "transition":
         return f"transition「{beat.get('from')} → {beat.get('to')}」のラベル"
     return str(beat["type"])
@@ -151,7 +169,8 @@ def verify_sources(spec: dict[str, Any], docs_dir: Path) -> VerifyResult:
     # sources[].id に存在するか)では「出典ファイルが消えた・content_hash が変わった」
     # を捕まえられない。**出典を要求するフィールドを追加したら必ずここにも足すこと。**
     # 足し忘れると出典必須ポリシーがレンダリング時に迂回される。
-    dropped_flow_labels: set[str] = set()
+    # エッジ beat type -> 除外されたノード名の集合。
+    dropped_nodes: dict[str, set[str]] = {}
     beats: list[dict[str, Any]] = []
     for beat in spec["beats"]:
         if beat.get("decorative") is True:
@@ -184,21 +203,26 @@ def verify_sources(spec: dict[str, Any], docs_dir: Path) -> VerifyResult:
         warnings.append(
             f"{_beat_label(beat)}は{_status_message(src, status)}。描画から除外しました"
         )
-        if beat["type"] in ("flow_step", "decision"):
-            # 除外したノードを指す transition は矢印の接続先を失うので連鎖除外する。
-            dropped_flow_labels.add(beat["label"])
+        if beat["type"] in _NODE_TO_EDGE_TYPE:
+            # 除外したノードを指すエッジは接続先を失うので連鎖除外する。
+            # flow_step / decision は label、domain_entity は name で名乗る。
+            node_name = beat.get("label") if "label" in beat else beat.get("name")
+            if isinstance(node_name, str):
+                dropped_nodes.setdefault(_NODE_TO_EDGE_TYPE[beat["type"]], set()).add(node_name)
 
-    # 除外した flow_step を参照する transition も連鎖除外
-    if dropped_flow_labels:
+    # 除外したノードを参照するエッジも連鎖除外する。
+    if dropped_nodes:
         kept: list[dict[str, Any]] = []
         for beat in beats:
-            if beat["type"] != "transition":
+            names = dropped_nodes.get(beat["type"])
+            if names is None:
                 kept.append(beat)
                 continue
-            if beat.get("from") in dropped_flow_labels or beat.get("to") in dropped_flow_labels:
+            endpoints = [beat.get(key) for key in _EDGE_ENDPOINT_KEYS]
+            if any(endpoint in names for endpoint in endpoints):
                 warnings.append(
-                    f"transition「{beat.get('from')} → {beat.get('to')}」は除外済みの flow_step を"
-                    "参照するため描画から除外しました"
+                    f"{beat['type']}「{endpoints[0]} → {endpoints[1]}」は除外済みの"
+                    "ノードを参照するため描画から除外しました"
                 )
                 continue
             kept.append(beat)

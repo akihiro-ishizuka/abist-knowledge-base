@@ -170,3 +170,115 @@ def classify_edge(src: tuple[int, int], dst: tuple[int, int]) -> str:
     if dst_band == src_band + 1:
         return EDGE_WRAP_DOWN
     return EDGE_CROSS_BAND_BACK
+
+#: 1つの帯(band)に並べる rank の数。これを超えたら次の帯へ折り返す。
+MAX_RANKS_PER_BAND = 4
+
+
+def find_back_edges(labels: list[str], edges: list[tuple[str, str]]) -> set[tuple[str, str]]:
+    """DFS で後退辺(サイクルを閉じる辺)を検出して返す。
+
+    後退辺を除かないと最長路レイヤリングが停止しない。再帰ではなく明示スタックで
+    走査する(ノード数は MAX_BEATS 以下だが、再帰は深さ制限に依存するため)。
+    """
+    adjacency: dict[str, list[str]] = {label: [] for label in labels}
+    for src, dst in edges:
+        if src in adjacency and dst in adjacency:
+            adjacency[src].append(dst)
+
+    WHITE, GRAY, BLACK = 0, 1, 2
+    color = dict.fromkeys(labels, WHITE)
+    back: set[tuple[str, str]] = set()
+
+    for root in labels:
+        if color[root] != WHITE:
+            continue
+        # (node, 未処理の隣接ノードのイテレータ) を積む
+        color[root] = GRAY
+        stack: list[tuple[str, list[str], int]] = [(root, adjacency[root], 0)]
+        while stack:
+            node, neighbours, index = stack[-1]
+            if index >= len(neighbours):
+                color[node] = BLACK
+                stack.pop()
+                continue
+            stack[-1] = (node, neighbours, index + 1)
+            nxt = neighbours[index]
+            if color[nxt] == GRAY:
+                # 探索中のノードへ戻る辺 = 後退辺(自己ループも含む)
+                back.add((node, nxt))
+            elif color[nxt] == WHITE:
+                color[nxt] = GRAY
+                stack.append((nxt, adjacency[nxt], 0))
+    return back
+
+
+def assign_ranks(labels: list[str], edges: list[tuple[str, str]]) -> dict[str, int]:
+    """最長路レイヤリング。ノードごとの rank(=列番号)を返す。
+
+    - 後退辺は rank 計算から除外する(除かないと停止しない)
+    - rank(v) = 入次数0なら0、そうでなければ max(rank(u) for u->v) + 1
+    - 孤立ノード(どの辺にも現れない)は末尾 rank へ置く
+
+    **直線フロー A->B->C->D->E では rank が 0,1,2,3,4 と1個ずつ増え、各 rank に
+    ノード1個になる。** これが「直線フローの配置は変わらない」という後方互換の根拠。
+    """
+    if not labels:
+        return {}
+    back = find_back_edges(labels, edges)
+    forward = [(s, d) for s, d in edges if (s, d) not in back and s in labels and d in labels]
+
+    incoming: dict[str, list[str]] = {label: [] for label in labels}
+    outgoing: dict[str, list[str]] = {label: [] for label in labels}
+    for src, dst in forward:
+        incoming[dst].append(src)
+        outgoing[src].append(dst)
+
+    connected = {label for label in labels if incoming[label] or outgoing[label]}
+    isolated = [label for label in labels if label not in connected]
+
+    ranks: dict[str, int] = {}
+    # Kahn 法で入次数0から順に確定させる(forward は非巡回なので必ず全て埋まる)
+    remaining = {label: len(incoming[label]) for label in connected}
+    queue = [label for label in labels if label in connected and remaining[label] == 0]
+    while queue:
+        node = queue.pop(0)
+        ranks[node] = max((ranks[u] + 1 for u in incoming[node] if u in ranks), default=0)
+        for nxt in outgoing[node]:
+            remaining[nxt] -= 1
+            if remaining[nxt] == 0:
+                queue.append(nxt)
+
+    # 念のため: 何らかの理由で確定しなかったノードは出現順で末尾に寄せる
+    unresolved = [label for label in connected if label not in ranks]
+    tail = max(ranks.values(), default=-1)
+    for offset, label in enumerate(unresolved, start=1):
+        ranks[label] = tail + offset
+
+    tail = max(ranks.values(), default=-1)
+    for offset, label in enumerate(isolated, start=1):
+        ranks[label] = tail + offset
+    return ranks
+
+
+def layout_grid(
+    labels: list[str], ranks: dict[str, int], *, max_ranks_per_band: int = MAX_RANKS_PER_BAND
+) -> dict[str, tuple[int, int, int]]:
+    """rank から `(band, col, slot)` の配置を決める。
+
+    - band = rank // max_ranks_per_band(帯の折り返し)
+    - col  = rank % max_ranks_per_band(帯の中での列位置)
+    - slot = 同じ rank に複数ノードがあるときの縦位置(labels の出現順)
+
+    直線フロー(1 rank に1ノード)では slot が常に0になり、col が0,1,2,3 と進んで
+    4個目で band が繰り上がる = 従来の `MAX_STEPS_PER_ROW = 4` と同じ配置になる。
+    """
+    by_rank: dict[int, list[str]] = {}
+    for label in labels:
+        by_rank.setdefault(ranks.get(label, 0), []).append(label)
+    placement: dict[str, tuple[int, int, int]] = {}
+    for rank, members in by_rank.items():
+        band, col = divmod(rank, max_ranks_per_band)
+        for slot, label in enumerate(members):
+            placement[label] = (band, col, slot)
+    return placement

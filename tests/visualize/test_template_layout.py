@@ -14,9 +14,12 @@ from templates.layout import (
     EDGE_CROSS_BAND_BACK,
     EDGE_SKIP_FORWARD,
     EDGE_WRAP_DOWN,
+    assign_ranks,
     classify_edge,
     display_width,
+    find_back_edges,
     find_duplicate_labels,
+    layout_grid,
     wrap_cjk,
 )
 
@@ -131,3 +134,75 @@ class TestClassifyEdge:
 
     def test_self_loop_is_back(self) -> None:
         assert classify_edge((0, 2), (0, 2)) == EDGE_BACK
+
+
+class TestAssignRanks:
+    """自動レイヤリング。直線フローの配置互換がここで担保される。"""
+
+    def test_straight_line_gets_one_node_per_rank(self) -> None:
+        # これが「直線フローの見た目は変わらない」の根拠。
+        labels = list("ABCDE")
+        edges = [("A", "B"), ("B", "C"), ("C", "D"), ("D", "E")]
+        assert assign_ranks(labels, edges) == {"A": 0, "B": 1, "C": 2, "D": 3, "E": 4}
+
+    def test_branch_puts_targets_on_the_same_rank(self) -> None:
+        ranks = assign_ranks(list("ABCD"), [("A", "B"), ("A", "C"), ("B", "D"), ("C", "D")])
+        assert ranks["B"] == ranks["C"], "分岐先は同じ列に来ること"
+        assert ranks["D"] == ranks["B"] + 1, "合流は分岐先の次の列"
+        assert ranks["A"] == 0
+
+    def test_back_edge_does_not_change_ranks(self) -> None:
+        forward = [("A", "B"), ("B", "C"), ("C", "D")]
+        base = assign_ranks(list("ABCD"), forward)
+        withback = assign_ranks(list("ABCD"), [*forward, ("D", "B")])
+        assert base == withback, "後退辺は rank 計算から除外されること"
+
+    def test_cycle_terminates(self) -> None:
+        ranks = assign_ranks(list("ABC"), [("A", "B"), ("B", "C"), ("C", "A")])
+        assert set(ranks) == {"A", "B", "C"}
+
+    def test_self_loop_terminates(self) -> None:
+        ranks = assign_ranks(["A", "B"], [("A", "A"), ("A", "B")])
+        assert ranks["B"] == ranks["A"] + 1
+
+    def test_isolated_node_goes_to_the_tail_and_is_not_lost(self) -> None:
+        ranks = assign_ranks(list("ABX"), [("A", "B")])
+        assert "X" in ranks, "孤立ノードが消えないこと"
+        assert ranks["X"] > ranks["B"]
+
+    def test_empty(self) -> None:
+        assert assign_ranks([], []) == {}
+
+    def test_edges_referencing_unknown_labels_are_ignored(self) -> None:
+        ranks = assign_ranks(["A", "B"], [("A", "B"), ("A", "存在しない")])
+        assert ranks == {"A": 0, "B": 1}
+
+
+class TestFindBackEdges:
+    def test_detects_cycle_edge(self) -> None:
+        back = find_back_edges(list("ABC"), [("A", "B"), ("B", "C"), ("C", "A")])
+        assert back == {("C", "A")}
+
+    def test_dag_has_no_back_edges(self) -> None:
+        assert find_back_edges(list("ABC"), [("A", "B"), ("B", "C"), ("A", "C")]) == set()
+
+    def test_self_loop_is_a_back_edge(self) -> None:
+        assert ("A", "A") in find_back_edges(["A"], [("A", "A")])
+
+
+class TestLayoutGrid:
+    def test_straight_line_wraps_every_four_columns(self) -> None:
+        """従来の MAX_STEPS_PER_ROW=4 と同じ配置になること(後方互換の実証)。"""
+        labels = list("ABCDE")
+        ranks = assign_ranks(labels, [("A", "B"), ("B", "C"), ("C", "D"), ("D", "E")])
+        grid = layout_grid(labels, ranks)
+        assert grid["A"] == (0, 0, 0)
+        assert grid["D"] == (0, 3, 0)
+        assert grid["E"] == (1, 0, 0), "5個目は次の帯の先頭"
+
+    def test_same_rank_nodes_get_distinct_slots(self) -> None:
+        labels = list("ABC")
+        ranks = {"A": 0, "B": 1, "C": 1}
+        grid = layout_grid(labels, ranks)
+        assert grid["B"][:2] == grid["C"][:2], "同 rank は同じ (band, col)"
+        assert grid["B"][2] != grid["C"][2], "slot で縦に分かれる"

@@ -79,16 +79,34 @@ def test_empty_object_reports_multiple_errors():
     assert ("sources", "invalid") in codes
 
 
-def test_reserved_kind_reports_reserved_kind_error():
-    """未実装の予約 kind は `reserved_kind`(タイポの `unknown_kind` と区別)。
+def test_reserved_kinds_is_now_empty():
+    """予約 kind をすべて実装したので RESERVED_KINDS は空。
 
-    timeline / comparison は実装済みになったので、まだ予約中の domain を使う。
-    RESERVED_KINDS が空になったらこのテストは削除し、
-    `test_reserved_and_implemented_kinds_are_disjoint` に役割を移すこと。
+    `reserved_kind` の分岐自体は将来の予約のために scene_spec に残してある
+    (`test_reserved_kind_branch_still_works` が動作を保証する)。
+    未知の kind は `unknown_kind` として区別され続ける。
     """
-    result = validate_scene_spec(_explain_spec(scene_kind="domain", template="domain"))
+    assert RESERVED_KINDS == []
+
+
+def test_reserved_kind_branch_still_works(monkeypatch):
+    """RESERVED_KINDS が空でも、予約 kind を足せば `reserved_kind` を返せること。
+
+    将来 kind を予約したときにタイポ(`unknown_kind`)と区別できる仕組みが
+    生きていることを、実装を消さずに固定する。
+    """
+    import abist_kb.domain.scene_spec as module
+
+    monkeypatch.setattr(module, "RESERVED_KINDS", ["future_kind"])
+    result = validate_scene_spec(_explain_spec(scene_kind="future_kind", template="x"))
     assert result.ok is False
     assert any(e.code == "reserved_kind" for e in result.errors)
+
+
+def test_unknown_kind_is_distinguished_from_reserved():
+    result = validate_scene_spec(_explain_spec(scene_kind="typo_kind", template="x"))
+    assert result.ok is False
+    assert any(e.code == "unknown_kind" for e in result.errors)
 
 
 def test_non_object_is_invalid():
@@ -227,7 +245,13 @@ def test_scene_kinds_match_list_scene_kinds_contract():
     list を先頭要素だけ構造比較するため、先頭が変わらない限り kind を追加しても
     fixture は無風でいられる(値は比較されないので count も自由)。
     """
-    assert [k["kind"] for k in SCENE_KINDS] == ["explain", "flow", "timeline", "comparison"]
+    assert [k["kind"] for k in SCENE_KINDS] == [
+        "explain",
+        "flow",
+        "timeline",
+        "comparison",
+        "domain",
+    ]
     for info in SCENE_KINDS:
         assert set(info.keys()) == {"kind", "description", "template", "required", "beat_types"}
 
@@ -272,6 +296,8 @@ def test_every_beat_type_is_validated():
         "decision",
         "timeline_point",
         "comparison_item",
+        "domain_entity",
+        "domain_relation",
     }
     for info in SCENE_KINDS:
         for beat_type in info["beat_types"]:
@@ -766,6 +792,118 @@ def test_comparison_rejects_flow_step_beat_type() -> None:
     spec = _comparison_spec(
         [_cell("A", "UI"), _cell("B", "UI"), {"type": "flow_step", "label": "X"}]
     )
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    assert any(e.code == "unknown_beat_type" for e in result.errors)
+
+
+# ---------------------------------------------------------------------------
+# Phase 6-a: domain
+# ---------------------------------------------------------------------------
+
+
+def _domain_spec(beats: list[dict]) -> dict:
+    return {
+        "schema_version": "1.0",
+        "scene_kind": "domain",
+        "output_format": "png",
+        "template": "domain_map_v1",
+        "title": "構成",
+        "sources": [
+            {"id": "s1", "path": "a.md", "start_line": 1, "end_line": 1, "content_hash": "0" * 64}
+        ],
+        "beats": beats,
+    }
+
+
+def _ent(name: str, **extra) -> dict:
+    beat = {"type": "domain_entity", "name": name, "source_refs": ["s1"]}
+    beat.update(extra)
+    return beat
+
+
+def _rel(a: str, b: str, **extra) -> dict:
+    beat = {"type": "domain_relation", "from": a, "to": b, "source_refs": ["s1"]}
+    beat.update(extra)
+    return beat
+
+
+def test_valid_domain_spec_is_ok() -> None:
+    spec = _domain_spec([_ent("A"), _ent("B"), _rel("A", "B", label="呼ぶ")])
+    result = validate_scene_spec(spec)
+    assert result.ok, result.errors
+
+
+def test_domain_entity_requires_source_refs() -> None:
+    spec = _domain_spec([{"type": "domain_entity", "name": "A"}, _ent("B")])
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    assert any(e.code == "missing_source_refs" for e in result.errors)
+
+
+def test_domain_relation_requires_source_refs() -> None:
+    """関係そのものが独立した事実主張なので transition と違い出典が要る。"""
+    spec = _domain_spec([_ent("A"), _ent("B"), {"type": "domain_relation", "from": "A", "to": "B"}])
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    assert any(e.code == "missing_source_refs" for e in result.errors)
+
+
+def test_domain_relation_referencing_unknown_entity_is_unknown_label() -> None:
+    spec = _domain_spec([_ent("A"), _ent("B"), _rel("A", "存在しない")])
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    assert any(e.code == "unknown_label" for e in result.errors)
+
+
+def test_domain_duplicate_entity_name_is_invalid() -> None:
+    spec = _domain_spec([_ent("A"), _ent("A"), _ent("B")])
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    dup = [e for e in result.errors if e.code == "duplicate_name"]
+    assert len(dup) == 1
+    assert dup[0].path == "beats[1].name"
+
+
+def test_domain_requires_at_least_two_entities() -> None:
+    result = validate_scene_spec(_domain_spec([_ent("A")]))
+    assert not result.ok
+    assert any(e.path == "beats" for e in result.errors)
+
+
+def test_domain_rejects_more_than_ten_entities() -> None:
+    result = validate_scene_spec(_domain_spec([_ent(f"E{i}") for i in range(11)]))
+    assert not result.ok
+    assert any(e.path == "beats" for e in result.errors)
+
+
+def test_domain_rejects_more_than_twelve_relations() -> None:
+    beats = [_ent("A"), _ent("B")] + [_rel("A", "B") for _ in range(13)]
+    result = validate_scene_spec(_domain_spec(beats))
+    assert not result.ok
+    assert any(e.path == "beats" for e in result.errors)
+
+
+def test_domain_rejects_five_groups() -> None:
+    beats = [_ent(f"E{i}", group=f"G{i}") for i in range(5)]
+    result = validate_scene_spec(_domain_spec(beats))
+    assert not result.ok
+    assert any(e.path == "beats" for e in result.errors)
+
+
+def test_domain_entity_description_over_60_chars_is_invalid() -> None:
+    spec = _domain_spec([_ent("A", description="あ" * 61), _ent("B")])
+    result = validate_scene_spec(spec)
+    assert not result.ok
+    assert any(e.path == "beats[0].description" for e in result.errors)
+
+
+def test_domain_group_is_optional() -> None:
+    assert validate_scene_spec(_domain_spec([_ent("A"), _ent("B", group="G")])).ok
+
+
+def test_domain_rejects_flow_step_beat_type() -> None:
+    spec = _domain_spec([_ent("A"), _ent("B"), {"type": "flow_step", "label": "X"}])
     result = validate_scene_spec(spec)
     assert not result.ok
     assert any(e.code == "unknown_beat_type" for e in result.errors)

@@ -92,10 +92,29 @@ SCENE_KINDS: list[dict[str, Any]] = [
         ],
         "beat_types": ["comparison_item", "statement", "metric"],
     },
+    {
+        "kind": "domain",
+        "description": (
+            "システム構成・用語間の関係図。domain_entity（要素、group で括れる）と "
+            "domain_relation（関係名つきの矢印）で静的な構造を示す。"
+            "時間的な流れ（順序に意味があり矢印にラベルが無い）は flow を使うこと"
+        ),
+        "template": "domain_map_v1",
+        "required": [
+            "schema_version",
+            "scene_kind",
+            "output_format",
+            "template",
+            "title",
+            "sources",
+            "beats",
+        ],
+        "beat_types": ["domain_entity", "domain_relation", "statement", "metric"],
+    },
 ]
 
 #: スキーマ予約のみ(未実装)。指定されたら専用エラーで案内する
-RESERVED_KINDS: list[str] = ["domain"]
+RESERVED_KINDS: list[str] = []
 
 OUTPUT_FORMATS: list[str] = ["mp4", "png"]
 
@@ -107,6 +126,12 @@ MAX_TIMELINE_POINTS = 10
 MAX_COMPARISON_SIDES = 3
 #: comparison の行数(distinct aspect)上限。
 MAX_COMPARISON_ASPECTS = 6
+#: domain の要素数上限。これを超えると fit_to_frame の等比縮小で判読不能になる。
+MAX_DOMAIN_ENTITIES = 10
+#: domain の関係数上限。矢印が増えるほど交差して読めなくなる。
+MAX_DOMAIN_RELATIONS = 12
+#: domain のグループ数上限。
+MAX_DOMAIN_GROUPS = 4
 _SOURCE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,32}$")
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -362,6 +387,15 @@ def _validate_beats(
             flow_label_first_index[label] = index
     flow_labels = flow_label_first_index.keys()
 
+    # name -> 最初に出現した index。domain_relation の接続先解決と重複検出に使う。
+    entity_name_first_index: dict[str, int] = {}
+    for index, b in enumerate(beats):
+        if not _is_plain_object(b) or b.get("type") != "domain_entity":
+            continue
+        name = b.get("name")
+        if isinstance(name, str) and name not in entity_name_first_index:
+            entity_name_first_index[name] = index
+
     # (aspect, side) -> 最初に出現した index。comparison のセル重複検出に使う。
     comparison_cell_first_index: dict[tuple[str, str], int] = {}
     for index, b in enumerate(beats):
@@ -508,6 +542,89 @@ def _validate_beats(
                 _validate_source_refs(
                     beat.get("source_refs"), at, source_ids, errors, required=False
                 )
+        elif beat_type == "domain_entity":
+            name = beat.get("name")
+            if not isinstance(name, str) or not (1 <= len(name) <= 24):
+                errors.append(
+                    SceneSpecError(f"{at}.name", "invalid", "name は 1〜24 文字で指定してください")
+                )
+            else:
+                seen_at = entity_name_first_index.get(name)
+                if seen_at is not None and seen_at != i:
+                    errors.append(
+                        SceneSpecError(
+                            f"{at}.name",
+                            "duplicate_name",
+                            f'domain_entity の name "{name}" が beats[{seen_at}] と'
+                            "重複しています。name は domain_relation の接続先を"
+                            "一意に指すため区別してください",
+                        )
+                    )
+            group = beat.get("group")
+            if group is not None and (not isinstance(group, str) or not (1 <= len(group) <= 20)):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.group", "invalid", "group は 1〜20 文字で指定してください"
+                    )
+                )
+            description = beat.get("description")
+            if description is not None and (
+                not isinstance(description, str) or len(description) > 60
+            ):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.description",
+                        "invalid",
+                        "description は 60 文字以内で指定してください(箱の中に入るため)",
+                    )
+                )
+            _validate_source_refs(
+                beat.get("source_refs"),
+                at,
+                source_ids,
+                errors,
+                required=beat.get("decorative") is not True,
+                require_hint=(
+                    "domain_entity は構成要素の存在という事実を述べるため"
+                    "出典(source_refs)が必要です。装飾なら decorative:true を付けてください"
+                ),
+            )
+        elif beat_type == "domain_relation":
+            for key in ("from", "to"):
+                value = beat.get(key)
+                if not isinstance(value, str) or len(value) < 1:
+                    errors.append(
+                        SceneSpecError(f"{at}.{key}", "invalid", f"{key} を指定してください")
+                    )
+                elif value not in entity_name_first_index:
+                    errors.append(
+                        SceneSpecError(
+                            f"{at}.{key}",
+                            "unknown_label",
+                            f'domain_relation の {key} "{value}" に一致する'
+                            "domain_entity の name がありません",
+                        )
+                    )
+            label = beat.get("label")
+            if label is not None and (not isinstance(label, str) or not (1 <= len(label) <= 16)):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.label", "invalid", "label は 1〜16 文字で指定してください"
+                    )
+                )
+            # transition と違い、関係そのものが独立した事実主張(「A は B を呼ぶ」)。
+            # ここを免除すると entity だけ出典付きで関係は全部創作、という図が通る。
+            _validate_source_refs(
+                beat.get("source_refs"),
+                at,
+                source_ids,
+                errors,
+                required=beat.get("decorative") is not True,
+                require_hint=(
+                    "domain_relation は要素間の関係という事実を述べるため"
+                    "出典(source_refs)が必要です。装飾なら decorative:true を付けてください"
+                ),
+            )
         elif beat_type == "comparison_item":
             for key, limit in (("side", 20), ("aspect", 20), ("text", 60)):
                 value = beat.get(key)
@@ -676,6 +793,19 @@ def composition_reason(scene_kind: str, beats: list[dict[str, Any]]) -> str | No
             return f"side（列見出し）は {MAX_COMPARISON_SIDES} 種類以内にしてください"
         if len(aspects) > MAX_COMPARISON_ASPECTS:
             return f"aspect（行見出し）は {MAX_COMPARISON_ASPECTS} 種類以内にしてください"
+        return None
+    if scene_kind == "domain":
+        entities = [b for b in beats if b.get("type") == "domain_entity"]
+        relations = [b for b in beats if b.get("type") == "domain_relation"]
+        if len(entities) < 2:
+            return "domain_entity の beat が 2 件以上必要です"
+        if len(entities) > MAX_DOMAIN_ENTITIES:
+            return f"domain_entity は {MAX_DOMAIN_ENTITIES} 件以内にしてください"
+        if len(relations) > MAX_DOMAIN_RELATIONS:
+            return f"domain_relation は {MAX_DOMAIN_RELATIONS} 件以内にしてください"
+        groups = {b.get("group") for b in entities if isinstance(b.get("group"), str)}
+        if len(groups) > MAX_DOMAIN_GROUPS:
+            return f"group は {MAX_DOMAIN_GROUPS} 種類以内にしてください"
         return None
     if scene_kind == "timeline":
         points = counts.get("timeline_point", 0)
