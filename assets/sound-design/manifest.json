@@ -1,0 +1,160 @@
+{
+  "preset": "professional",
+  "license_note": "社内制作の合成音。外部素材を含まない。",
+  "assets": [
+    {
+      "id": "startup_soft_01",
+      "categories": [
+        "startup"
+      ],
+      "path": "professional/startup_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "2f591dacec8cbaf068c234304e87986c9fcc5177f4a17116498a2939894a92f2",
+      "duration_ms": 450
+    },
+    {
+      "id": "startup_soft_02",
+      "categories": [
+        "startup"
+      ],
+      "path": "professional/startup_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "177b62f8601e308e5050de7d5e09a581c0cc5389cc432d1bf4514cdabc185647",
+      "duration_ms": 450
+    },
+    {
+      "id": "transition_soft_01",
+      "categories": [
+        "transition"
+      ],
+      "path": "professional/transition_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "d8a2bc66f882f8f2c507d98263b82954aab9ddb7c516c742a67adf860ed69c9b",
+      "duration_ms": 220
+    },
+    {
+      "id": "transition_soft_02",
+      "categories": [
+        "transition"
+      ],
+      "path": "professional/transition_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "d65817d59fe2b72512c9caa7c00dc4cea08087e32d6c5f364ddcca71b462543e",
+      "duration_ms": 220
+    },
+    {
+      "id": "accent_soft_01",
+      "categories": [
+        "accent"
+      ],
+      "path": "professional/accent_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "1e99e815a66e92a6f922f1fce17db6e0cf1908e33da2f6ab31a9cc738be4cca2",
+      "duration_ms": 160
+    },
+    {
+      "id": "accent_soft_02",
+      "categories": [
+        "accent"
+      ],
+      "path": "professional/accent_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "58f913daf57abcf0bc97be0c42a15de0c00f680f30e90d505fb0a6366928927d",
+      "duration_ms": 160
+    },
+    {
+      "id": "swipe_soft_01",
+      "categories": [
+        "swipe"
+      ],
+      "path": "professional/swipe_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "0dbbb26049e7bf352d510efb7dd564b4319f7299e32ca04543c7dcd7a23bddf1",
+      "duration_ms": 180
+    },
+    {
+      "id": "branch_soft_01",
+      "categories": [
+        "branch"
+      ],
+      "path": "professional/branch_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "fc0f0b79caa06cef65167150d1abc08e267ac219f5f244a300bdb03cb814aa35",
+      "duration_ms": 240
+    },
+    {
+      "id": "caution_soft_01",
+      "categories": [
+        "caution"
+      ],
+      "path": "professional/caution_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "cd86e7c7ef2e58fbf9b0abec015bbb5a0209bd098b8a75eded13979aacb2267d",
+      "duration_ms": 350
+    },
+    {
+      "id": "caution_soft_02",
+      "categories": [
+        "caution"
+      ],
+      "path": "professional/caution_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "b00deaae4e0a21bdc3fc6cf9242075033af8941d4d07d09637b2a19e56fecf2e",
+      "duration_ms": 350
+    },
+    {
+      "id": "complete_soft_01",
+      "categories": [
+        "complete"
+      ],
+      "path": "professional/complete_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "d219ac01a0fa4e116a3c1066a82a044480578819671f811dc05a1960bc2da956",
+      "duration_ms": 500
+    },
+    {
+      "id": "complete_soft_02",
+      "categories": [
+        "complete"
+      ],
+      "path": "professional/complete_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "9ca36ed292df3d0cf22a02e30113a7b4b06c6939c46941b6d4a5e77afd37578b",
+      "duration_ms": 500
+    },
+    {
+      "id": "error_soft_01",
+      "categories": [
+        "error"
+      ],
+      "path": "professional/error_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "3650d42394b58d76b8d19f0ae499304338d3391ddf7d120a7dfdf112127ae145",
+      "duration_ms": 400
+    },
+    {
+      "id": "ending_soft_01",
+      "categories": [
+        "ending"
+      ],
+      "path": "professional/ending_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack (synthesized)",
+      "sha256": "2c30c9c5573487e1eb0ace251f2d1f8496426e74d19f694b7a3e716773188c7a",
+      "duration_ms": 600
+    }
+  ]
+}
