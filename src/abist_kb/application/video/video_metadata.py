@@ -145,11 +145,15 @@ def build_description(
         blocks.append(f"【画面キャプチャ】対象コミット: {capture_commit_sha}")
 
     if sound_attributions:
-        lines = ["【効果音】"]
+        # **表記が同じものは畳む。** 同じパックから7音使うと同一行が7回並び、
+        # 説明文としては読めなくなる（帰属としては1回で足りる）。
+        seen: list[str] = []
         for entry in sound_attributions:
             attribution = entry.get("attribution") or entry.get("sound_id")
-            lines.append(f"- {attribution}（{entry.get('license')}）")
-        blocks.append("\n".join(lines))
+            line = f"- {attribution}（{entry.get('license')}）"
+            if line not in seen:
+                seen.append(line)
+        blocks.append("\n".join(["【効果音】", *seen]))
 
     return "\n\n".join(blocks)
 
