@@ -14,6 +14,7 @@ from templates.base import (
     card_title,
     content_width,
     fit_to_frame,
+    hold_to,
     resolve_font,
     source_footer,
     wrapped_text,
@@ -63,6 +64,7 @@ def make_scene_classes(spec: dict):
                 self.play(FadeIn(part, shift=DOWN * 0.15), run_time=0.5)
                 self.wait(0.3)
             self.wait(1.0)
+            hold_to(self, spec)
 
     class ChapterCardStatic(Scene):
         def construct(self):

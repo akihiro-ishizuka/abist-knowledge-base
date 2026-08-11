@@ -80,6 +80,10 @@ def _scene_spec_for(scene: dict[str, Any], spec: dict[str, Any]) -> dict[str, An
     else:
         enriched.setdefault("quality", "standard")
     enriched["frame"] = {"aspect_ratio": fmt.get("aspect_ratio") or "16:9"}
+    # 尺の下限はシーン側（台本が決めた読み上げ時間）を尊重する
+    minimum = scene.get("min_duration_sec")
+    if isinstance(minimum, int | float) and not isinstance(minimum, bool) and minimum > 0:
+        enriched["min_duration_sec"] = float(minimum)
     return enriched
 
 

@@ -247,11 +247,21 @@ def mux_audio(
     if audio is None:
         args = ["-i", str(video), "-c", "copy", str(output)]
     else:
+        # **`-shortest` だけでは映像が切られる。** ナレーションは最後のシーンの
+        # 途中で終わるため、素の `-shortest` は音声長で映像を打ち切ってしまう。
+        # `apad` で音声を無音で伸ばしてから `-shortest` を効かせ、
+        # 「映像の長さちょうど」で終わるようにする。
         args = [
             "-i",
             str(video),
             "-i",
             str(audio),
+            "-filter_complex",
+            "[1:a]apad[aout]",
+            "-map",
+            "0:v",
+            "-map",
+            "[aout]",
             "-c:v",
             "copy",
             "-c:a",

@@ -15,6 +15,7 @@ from templates.base import (
     card_title,
     content_width,
     fit_to_frame,
+    hold_to,
     resolve_font,
     scale_font,
     source_footer,
@@ -64,6 +65,7 @@ def make_scene_classes(spec: dict):
                 self.wait(1.0)
             self.play(FadeIn(layout[2]), run_time=0.4)
             self.wait(1.3)
+            hold_to(self, spec)
 
     class QuoteCardStatic(Scene):
         def construct(self):

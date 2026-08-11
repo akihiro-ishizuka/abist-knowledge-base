@@ -171,3 +171,25 @@ def card_title(text: str, font: str, *, font_size: float = 48, color: str = COLO
     """カード系テンプレートの見出し。縦型では自動で一段小さくする。"""
     size = font_size * (0.78 if is_portrait() else 1.0)
     return wrapped_text(text, font, size, color, content_width(), weight="BOLD")
+
+
+#: `hold_to` が待てる上限（秒）。暴走した指定でレンダリングが張り付かないための保険。
+MAX_HOLD_SEC = 30.0
+
+
+def hold_to(scene, spec: dict) -> None:
+    """シーンの尺が `spec["min_duration_sec"]` に届くまで最終フレームを保持する。
+
+    **これは内容の水増しではなく間の調整。** ナレーションが映像より長いと、
+    音声を映像へ載せる段で末尾が切れる（あるいは映像が黒く伸びる）。
+    尺は「読み上げに必要な長さ」から決まるので、映像側をそこへ合わせる。
+
+    実経過は `scene.renderer.time`（既に再生したアニメーションの合計秒）を見る。
+    """
+    target = spec.get("min_duration_sec")
+    if not isinstance(target, (int, float)) or isinstance(target, bool) or target <= 0:
+        return
+    elapsed = float(getattr(scene.renderer, "time", 0.0) or 0.0)
+    remaining = min(float(target) - elapsed, MAX_HOLD_SEC)
+    if remaining > 0.05:
+        scene.wait(remaining)

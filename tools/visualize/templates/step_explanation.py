@@ -13,6 +13,7 @@ from templates.base import (
     COLOR_METRIC,
     COLOR_TITLE,
     fit_to_frame,
+    hold_to,
     resolve_font,
     source_footer,
     wrapped_text,
@@ -91,6 +92,7 @@ def make_scene_classes(spec: dict):
                     self.play(FadeIn(item, shift=UP * 0.25), run_time=0.5)
                 self.wait(_dwell_seconds(beat))
             self.wait(1.5)
+            hold_to(self, spec)
 
     class StepExplanationStatic(Scene):
         def construct(self):

@@ -217,6 +217,8 @@ OUTPUT_FORMATS: list[str] = ["mp4", "png"]
 ASPECT_RATIOS: list[str] = ["16:9", "9:16"]
 
 MAX_BEATS = 30
+#: `min_duration_sec` の上限（秒）。誤指定でレンダリングが張り付くのを防ぐ。
+MAX_MIN_DURATION_SEC = 60.0
 #: quote の本文上限。これを超えると 1 画面で読めない(引用は抜粋であるべき)。
 MAX_QUOTE_CHARS = 240
 #: code の本文上限。行数・桁数はテンプレート側でさらに切り詰める。
@@ -468,10 +470,13 @@ def _validate_beats(
     errors: list[SceneSpecError],
 ) -> None:
     beats = spec.get("beats")
-    if not isinstance(beats, list) or len(beats) < 1 or len(beats) > MAX_BEATS:
+    # 表紙・章扉・エンドカードは「タイトルだけで成立する」面なので beat 0 件を許す。
+    # それ以外の kind は最低1件（空の画面を出さないための下限）。
+    minimum = 0 if _VIDEO_CARD_MIN_BEATS.get(kind_info["kind"], ("", 1))[1] == 0 else 1
+    if not isinstance(beats, list) or len(beats) < minimum or len(beats) > MAX_BEATS:
         errors.append(
             SceneSpecError(
-                "beats", "invalid", f"beats は 1〜{MAX_BEATS} 件の配列で指定してください"
+                "beats", "invalid", f"beats は {minimum}〜{MAX_BEATS} 件の配列で指定してください"
             )
         )
         return
@@ -1154,6 +1159,22 @@ def validate_scene_spec(spec: Any) -> SceneSpecResult:
         value = spec.get(key)
         if value is not None and (not _is_integer(value) or value < 1):
             errors.append(SceneSpecError(key, "invalid", f"{key} は 1 以上の整数です"))
+
+    # 尺の下限。ナレーションが映像より長いときに映像側を伸ばすために使う
+    # （動画では「読み上げに必要な長さ」が尺を決めるので、映像がそこへ合わせる）。
+    minimum = spec.get("min_duration_sec")
+    if minimum is not None and (
+        not isinstance(minimum, int | float)
+        or isinstance(minimum, bool)
+        or not (0 < minimum <= MAX_MIN_DURATION_SEC)
+    ):
+        errors.append(
+            SceneSpecError(
+                "min_duration_sec",
+                "invalid",
+                f"min_duration_sec は 0 より大きく {MAX_MIN_DURATION_SEC} 秒以下の数値です",
+            )
+        )
 
     font = spec.get("font")
     if font is not None and (not isinstance(font, str) or len(font) < 1):

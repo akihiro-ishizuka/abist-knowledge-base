@@ -21,6 +21,7 @@ from templates.base import (
     COLOR_RULE,
     card_title,
     content_width,
+    hold_to,
     resolve_font,
     source_footer,
     wrapped_text,
@@ -89,6 +90,7 @@ def make_scene_classes(spec: dict):
                 self.play(FadeIn(part), run_time=0.55)
                 self.wait(0.5)
             self.wait(1.6)
+            hold_to(self, spec)
 
     class ImageStillStatic(Scene):
         def construct(self):

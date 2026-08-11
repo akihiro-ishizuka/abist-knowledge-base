@@ -85,6 +85,41 @@ class ChatAskRequest(BaseModel):
     question: str
 
 
+class VideoInputs(BaseModel):
+    kb_paths: list[str] = []
+    kb_directories: list[str] = []
+    kb_queries: list[Any] = []
+    esa_posts: list[Any] = []
+
+
+class VideoTargetDuration(BaseModel):
+    min: float
+    max: float
+
+
+class VideoPlanRequest(BaseModel):
+    title: str
+    inputs: VideoInputs
+    purpose: str | None = None
+    target_duration_sec: VideoTargetDuration | None = None
+
+
+class VideoCreateRequest(VideoPlanRequest):
+    aspect_ratio: str | None = None
+
+
+class VideoApproveRequest(BaseModel):
+    approver: str
+    confirmed: bool = False
+
+
+class VideoDistributionRequest(BaseModel):
+    classification: str | None = None
+    audience: list[str] | None = None
+    allowed_groups: list[str] | None = None
+    public_candidate: bool | None = None
+
+
 class QualityIntegrityRequest(BaseModel):
     update_db: bool = False
 
@@ -484,6 +519,85 @@ def register_api_routes(
         return await run_locked(
             request,
             lambda: facade.visualization_detail(get_container(request), visualization_id),
+        )
+
+    # --- 動画（video Phase 10）。**外部への送信は一切行わない** ---
+
+    @app.post(f"{router_prefix}/videos/plan")
+    async def video_plan(body: VideoPlanRequest, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: facade.video_plan(get_container(request), **body.model_dump(exclude_none=True)),
+        )
+
+    @app.post(f"{router_prefix}/videos")
+    async def video_create(body: VideoCreateRequest, request: Request) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: facade.video_create(
+                get_container(request), **body.model_dump(exclude_none=True)
+            ),
+        )
+
+    @app.get(f"{router_prefix}/videos")
+    async def videos_list(
+        request: Request, limit: int = 20, offset: int = 0, state: str | None = None
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: facade.video_list(
+                get_container(request), limit=limit, offset=offset, state=state
+            ),
+        )
+
+    @app.get(f"{router_prefix}/videos/{{video_id}}")
+    async def video_detail(request: Request, video_id: str) -> dict[str, Any]:
+        return await run_locked(
+            request, lambda: facade.video_detail(get_container(request), video_id)
+        )
+
+    @app.post(f"{router_prefix}/videos/{{video_id}}/render")
+    async def video_submit_render(request: Request, video_id: str) -> dict[str, Any]:
+        return await run_locked(
+            request, lambda: facade.video_submit_render(get_container(request), video_id)
+        )
+
+    @app.post(f"{router_prefix}/videos/{{video_id}}/qa")
+    async def video_run_qa(request: Request, video_id: str) -> dict[str, Any]:
+        return await run_locked(
+            request, lambda: facade.video_run_qa(get_container(request), video_id)
+        )
+
+    @app.post(f"{router_prefix}/videos/{{video_id}}/approve")
+    async def video_approve(
+        body: VideoApproveRequest, request: Request, video_id: str
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: facade.video_approve(
+                get_container(request),
+                video_id,
+                approver=body.approver,
+                confirmed=body.confirmed,
+            ),
+        )
+
+    @app.post(f"{router_prefix}/videos/{{video_id}}/distribution")
+    async def video_set_distribution(
+        body: VideoDistributionRequest, request: Request, video_id: str
+    ) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: facade.video_set_distribution(
+                get_container(request), video_id, **body.model_dump(exclude_none=True)
+            ),
+        )
+
+    @app.post(f"{router_prefix}/videos/{{video_id}}/public-review")
+    async def video_request_public_review(request: Request, video_id: str) -> dict[str, Any]:
+        return await run_locked(
+            request,
+            lambda: facade.video_request_public_review(get_container(request), video_id),
         )
 
     @app.get(f"{router_prefix}/quality")

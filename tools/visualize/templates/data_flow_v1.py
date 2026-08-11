@@ -30,10 +30,11 @@ from templates.base import (
     COLOR_BOX,
     COLOR_DECISION,
     COLOR_KEY,
-    COLOR_WARN,
     COLOR_METRIC,
     COLOR_TITLE,
+    COLOR_WARN,
     fit_to_frame,
+    hold_to,
     resolve_font,
     source_footer,
     wrapped_text,
@@ -317,6 +318,7 @@ def make_scene_classes(spec: dict):
             for part in rest:
                 self.play(FadeIn(part), run_time=0.5)
             self.wait(1.5)
+            hold_to(self, spec)
 
     class DataFlowStatic(Scene):
         def construct(self):

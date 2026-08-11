@@ -24,7 +24,13 @@ from abist_kb.domain.job import JobState
 from abist_kb.infrastructure.jobs.repository import JobRepository
 from abist_kb.presentation.api.app import create_api_app
 from abist_kb.presentation.common.container import ServiceContainer
-from abist_kb.presentation.mcp import jobs_tools, kb_admin, kb_search, kb_visualize
+from abist_kb.presentation.mcp import (
+    jobs_tools,
+    kb_admin,
+    kb_search,
+    kb_video,
+    kb_visualize,
+)
 
 MATRIX_PATH = Path(__file__).resolve().parents[2] / "design" / "ui-action-matrix.yaml"
 ALL_SURFACES = ("mcp", "api")
@@ -52,6 +58,16 @@ MCP_TOOL_BY_ACTION: dict[str, str] = {
     "visualization_deps": "check_visualize_deps",
     "visualization_list": "list_visualizations",
     "visualization_detail": "get_visualization",
+    # --- 動画（video Phase 10）---
+    "video_plan": "plan_video",
+    "video_create": "create_video_project",
+    "video_submit_render": "start_render_video",
+    "video_list": "list_videos",
+    "video_detail": "get_video",
+    "video_run_qa": "run_video_qa",
+    "video_approve": "approve_video",
+    "video_set_distribution": "set_distribution",
+    "video_request_public_review": "request_public_review",
     "quality_run_integrity": "quality_run_integrity",
     "quality_apply_integrity_updates": "quality_apply_integrity_updates",
     "quality_run_duplicates": "quality_run_duplicates",
@@ -104,6 +120,7 @@ def all_mcp_tool_names() -> set[str]:
         jobs_tools.list_tools(),
         kb_search.list_tools(),
         kb_visualize.list_tools(),
+        kb_video.list_tools(),
     ):
         names.update(tool.name for tool in listing)
     return names
@@ -201,6 +218,15 @@ API_ROUTE_BY_ACTION: dict[str, tuple[str, str]] = {
     "visualization_deps": ("GET", "/api/v1/visualization/deps"),
     "visualization_list": ("GET", "/api/v1/visualizations"),
     "visualization_detail": ("GET", "/api/v1/visualizations/{visualization_id}"),
+    "video_plan": ("POST", "/api/v1/videos/plan"),
+    "video_create": ("POST", "/api/v1/videos"),
+    "video_submit_render": ("POST", "/api/v1/videos/{video_id}/render"),
+    "video_list": ("GET", "/api/v1/videos"),
+    "video_detail": ("GET", "/api/v1/videos/{video_id}"),
+    "video_run_qa": ("POST", "/api/v1/videos/{video_id}/qa"),
+    "video_approve": ("POST", "/api/v1/videos/{video_id}/approve"),
+    "video_set_distribution": ("POST", "/api/v1/videos/{video_id}/distribution"),
+    "video_request_public_review": ("POST", "/api/v1/videos/{video_id}/public-review"),
     "quality_run_integrity": ("POST", "/api/v1/quality/integrity"),
     "quality_run_duplicates": ("POST", "/api/v1/quality/duplicates"),
     "quality_run_contradictions": ("POST", "/api/v1/quality/contradictions"),

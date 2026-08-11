@@ -26,6 +26,10 @@ SCENE_ROLES: tuple[str, ...] = (
     "summary",
     "cta",
     "ending",
+    # --- 動画専用カード（Phase 7）。章立てのために追加 ---
+    "chapter",
+    "quote",
+    "comparison",
 )
 
 #: 主張の種類。`fact` だけが出典必須。

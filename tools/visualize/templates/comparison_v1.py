@@ -22,6 +22,7 @@ from templates.base import (
     COLOR_TITLE,
     COLOR_WARN,
     fit_to_frame,
+    hold_to,
     resolve_font,
     scale_font,
     source_footer,
@@ -211,6 +212,7 @@ def make_scene_classes(spec: dict):
             for part in rest:
                 self.play(FadeIn(part), run_time=0.5)
             self.wait(1.5)
+            hold_to(self, spec)
 
     class ComparisonStatic(Scene):
         def construct(self):

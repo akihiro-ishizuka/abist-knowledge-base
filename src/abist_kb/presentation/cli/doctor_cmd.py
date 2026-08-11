@@ -9,9 +9,11 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 from typing import Literal, TypedDict
 
 import typer
@@ -250,6 +252,59 @@ def _check_manim() -> CheckResult:
     )
 
 
+#: TTS プロバイダを示す環境変数。未設定でも動画は作れる（none / 手動音声）ので warn。
+_TTS_ENV_VARS = ("ABIST_KB_TTS_PROVIDER", "AZURE_SPEECH_KEY", "GOOGLE_APPLICATION_CREDENTIALS")
+
+
+def _check_video_tts() -> CheckResult:
+    """動画ナレーションの外部 TTS が設定されているか。
+
+    **未設定は fail にしない。** `none`（無音）・`silence`・手動音声で動画は
+    完成するので、これは「使える経路が増えるか」の情報にすぎない。
+    YouTube 認証の検査は行わない（自動投稿は実装しないため）。
+    """
+    configured = [name for name in _TTS_ENV_VARS if os.environ.get(name)]
+    if configured:
+        return _result("video_tts", "ok", f"TTS 設定を検出しました: {', '.join(configured)}")
+    return _result(
+        "video_tts",
+        "warn",
+        "外部 TTS が未設定です（無音・手動音声での動画生成は可能です）。",
+        hint="音声を付けるなら TTS プロバイダを設定するか、"
+        "manual 音声ディレクトリを用意してください。",
+    )
+
+
+def _check_video_capture() -> CheckResult:
+    """画面キャプチャの有効/無効と、登録済みプロファイルの有無。
+
+    **既定は無効。** 無効であることは正常なので ok として報告する
+    （警告にすると「有効化すべき」という誤ったシグナルになる）。
+    """
+    from abist_kb.application.video.capture_planner import list_profiles
+    from abist_kb.domain.capture_spec import is_capture_enabled
+
+    enabled = is_capture_enabled(dict(os.environ))
+    if not enabled:
+        return _result(
+            "video_capture",
+            "ok",
+            "画面キャプチャは無効です（既定）。",
+            hint="有効にするには ABIST_KB_VIDEO_CAPTURE_ENABLED=1 を設定し、"
+            "config/capture-profiles.json へプロファイルを登録してください。",
+        )
+    profiles = list_profiles(Path(__file__).resolve().parents[3])
+    if profiles:
+        return _result("video_capture", "ok", f"有効。登録済みプロファイル: {', '.join(profiles)}")
+    return _result(
+        "video_capture",
+        "warn",
+        "画面キャプチャは有効ですが、登録済みプロファイルがありません。",
+        hint="config/capture-profiles.json にプロファイルを登録してください"
+        "（MCP/API から起動コマンドは渡せません）。",
+    )
+
+
 def _run_checks(settings: Settings) -> list[CheckResult]:
     report = check_sqlite_capabilities()
     return [
@@ -264,6 +319,8 @@ def _run_checks(settings: Settings) -> list[CheckResult]:
         _check_data_dir(settings),
         _check_ffmpeg(),
         _check_manim(),
+        _check_video_tts(),
+        _check_video_capture(),
     ]
 
 

@@ -14,6 +14,7 @@ from templates.base import (
     card_title,
     content_width,
     fit_to_frame,
+    hold_to,
     resolve_font,
     scale_font,
     source_footer,
@@ -56,6 +57,7 @@ def make_scene_classes(spec: dict):
                 self.play(FadeIn(part, shift=DOWN * 0.2), run_time=0.6)
                 self.wait(0.5)
             self.wait(1.4)
+            hold_to(self, spec)
 
     class CtaCardStatic(Scene):
         def construct(self):

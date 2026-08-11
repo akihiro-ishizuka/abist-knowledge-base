@@ -164,6 +164,33 @@ def reconcile_from_disk(
     return stats
 
 
+def reconcile_if_needed(
+    conn: sqlite3.Connection, reports_dir: Path, *, root_dir: Path
+) -> list[str]:
+    """ディスクと DB の差分があるときだけ再構築する（一覧参照のたびの自己修復）。
+
+    「クライアントのタイムアウトで応答は切れたが、レンダリングは完走していた」
+    という状況で DB 行だけが欠けるのを、次の一覧参照で自動的に解消するための道。
+    """
+    from abist_kb.infrastructure.video.artifact_store import videos_dir
+
+    root = videos_dir(reports_dir)
+    on_disk = disk_ids(root)
+    known = VideoProjectRepository(conn).all_ids()
+    if on_disk == known:
+        return []
+    stats = reconcile_from_disk(conn, root, root_dir=root_dir)
+    if stats.get("skipped"):
+        return [
+            f"動画プロジェクトが {stats['skipped']} 件あるため自動再構築を省略しました"
+            "（video reconcile を手動で実行してください）"
+        ]
+    return [
+        f"ディスクとの差分を検出したためカタログを再構築しました"
+        f"（取り込み {stats['upserted']} 件 / 削除 {stats['orphaned']} 件）"
+    ]
+
+
 def disk_ids(videos_root: Path) -> set[str]:
     if not videos_root.exists():
         return set()
@@ -189,6 +216,7 @@ __all__ = [
     "MAX_AUTO_RECONCILE_DIRS",
     "disk_ids",
     "reconcile_from_disk",
+    "reconcile_if_needed",
     "record_project",
     "spec_drifted",
 ]

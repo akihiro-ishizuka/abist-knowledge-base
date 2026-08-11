@@ -22,6 +22,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from abist_kb.application.video.chapter_planner import build_chaptered_draft, count_materials
+from abist_kb.application.video.duration_planner import plan_duration
 from abist_kb.application.video.input_resolver import ResolvedInput
 from abist_kb.domain.line_range import range_hash
 from abist_kb.domain.scene_spec import validate_scene_spec
@@ -218,6 +220,105 @@ def parse_llm_draft(raw: str) -> tuple[dict[str, Any] | None, str | None]:
     return parsed, None
 
 
+#: 動画専用カードの kind -> template。SceneSpec 側の SCENE_KINDS と対応する。
+_CARD_TEMPLATES: dict[str, str] = {
+    "title": "title_card",
+    "chapter": "chapter_card",
+    "key_points": "key_points",
+    "quote": "quote_card",
+    "summary": "summary_card",
+    "cta": "cta_card",
+    "ending": "ending_card",
+    "image": "image_still",
+}
+#: 事実を述べない（＝装飾でよい）カード。表紙・行動喚起・エンドカードだけ。
+_DECORATIVE_CARDS = frozenset({"title", "cta", "ending"})
+
+
+def _card_beats(
+    scene: dict[str, Any], diagram: dict[str, Any], kind: str, has_source: bool
+) -> list[dict[str, Any]]:
+    """カード kind ごとの beats を組む（出典の有無で decorative を切り替える）。"""
+    decorative = kind in _DECORATIVE_CARDS or not has_source
+    refs = [] if decorative else ["s1"]
+
+    if kind == "quote":
+        # 引用は decorative を認めない（出典が無いなら描かない）
+        if not has_source:
+            return []
+        return [
+            {
+                "type": "quote",
+                "text": text[:240],
+                "attribution": diagram.get("attribution"),
+                "source_refs": ["s1"],
+            }
+            for text in (diagram.get("quotes") or [])
+            if isinstance(text, str) and text
+        ]
+
+    if kind == "image":
+        path = diagram.get("image_path")
+        if not isinstance(path, str) or not path:
+            return []
+        beat: dict[str, Any] = {"type": "image", "path": path}
+        if diagram.get("caption"):
+            beat["caption"] = str(diagram["caption"])[:200]
+        if decorative:
+            beat["decorative"] = True
+        else:
+            beat["source_refs"] = ["s1"]
+        return [beat]
+
+    texts: list[str] = []
+    if kind in ("key_points", "summary"):
+        texts = [c["text"] for c in (scene.get("claims") or []) if isinstance(c.get("text"), str)]
+    if not texts:
+        texts = [t for t in (scene.get("on_screen_text") or []) if isinstance(t, str)]
+    if not texts and kind in ("chapter", "title", "ending", "cta"):
+        # 章扉・表紙は本文が無くてもタイトルだけで成立する（beat 0 件を許す kind）
+        return []
+
+    beats: list[dict[str, Any]] = []
+    for text in texts[:MAX_STATEMENTS_PER_SCENE]:
+        entry: dict[str, Any] = {"type": "statement", "text": text[:200]}
+        if decorative:
+            entry["decorative"] = True
+        else:
+            entry["source_refs"] = refs
+        beats.append(entry)
+    return beats
+
+
+def _card_spec_from(
+    scene: dict[str, Any],
+    diagram: dict[str, Any],
+    kind: Any,
+    title: str,
+    sources: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """動画専用カードの SceneSpec（対象外の kind なら None）。"""
+    template = _CARD_TEMPLATES.get(kind) if isinstance(kind, str) else None
+    if template is None:
+        return None
+    beats = _card_beats(scene, diagram, kind, has_source=bool(sources))
+    if kind in ("quote", "image", "key_points", "summary") and not beats:
+        return None  # 中身の無いカードは作らない（空の画面を出さない）
+    spec: dict[str, Any] = {
+        "schema_version": "1.0",
+        "scene_kind": kind,
+        "output_format": "mp4",
+        "template": template,
+        "title": title,
+        "sources": sources,
+        "beats": beats,
+    }
+    for key in ("chapter_index", "chapter_total"):
+        if isinstance(diagram.get(key), int):
+            spec[key] = diagram[key]
+    return spec
+
+
 def _scene_spec_from(
     scene: dict[str, Any], outline_by_path: dict[str, DocumentOutline], docs_dir: Path
 ) -> dict[str, Any] | None:
@@ -228,7 +329,10 @@ def _scene_spec_from(
     title = scene.get("title") or scene["id"]
 
     if outline is None:
-        # 出典に紐づかないシーン（タイトル・まとめ）は装飾のみで描く
+        # 出典に紐づかないシーン（表紙・エンドカード）は装飾のみで描く
+        card = _card_spec_from(scene, diagram, diagram.get("kind"), title, [])
+        if card is not None:
+            return card
         texts = scene.get("on_screen_text") or [title]
         return {
             "schema_version": "1.0",
@@ -244,6 +348,10 @@ def _scene_spec_from(
         outline, docs_dir, source_info.get("start", 1), source_info.get("end", 1)
     )
     kind = diagram.get("kind", "explain")
+
+    card = _card_spec_from(scene, diagram, kind, title, [source])
+    if card is not None:
+        return card
 
     if kind == "flow":
         steps = [s for s in (diagram.get("steps") or []) if isinstance(s, str)][:MAX_FLOW_STEPS]
@@ -295,6 +403,8 @@ class PlanResult:
     used_paths: set[str] = field(default_factory=set)
     warnings: list[str] = field(default_factory=list)
     errors: list[dict[str, str]] = field(default_factory=list)
+    #: 目標尺から逆算した構成（`target_duration_sec` を渡したときだけ入る）。
+    duration_plan: dict[str, Any] | None = None
 
 
 def build_scenes(
@@ -334,16 +444,20 @@ def build_scenes(
             continue
         for source in scene_spec.get("sources") or []:
             used.add(source["path"])
-        scenes.append(
-            {
-                "id": scene["id"],
-                "role": scene["role"],
-                "kind": scene_spec["scene_kind"],
-                "on_screen_text": scene.get("on_screen_text") or [],
-                "narration": scene.get("narration") or {"text": None, "source_refs": []},
-                "scene_spec": scene_spec,
-            }
-        )
+        entry: dict[str, Any] = {
+            "id": scene["id"],
+            "role": scene["role"],
+            "kind": scene_spec["scene_kind"],
+            "title": scene_spec.get("title"),
+            "on_screen_text": scene.get("on_screen_text") or [],
+            "narration": scene.get("narration") or {"text": None, "source_refs": []},
+            "scene_spec": scene_spec,
+        }
+        # 章番号は動画メタデータ（チャプター）の元になるので scenes[] にも残す
+        for key in ("chapter_index", "chapter_total"):
+            if isinstance(scene_spec.get(key), int):
+                entry[key] = scene_spec[key]
+        scenes.append(entry)
 
     if not scenes:
         return PlanResult(
@@ -371,11 +485,16 @@ def plan_video(
     title: str,
     purpose: str | None = None,
     chat_fn: Any | None = None,
+    target_duration_sec: dict[str, float] | None = None,
 ) -> tuple[PlanResult, dict[str, Any] | None]:
     """題材から台本を作り、SceneSpec まで組む。
 
     `chat_fn` が無ければ**ルールベース**で組む（外部設定はブロッカーにしない）。
     LLM を使う場合も出力は `validate_script_draft` を必ず通す。
+
+    `target_duration_sec` を渡すと**目標尺から逆算した章立て**で組む。
+    関連情報だけでは目標尺に届かない場合は `INSUFFICIENT_CONTENT_FOR_DURATION`
+    を返して止まる（水増しした説明で尺を埋めない）。
     """
     outlines = [o for o in (outline_document(docs_dir, i) for i in resolved_inputs) if o]
     if not outlines:
@@ -411,6 +530,32 @@ def plan_video(
         except Exception as exc:  # noqa: BLE001 - provider の失敗で動画生成を止めない
             warnings.append(f"LLM が利用できないためルールベースへ切り替えます: {exc}")
 
+    duration_plan = None
+    if raw_draft is None and target_duration_sec is not None:
+        # 目標尺から逆算した章立て。素材が足りなければここで止まる
+        # （入力文書を機械的に増やして尺を埋めることはしない）。
+        duration_plan = plan_duration(
+            target_duration_sec, available_materials=count_materials(outlines)
+        )
+        if not duration_plan.ok:
+            return (
+                PlanResult(
+                    ok=False,
+                    errors=[
+                        {
+                            "path": "format.target_duration_sec",
+                            "code": duration_plan.code or "INVALID_VIDEO_SPEC",
+                            "message": duration_plan.message or "",
+                        }
+                    ],
+                    warnings=warnings,
+                    duration_plan=duration_plan.to_dict(),
+                ),
+                None,
+            )
+        warnings.extend(duration_plan.warnings)
+        raw_draft = build_chaptered_draft(outlines, duration_plan, title=title, purpose=purpose)
+
     if raw_draft is None:
         raw_draft = plan_draft_from_documents(outlines, title=title, purpose=purpose)
 
@@ -424,6 +569,7 @@ def plan_video(
             used_paths=result.used_paths,
             warnings=[*warnings, *result.warnings],
             errors=result.errors,
+            duration_plan=duration_plan.to_dict() if duration_plan else None,
         ),
         raw_draft,
     )

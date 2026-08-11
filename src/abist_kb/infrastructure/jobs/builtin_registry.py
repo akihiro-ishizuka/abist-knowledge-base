@@ -26,6 +26,10 @@ from abist_kb.application.sync_service import (
     record_sync_result,
     write_sync_report,
 )
+from abist_kb.application.video.render_job import (
+    BUILTIN_VIDEO_HANDLERS,
+    BUILTIN_VIDEO_RESOURCES,
+)
 from abist_kb.application.visualization.render_job import (
     BUILTIN_RENDER_HANDLERS,
     BUILTIN_RENDER_RESOURCES,
@@ -376,6 +380,7 @@ def build_builtin_handlers(
         "kb_download_web": _make_web_handler(settings, conn),
         "kb_download_git": _make_git_handler(settings, conn),
         **BUILTIN_RENDER_HANDLERS,
+        **BUILTIN_VIDEO_HANDLERS,
     }
     return handlers
 
@@ -391,6 +396,8 @@ def build_builtin_resources() -> dict[str, ResourceRequirement]:
         "kb_download_web": _DOCS_WRITE,
         "kb_download_git": _DOCS_WRITE,
         **BUILTIN_RENDER_RESOURCES,
+        # 動画も render 区画を使う（Manim は全プロセス横断で単一実行）
+        **BUILTIN_VIDEO_RESOURCES,
     }
     return resources
 

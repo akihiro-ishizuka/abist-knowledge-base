@@ -49,6 +49,7 @@ import mcp.types as types
 from abist_kb.application.batch_service import BatchService
 from abist_kb.application.index_service import CORPUS_LABELS, IndexService
 from abist_kb.application.job_service import JobService
+from abist_kb.application.video.render_job import VIDEO_JOB_KIND
 from abist_kb.application.visualization.render_job import RENDER_JOB_KIND
 from abist_kb.domain.errors import AppError
 from abist_kb.domain.job import Job
@@ -114,6 +115,7 @@ _JOB_KIND_FOR_TOOL: dict[str, str] = {
     "start_download_web": "kb_download_web",
     "start_download_git": "kb_download_git",
     "start_render_scene": RENDER_JOB_KIND,
+    "start_render_video": VIDEO_JOB_KIND,
 }
 
 
@@ -532,6 +534,26 @@ class JobTools:
         if slug:
             params["slug"] = slug
         return self._start("start_render_scene", params)
+
+    def start_render_video(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        """動画レンダリングを非同期ジョブへ投入する。
+
+        **`capture_profile` は登録済みプロファイル名のみ。** 起動コマンドは
+        ジョブ params にも入らない（実行内容は運用者の設定ファイルが決める）。
+        """
+        params: dict[str, Any] = {
+            "project_dir": str(arguments["project_dir"]),
+            "docs_dir": str(self._docs_dir),
+            "reports_dir": str(self._reports_dir),
+            "repo_root": str(self._repo_root),
+            "tts": arguments.get("tts") or "none",
+            "sound_intensity": arguments.get("sound_intensity") or "subtle",
+        }
+        if arguments.get("capture_profile"):
+            params["capture_profile"] = str(arguments["capture_profile"])
+        if arguments.get("manual_audio_dir"):
+            params["manual_audio_dir"] = str(arguments["manual_audio_dir"])
+        return self._start("start_render_video", params)
 
     # -- job_status -----------------------------------------------------------
 

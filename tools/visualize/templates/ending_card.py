@@ -16,6 +16,7 @@ from templates.base import (
     card_title,
     content_width,
     fit_to_frame,
+    hold_to,
     resolve_font,
     scale_font,
     wrapped_text,
@@ -80,6 +81,7 @@ def make_scene_classes(spec: dict):
                 self.play(FadeIn(part), run_time=0.45)
                 self.wait(0.3)
             self.wait(2.0)
+            hold_to(self, spec)
 
     class EndingCardStatic(Scene):
         def construct(self):

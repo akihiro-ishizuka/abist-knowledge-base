@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import shutil
 import sqlite3
+from pathlib import Path
 from typing import Any
 
 from abist_kb.domain.errors import AppError, ErrorCode
@@ -703,3 +704,111 @@ __all__ = [
     "visualization_submit_render",
     "visualization_validate",
 ]
+
+
+# --- 動画（video Phase 10）------------------------------------------------
+#
+# **どの関数も動画を外部へ送信しない。** 返すのは成果物のパスと判定結果だけで、
+# YouTube API / OAuth / 自動アップロードは実装しない（将来バックログ）。
+
+
+def _video_project_dir(container: ServiceContainer, video_id: str) -> Path:
+    """`video_id` からプロジェクトディレクトリを引く（外へ出る指定は拒否）。"""
+    from abist_kb.infrastructure.video.artifact_store import videos_dir
+
+    root = videos_dir(container.settings.reports_dir).resolve()
+    candidate = (root / video_id).resolve()
+    if root not in candidate.parents or not candidate.is_dir():
+        raise AppError(code=ErrorCode.NOT_FOUND, message=f"動画 {video_id} は見つかりません")
+    return candidate
+
+
+def _video_tools(container: ServiceContainer):
+    from abist_kb.presentation.mcp.kb_video import KbVideoTools
+
+    return KbVideoTools(
+        container.conn,
+        docs_dir=container.settings.docs_dir,
+        reports_dir=container.settings.reports_dir,
+        repo_root=container.settings.root_dir,
+    )
+
+
+def _unwrap(result: Any) -> dict[str, Any]:
+    """MCP の `CallToolResult` から JSON 本文を取り出す（面をまたいで同じ値を返す）。"""
+    import json as _json
+
+    text = result.content[0].text if result.content else "{}"
+    payload = _json.loads(text)
+    if isinstance(payload, dict) and payload.get("ok") is False:
+        raise AppError(
+            code=ErrorCode.INVALID_INPUT,
+            message=payload.get("message") or payload.get("code") or "動画操作に失敗しました",
+        )
+    return payload
+
+
+def video_plan(container: ServiceContainer, **arguments: Any) -> dict[str, Any]:
+    """台本案を作る（保存しない）。"""
+    return _unwrap(_video_tools(container).plan_video(arguments))
+
+
+def video_create(container: ServiceContainer, **arguments: Any) -> dict[str, Any]:
+    """動画プロジェクトを作る（描画はしない）。"""
+    return _unwrap(_video_tools(container).create_video_project(arguments))
+
+
+def video_submit_render(container: ServiceContainer, video_id: str) -> dict[str, Any]:
+    """動画レンダリングを非同期ジョブへ投入する。"""
+    from abist_kb.application.video.render_job import VIDEO_JOB_KIND
+
+    project_dir = _video_project_dir(container, video_id)
+    params = {
+        "project_dir": str(project_dir),
+        "docs_dir": str(container.settings.docs_dir),
+        "reports_dir": str(container.settings.reports_dir),
+        "repo_root": str(container.settings.root_dir),
+    }
+    job = container.jobs.detach(VIDEO_JOB_KIND, params)
+    return {"job_id": job.id, "state": str(job.state), "video_id": video_id}
+
+
+def video_list(container: ServiceContainer, **filters: Any) -> dict[str, Any]:
+    """動画一覧（ディスクとの差分があれば自動整合してから返す）。"""
+    return _unwrap(_video_tools(container).list_videos(filters))
+
+
+def video_detail(container: ServiceContainer, video_id: str) -> dict[str, Any]:
+    """動画1件の詳細（成果物パス・QA・配布判定・承認の有効性）。"""
+    _video_project_dir(container, video_id)
+    return _unwrap(_video_tools(container).get_video({"video_id": video_id}))
+
+
+def video_run_qa(container: ServiceContainer, video_id: str) -> dict[str, Any]:
+    """QA を再実行する（FAIL でも成果物は消さない）。"""
+    _video_project_dir(container, video_id)
+    return _unwrap(_video_tools(container).run_video_qa({"video_id": video_id}))
+
+
+def video_approve(
+    container: ServiceContainer, video_id: str, *, approver: str, confirmed: bool
+) -> dict[str, Any]:
+    """社内プレビュー承認（成果物ハッシュにバインド。外部送信なし）。"""
+    _video_project_dir(container, video_id)
+    return _unwrap(
+        _video_tools(container).approve_video(
+            {"video_id": video_id, "approver": approver, "confirmed": confirmed}
+        )
+    )
+
+
+def video_set_distribution(container: ServiceContainer, video_id: str, **fields: Any) -> dict:
+    """情報区分・公開候補を更新する（機密ソースがあれば強制降格）。"""
+    _video_project_dir(container, video_id)
+    return _unwrap(_video_tools(container).set_distribution({"video_id": video_id, **fields}))
+
+
+def video_request_public_review(container: ServiceContainer, video_id: str) -> dict[str, Any]:
+    """公開審査への提出状態へ進める（**外部へは何も送らない**）。"""
+    _video_project_dir(container, video_id)
+    return _unwrap(_video_tools(container).request_public_review({"video_id": video_id}))

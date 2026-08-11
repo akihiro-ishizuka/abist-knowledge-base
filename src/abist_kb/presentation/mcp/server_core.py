@@ -35,6 +35,12 @@ from abist_kb.presentation.mcp.kb_download import (
 )
 from abist_kb.presentation.mcp.kb_search import KbSearchTools
 from abist_kb.presentation.mcp.kb_search import list_tools as kb_search_list_tools
+from abist_kb.presentation.mcp.kb_video import KbVideoTools
+from abist_kb.presentation.mcp.kb_video import handlers_for as kb_video_handlers
+from abist_kb.presentation.mcp.kb_video import list_tools as kb_video_list_tools
+from abist_kb.presentation.mcp.kb_video import (
+    validate_arguments as validate_kb_video_arguments,
+)
 from abist_kb.presentation.mcp.kb_visualize import KbVisualizeTools
 from abist_kb.presentation.mcp.kb_visualize import list_tools as kb_visualize_list_tools
 from abist_kb.presentation.mcp.kb_visualize import (
@@ -269,6 +275,9 @@ def build_kb_admin_server(
 
     @server.call_tool(validate_input=False)
     async def _call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
+        validation_error = validate_kb_video_arguments(name, arguments)
+        if validation_error is not None:
+            return validation_error
         validation_error = validate_kb_admin_arguments(name, arguments)
         if validation_error is not None:
             return validation_error
@@ -342,6 +351,14 @@ def build_all_server(
         repo_root=resolved.root_dir,
     )
     admin_tools = KbAdminTools(ServiceContainer(resolved))
+    # 動画は `reports/` のベースをそのまま受け取る（`videos_dir` はこの層より内側で導出）
+    video_tools = KbVideoTools(
+        conn,
+        docs_dir=resolved.docs_dir,  # type: ignore[arg-type]
+        reports_dir=resolved.reports_dir,  # type: ignore[arg-type]
+        repo_root=resolved.root_dir,
+        job_tools=job_tools,
+    )
 
     handlers: dict[str, Any] = {
         "search_kb": search_tools.search_kb,
@@ -373,6 +390,8 @@ def build_all_server(
         "get_batch": job_tools.get_batch,
         "list_corpora": job_tools.list_corpora,
         "system_status": job_tools.system_status,
+        "start_render_video": job_tools.start_render_video,
+        **kb_video_handlers(video_tools),
         **kb_admin_handlers(admin_tools),
     }
 
@@ -383,6 +402,7 @@ def build_all_server(
             *kb_download_list_tools(),
             *kb_visualize_list_tools(),
             *jobs_list_tools(),
+            *kb_video_list_tools(),
             *kb_admin_list_tools(),
         ]
 
