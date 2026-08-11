@@ -843,9 +843,7 @@ def test_handler_writes_stop_after_resource_lease_is_stolen_mid_run(db_path: Pat
         f"検知猶予({detection_grace_sec}s)を超えて書き込みが続いた"
         f"(fix2 が機能していない再現): {late_writes}"
     )
-    assert len(writes_after) <= 1, (
-        f"奪取後の書き込みが飛び込み1件を超えている: {writes_after}"
-    )
+    assert len(writes_after) <= 1, f"奪取後の書き込みが飛び込み1件を超えている: {writes_after}"
 
 
 def test_exactly_one_process_claims_the_same_queued_job(db_path: Path) -> None:
