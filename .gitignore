@@ -29,6 +29,9 @@ venv/
 .env
 .env.*
 !.env.example
+# 画面キャプチャの起動コマンド登録簿。運用者が各環境で作る運用ファイルで、
+# 社内ホスト名や起動手順が入りうるためコミットしない（雛形だけ追跡する）。
+config/capture-profiles.json
 
 # Application data (regenerable / local)
 data/

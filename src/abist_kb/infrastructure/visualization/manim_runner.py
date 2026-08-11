@@ -150,6 +150,12 @@ def _kill_process_tree(proc: subprocess.Popen[str]) -> None:
         proc.kill()
 
 
+#: 公開名。長時間常駐するプロセス(Phase 7 の画面キャプチャ)も同じ木 kill を使う。
+#: 実装を複製すると「孫が残らない」保証が片方だけ壊れるので、必ずこれを共有する。
+kill_process_tree = _kill_process_tree
+spawn_kwargs = _spawn_kwargs
+
+
 def run_python_process(
     *,
     python_path: str,
@@ -367,6 +373,8 @@ def ffmpeg_version() -> str | None:
 
 __all__ = [
     "ProcessResult",
+    "kill_process_tree",
+    "spawn_kwargs",
     "check_visualize_deps",
     "default_timeout_seconds",
     "ffmpeg_version",

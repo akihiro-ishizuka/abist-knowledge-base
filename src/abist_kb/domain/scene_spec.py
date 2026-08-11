@@ -20,6 +20,17 @@ from typing import Any
 
 SCHEMA_VERSION = "1.0"
 
+#: 動画専用カードの必須フィールド（既存 kind と同じ集合。重複を避けて共有する）。
+_VIDEO_CARD_REQUIRED = [
+    "schema_version",
+    "scene_kind",
+    "output_format",
+    "template",
+    "title",
+    "sources",
+    "beats",
+]
+
 #: list_scene_kinds とバリデータの単一ソース
 SCENE_KINDS: list[dict[str, Any]] = [
     {
@@ -111,6 +122,89 @@ SCENE_KINDS: list[dict[str, Any]] = [
         ],
         "beat_types": ["domain_entity", "domain_relation", "statement", "metric"],
     },
+    # --- 動画専用（Phase 7）。単体でも描けるが、主用途は章立て動画の構成要素 ---
+    {
+        "kind": "title",
+        "description": "動画の表紙。大見出しと補足を出す。事実を述べない行は decorative:true",
+        "template": "title_card",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["statement"],
+    },
+    {
+        "kind": "chapter",
+        "description": (
+            "章扉。章タイトルとねらいを出す。chapter_index / chapter_total を"
+            "付けると「第 N 章 / 全 M 章」を表示する"
+        ),
+        "template": "chapter_card",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["statement"],
+    },
+    {
+        "kind": "key_points",
+        "description": "同格の要点を並べる箇条書き。順を追う説明は explain を使うこと",
+        "template": "key_points",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["statement", "metric"],
+    },
+    {
+        "kind": "quote",
+        "description": (
+            "原文の引用。quote は言い換えでも要約でもないため出典必須で、"
+            "decorative は使えない。attribution に出所の呼び名を書ける"
+        ),
+        "template": "quote_card",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["quote"],
+    },
+    {
+        "kind": "summary",
+        "description": "まとめ。結論をチェックマーク付きで並べる（動画の締め）",
+        "template": "summary_card",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["statement", "metric"],
+    },
+    {
+        "kind": "cta",
+        "description": "次の行動の案内（社内導線）。外部公開向けの誘導は扱わない",
+        "template": "cta_card",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["statement"],
+    },
+    {
+        "kind": "ending",
+        "description": "エンドカード。出典一覧と社内限定の注意書きを最後に出す",
+        "template": "ending_card",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["statement"],
+    },
+    {
+        "kind": "code",
+        "description": (
+            "コード片の提示。code beat に原文をそのまま入れる（language は任意）。"
+            "行数・桁数の上限を超える分はテンプレート側で省略記号にする"
+        ),
+        "template": "code_block",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["code"],
+    },
+    {
+        "kind": "formula",
+        "description": "数式・計算式の提示。LaTeX は使わず Unicode 記号で近似表示する",
+        "template": "formula_block",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["formula"],
+    },
+    {
+        "kind": "image",
+        "description": (
+            "静止画（アプリ画面キャプチャなど）の提示。path は scene-spec.json と"
+            "同じディレクトリからの相対パス。画像が無い場合はプレースホルダで描く"
+        ),
+        "template": "image_still",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["image"],
+    },
 ]
 
 #: スキーマ予約のみ(未実装)。指定されたら専用エラーで案内する
@@ -118,7 +212,15 @@ RESERVED_KINDS: list[str] = []
 
 OUTPUT_FORMATS: list[str] = ["mp4", "png"]
 
+#: フレームのアスペクト比。通常(16:9)と縦型 Shorts(9:16)だけを扱う。
+#: 実際の画素寸法とフレーム座標系は tools/visualize/templates/layout.py が持つ。
+ASPECT_RATIOS: list[str] = ["16:9", "9:16"]
+
 MAX_BEATS = 30
+#: quote の本文上限。これを超えると 1 画面で読めない(引用は抜粋であるべき)。
+MAX_QUOTE_CHARS = 240
+#: code の本文上限。行数・桁数はテンプレート側でさらに切り詰める。
+MAX_CODE_CHARS = 1200
 #: timeline の点数上限。11件目以降は fit_to_frame の等比縮小で判読不能になるため、
 #: 描いてから潰れるのではなく検証で弾いてエージェントに即フィードバックする。
 MAX_TIMELINE_POINTS = 10
@@ -738,6 +840,133 @@ def _validate_beats(
                     "装飾なら decorative:true を付けてください"
                 ),
             )
+        elif beat_type == "quote":
+            # 原文の引用。**decorative を認めない** —— 引用は「KB にこう書いてある」
+            # という主張そのものなので、出典なしの引用は成立しない。
+            text = beat.get("text")
+            if not isinstance(text, str) or not (1 <= len(text) <= MAX_QUOTE_CHARS):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.text",
+                        "invalid",
+                        f"quote の text は 1〜{MAX_QUOTE_CHARS} 文字で指定してください",
+                    )
+                )
+            attribution = beat.get("attribution")
+            if attribution is not None and not (
+                isinstance(attribution, str) and 1 <= len(attribution) <= 60
+            ):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.attribution",
+                        "invalid",
+                        "attribution は 1〜60 文字で指定してください",
+                    )
+                )
+            if beat.get("decorative") is True:
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.decorative",
+                        "invalid",
+                        "quote に decorative は指定できません"
+                        "(引用は原文の主張そのものなので出典が必ず要ります)",
+                    )
+                )
+            _validate_source_refs(
+                beat.get("source_refs"),
+                at,
+                source_ids,
+                errors,
+                required=True,
+                require_hint="quote には出典(source_refs)が必要です",
+            )
+        elif beat_type == "code":
+            text = beat.get("text")
+            if not isinstance(text, str) or not (1 <= len(text) <= MAX_CODE_CHARS):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.text",
+                        "invalid",
+                        f"code の text は 1〜{MAX_CODE_CHARS} 文字で指定してください",
+                    )
+                )
+            language = beat.get("language")
+            if language is not None and not (
+                isinstance(language, str) and 1 <= len(language) <= 24
+            ):
+                errors.append(
+                    SceneSpecError(f"{at}.language", "invalid", "language は 1〜24 文字です")
+                )
+            _validate_source_refs(
+                beat.get("source_refs"),
+                at,
+                source_ids,
+                errors,
+                required=beat.get("decorative") is not True,
+                require_hint=(
+                    "KB のコードを写す code には出典(source_refs)が必要です。"
+                    "説明用に書き下ろしたコードなら decorative:true を付けてください"
+                ),
+            )
+        elif beat_type == "formula":
+            text = beat.get("text")
+            if not isinstance(text, str) or not (1 <= len(text) <= 120):
+                errors.append(
+                    SceneSpecError(f"{at}.text", "invalid", "formula の text は 1〜120 文字です")
+                )
+            caption = beat.get("caption")
+            if caption is not None and not (isinstance(caption, str) and 1 <= len(caption) <= 200):
+                errors.append(
+                    SceneSpecError(f"{at}.caption", "invalid", "caption は 1〜200 文字です")
+                )
+            _validate_source_refs(
+                beat.get("source_refs"),
+                at,
+                source_ids,
+                errors,
+                required=beat.get("decorative") is not True,
+                require_hint=(
+                    "KB に根拠のある式には出典(source_refs)が必要です。"
+                    "説明用の一般式なら decorative:true を付けてください"
+                ),
+            )
+        elif beat_type == "image":
+            # path は scene-spec.json と同じディレクトリからの相対パス。
+            # `..`・絶対パス・バックスラッシュを弾くことで、成果物ツリーの外を
+            # 参照できないことを**検証段階で**保証する(テンプレート任せにしない)。
+            path = beat.get("path")
+            if not _is_safe_relative_path(path):
+                errors.append(
+                    SceneSpecError(
+                        f"{at}.path",
+                        "invalid",
+                        "path は scene-spec.json からの相対 POSIX パスのみ指定できます"
+                        '(".."・絶対パス・バックスラッシュ不可)',
+                    )
+                )
+            caption = beat.get("caption")
+            if caption is not None and not (isinstance(caption, str) and 1 <= len(caption) <= 200):
+                errors.append(
+                    SceneSpecError(f"{at}.caption", "invalid", "caption は 1〜200 文字です")
+                )
+            license_text = beat.get("license")
+            if license_text is not None and not (
+                isinstance(license_text, str) and 1 <= len(license_text) <= 120
+            ):
+                errors.append(
+                    SceneSpecError(f"{at}.license", "invalid", "license は 1〜120 文字です")
+                )
+            _validate_source_refs(
+                beat.get("source_refs"),
+                at,
+                source_ids,
+                errors,
+                required=beat.get("decorative") is not True,
+                require_hint=(
+                    "画面キャプチャが何を示すかは事実の主張なので出典(source_refs)が"
+                    "必要です。装飾画像なら decorative:true を付けてください"
+                ),
+            )
 
     # kind ごとの構成制約
     reason = composition_reason(kind_info["kind"], [b for b in beats if _is_plain_object(b)])
@@ -755,6 +984,22 @@ def _distinct_in_order(beats: list[dict[str, Any]], beat_type: str, key: str) ->
         if isinstance(value, str) and value not in seen:
             seen.append(value)
     return seen
+
+
+#: 動画カードの構成制約。`(必須 beat type, 最小件数)`。
+#: `None` は「type を問わず合計 N 件」の意味（statement と metric の両方を許す面）。
+_VIDEO_CARD_MIN_BEATS: dict[str, tuple[str | None, int]] = {
+    "title": ("statement", 0),
+    "chapter": ("statement", 0),
+    "key_points": (None, 1),
+    "quote": ("quote", 1),
+    "summary": (None, 1),
+    "cta": ("statement", 1),
+    "ending": ("statement", 0),
+    "code": ("code", 1),
+    "formula": ("formula", 1),
+    "image": ("image", 1),
+}
 
 
 def composition_reason(scene_kind: str, beats: list[dict[str, Any]]) -> str | None:
@@ -806,6 +1051,14 @@ def composition_reason(scene_kind: str, beats: list[dict[str, Any]]) -> str | No
         groups = {b.get("group") for b in entities if isinstance(b.get("group"), str)}
         if len(groups) > MAX_DOMAIN_GROUPS:
             return f"group は {MAX_DOMAIN_GROUPS} 種類以内にしてください"
+        return None
+    if scene_kind in _VIDEO_CARD_MIN_BEATS:
+        beat_type, minimum = _VIDEO_CARD_MIN_BEATS[scene_kind]
+        if beat_type is None:
+            if sum(counts.values()) < minimum:
+                return f"beat が {minimum} 件以上必要です"
+        elif counts.get(beat_type, 0) < minimum:
+            return f"{beat_type} の beat が {minimum} 件以上必要です"
         return None
     if scene_kind == "timeline":
         points = counts.get("timeline_point", 0)
@@ -884,6 +1137,24 @@ def validate_scene_spec(spec: Any) -> SceneSpecResult:
             )
         )
 
+    frame = spec.get("frame")
+    if frame is not None:
+        if not _is_plain_object(frame):
+            errors.append(SceneSpecError("frame", "invalid", "frame はオブジェクトで指定します"))
+        elif frame.get("aspect_ratio") not in ASPECT_RATIOS:
+            errors.append(
+                SceneSpecError(
+                    "frame.aspect_ratio",
+                    "invalid",
+                    f"aspect_ratio は {' / '.join(ASPECT_RATIOS)} のいずれかを指定してください",
+                )
+            )
+
+    for key in ("chapter_index", "chapter_total"):
+        value = spec.get(key)
+        if value is not None and (not _is_integer(value) or value < 1):
+            errors.append(SceneSpecError(key, "invalid", f"{key} は 1 以上の整数です"))
+
     font = spec.get("font")
     if font is not None and (not isinstance(font, str) or len(font) < 1):
         errors.append(
@@ -910,7 +1181,10 @@ def validate_scene_spec(spec: Any) -> SceneSpecResult:
 
 
 __all__ = [
+    "ASPECT_RATIOS",
     "MAX_BEATS",
+    "MAX_CODE_CHARS",
+    "MAX_QUOTE_CHARS",
     "OUTPUT_FORMATS",
     "RESERVED_KINDS",
     "SCENE_KINDS",

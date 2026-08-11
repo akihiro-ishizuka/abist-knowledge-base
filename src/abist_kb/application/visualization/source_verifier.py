@@ -84,6 +84,11 @@ _PRUNABLE_BEAT_TYPES = (
     "comparison_item",
     "domain_entity",
     "domain_relation",
+    # --- 動画専用カード（Phase 7）。事実を載せる beat は必ずここへ足す ---
+    "quote",
+    "code",
+    "formula",
+    "image",
 )
 
 #: 「ノードを名乗る beat type」-> 「それを参照するエッジの beat type」。
@@ -125,6 +130,14 @@ def _beat_label(beat: dict[str, Any]) -> str:
         return f"domain_relation「{beat.get('from')} → {beat.get('to')}」"
     if beat["type"] == "transition":
         return f"transition「{beat.get('from')} → {beat.get('to')}」のラベル"
+    if beat["type"] == "quote":
+        return f"quote「{beat.get('text')}」"
+    if beat["type"] == "code":
+        return f"code「{str(beat.get('text', ''))[:40]}」"
+    if beat["type"] == "formula":
+        return f"formula「{beat.get('text')}」"
+    if beat["type"] == "image":
+        return f"image「{beat.get('path')}」"
     return str(beat["type"])
 
 

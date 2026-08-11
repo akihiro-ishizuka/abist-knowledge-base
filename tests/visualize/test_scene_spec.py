@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from abist_kb.domain import scene_spec as scene_spec_module
 from abist_kb.domain.scene_spec import (
     MAX_BEATS,
     RESERVED_KINDS,
@@ -251,6 +252,17 @@ def test_scene_kinds_match_list_scene_kinds_contract():
         "timeline",
         "comparison",
         "domain",
+        # --- 動画専用カード（video Phase 7）。先頭 explain は動かさない ---
+        "title",
+        "chapter",
+        "key_points",
+        "quote",
+        "summary",
+        "cta",
+        "ending",
+        "code",
+        "formula",
+        "image",
     ]
     for info in SCENE_KINDS:
         assert set(info.keys()) == {"kind", "description", "template", "required", "beat_types"}
@@ -286,24 +298,55 @@ def test_every_scene_kind_has_a_registered_template():
         )
 
 
+def _validated_beat_types() -> set[str]:
+    """`_validate_beats` が実際に分岐している beat type を**ソースから**読む。
+
+    期待値を手で並べると、beat type を増やしたときにテスト側も一緒に書き換えて
+    しまい「検証分岐の有無」を見ていない状態に静かに退化する。分岐の実体を
+    ast で数えれば、その退化が起こらない。
+    """
+    import ast
+
+    tree = ast.parse(Path(scene_spec_module.__file__).read_text(encoding="utf-8"))
+    target = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_validate_beats"
+    )
+    found: set[str] = set()
+    for node in ast.walk(target):
+        if not isinstance(node, ast.Compare) or not isinstance(node.left, ast.Name):
+            continue
+        if node.left.id != "beat_type":
+            continue
+        for comparator in node.comparators:
+            if isinstance(comparator, ast.Constant) and isinstance(comparator.value, str):
+                found.add(comparator.value)
+    return found
+
+
 def test_every_beat_type_is_validated():
     """beat_types に書いたのに検証分岐が無い(=素通しする)ことを防ぐ。"""
-    known = {
-        "statement",
-        "metric",
-        "transition",
-        "flow_step",
-        "decision",
-        "timeline_point",
-        "comparison_item",
-        "domain_entity",
-        "domain_relation",
-    }
+    validated = _validated_beat_types()
+    assert validated, "_validate_beats の分岐を読み取れなかった"
     for info in SCENE_KINDS:
         for beat_type in info["beat_types"]:
-            assert beat_type in known, (
+            assert beat_type in validated, (
                 f'{info["kind"]} の beat type "{beat_type}" に検証分岐がありません'
             )
+
+
+def test_every_fact_bearing_beat_type_is_prunable():
+    """出典を要求する beat type が source_verifier の剪定対象に入っていること。
+
+    ここを忘れると、出典が消えた・内容が変わった主張がレンダリング時に
+    そのまま描かれる（出典必須ポリシーが実ファイル照合を迂回する）。
+    """
+    from abist_kb.application.visualization.source_verifier import _PRUNABLE_BEAT_TYPES
+
+    fact_bearing = {b for info in SCENE_KINDS for b in info["beat_types"]} - {"metric"}
+    missing = fact_bearing - set(_PRUNABLE_BEAT_TYPES)
+    assert not missing, f"剪定対象に入っていない beat type: {sorted(missing)}"
 
 
 def _flow_spec_with_beats(beats: list[dict]) -> dict:

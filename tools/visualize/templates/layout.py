@@ -282,3 +282,58 @@ def layout_grid(
         for slot, label in enumerate(members):
             placement[label] = (band, col, slot)
     return placement
+
+
+#: フレームプリセット。動画は 16:9(通常)と 9:16(Shorts)の2種類だけを扱う。
+#:
+#: `frame_height` は Manim の既定(8.0)に固定し、`frame_width` をアスペクト比から
+#: 導く。こうすると **同じ SceneSpec が縦型でも壊れない** —— 折り返し桁数は
+#: `base.max_cols_for` が `config.frame_width` から実測で決めるので、
+#: フレームが細くなれば自動的に行が短くなる。
+FRAME_HEIGHT = 8.0
+FRAME_ASPECTS: dict[str, tuple[int, int]] = {"16:9": (16, 9), "9:16": (9, 16)}
+
+#: アスペクト比 x 品質 の画素寸法。`quality` は寸法の段だけを決め、
+#: アスペクト比は `frame` が決める(2つの軸を混ぜない)。
+FRAME_PIXELS: dict[str, dict[str, tuple[int, int]]] = {
+    "16:9": {"draft": (1280, 720), "standard": (1920, 1080), "high": (2560, 1440)},
+    "9:16": {"draft": (720, 1280), "standard": (1080, 1920), "high": (1440, 2560)},
+}
+
+#: セーフエリアの内側マージン(フレーム単位)。字幕・出典はここより内に収める。
+SAFE_MARGIN_X = 0.6
+SAFE_MARGIN_Y = 0.5
+
+#: 縦型で1画面に載せる要素数の上限(「1画面1メッセージ」を機械的に守る)。
+MAX_ELEMENTS_PORTRAIT = 4
+
+
+def frame_size(aspect_ratio: str) -> tuple[float, float]:
+    """アスペクト比から Manim のフレーム寸法(幅, 高さ)を返す。"""
+    width_ratio, height_ratio = FRAME_ASPECTS.get(aspect_ratio, FRAME_ASPECTS["16:9"])
+    return FRAME_HEIGHT * width_ratio / height_ratio, FRAME_HEIGHT
+
+
+def pixel_size(aspect_ratio: str, quality: str) -> tuple[int, int]:
+    """アスペクト比と品質から画素寸法を返す(未知の値は既定へ落とす)。"""
+    table = FRAME_PIXELS.get(aspect_ratio, FRAME_PIXELS["16:9"])
+    return table.get(quality, table["standard"])
+
+
+def is_portrait(aspect_ratio: str) -> bool:
+    return aspect_ratio == "9:16"
+
+
+def safe_area(aspect_ratio: str) -> tuple[float, float]:
+    """セーフエリアの幅・高さ(フレーム単位)。"""
+    width, height = frame_size(aspect_ratio)
+    return width - SAFE_MARGIN_X * 2, height - SAFE_MARGIN_Y * 2
+
+
+def subtitle_max_chars(aspect_ratio: str) -> int:
+    """字幕1行の最大文字数(全角換算)。
+
+    縦型は 1 行を短くし、文字そのものを大きく出す。横型と同じ 20 文字にすると
+    画面幅に対して文字が小さくなりすぎ、Shorts で読めない。
+    """
+    return 12 if is_portrait(aspect_ratio) else 20

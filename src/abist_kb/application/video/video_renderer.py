@@ -69,14 +69,17 @@ def _scene_spec_for(scene: dict[str, Any], spec: dict[str, Any]) -> dict[str, An
     scene_spec = scene.get("scene_spec")
     if not isinstance(scene_spec, dict):
         return None
-    # 動画の解像度・品質をシーンへ伝える（SceneSpec 1.0 の任意フィールド）
+    # 動画の解像度・アスペクト比をシーンへ伝える（SceneSpec 1.0 の任意フィールド）。
+    # **アスペクト比はプロジェクトが決める。** シーン側で上書きさせると、
+    # 1本の動画に縦横が混ざって結合時に上下左右が黒帯だらけになる。
     fmt = spec.get("format") or {}
     enriched = {**scene_spec}
     enriched.setdefault("output_format", "mp4")
-    if fmt.get("width") == 2560:
+    if fmt.get("width") in (2560, 1440):
         enriched.setdefault("quality", "high")
     else:
         enriched.setdefault("quality", "standard")
+    enriched["frame"] = {"aspect_ratio": fmt.get("aspect_ratio") or "16:9"}
     return enriched
 
 

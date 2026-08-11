@@ -41,6 +41,10 @@ DEFAULT_MAX_DOCS_PER_DIRECTORY = 20
 DEFAULT_MAX_TOTAL_CANDIDATES = 60
 
 ASPECT_RATIOS: tuple[str, ...] = ("16:9", "9:16")
+#: アスペクト比ごとの比率（width x height の整合検査に使う）。
+ASPECT_DIMENSIONS: dict[str, tuple[int, int]] = {"16:9": (16, 9), "9:16": (9, 16)}
+#: 縦型（Shorts）の尺上限。これを超える縦型動画は視聴面の前提が崩れる。
+SHORTS_MAX_DURATION_SEC = 180.0
 CLASSIFICATIONS: tuple[str, ...] = ("internal", "confidential", "public_candidate_pending")
 REVIEW_STATUSES: tuple[str, ...] = (
     "not_requested",
@@ -245,6 +249,21 @@ def _validate_format(spec: dict[str, Any], errors: list[VideoSpecError]) -> None
         value = fmt.get(key)
         if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
             errors.append(VideoSpecError(f"format.{key}", "invalid", f"{key} は正の整数です"))
+    aspect = fmt.get("aspect_ratio")
+    width, height = fmt.get("width"), fmt.get("height")
+    expected = ASPECT_DIMENSIONS.get(aspect)
+    if expected is not None and isinstance(width, int) and isinstance(height, int):
+        want_w, want_h = expected
+        if abs(width / max(1, height) - want_w / want_h) > 0.01:
+            errors.append(
+                VideoSpecError(
+                    "format",
+                    "invalid",
+                    f"width x height が aspect_ratio {aspect} と一致しません"
+                    f"（{aspect} は {want_w}:{want_h} の比率です）",
+                )
+            )
+
     target = fmt.get("target_duration_sec")
     if _is_obj(target):
         lo, hi = target.get("min"), target.get("max")
@@ -260,6 +279,21 @@ def _validate_format(spec: dict[str, Any], errors: list[VideoSpecError]) -> None
         elif lo > hi:
             errors.append(
                 VideoSpecError("format.target_duration_sec", "invalid", "min は max 以下です")
+            )
+        elif lo <= 0:
+            errors.append(
+                VideoSpecError("format.target_duration_sec", "invalid", "min は 0 より大きい値です")
+            )
+        elif aspect == "9:16" and hi > SHORTS_MAX_DURATION_SEC:
+            # 縦型は Shorts 想定。長尺を縦で作ると視聴面の前提が崩れるので、
+            # 描いてから気付くのではなく検証で弾く。
+            errors.append(
+                VideoSpecError(
+                    "format.target_duration_sec",
+                    "INVALID_VIDEO_SPEC",
+                    f"9:16（縦型）の尺は {SHORTS_MAX_DURATION_SEC} 秒以内にしてください"
+                    f"（指定: {hi} 秒）",
+                )
             )
 
 
@@ -442,6 +476,8 @@ def validate_video_project_spec(spec: Any) -> VideoSpecResult:
 
 
 __all__ = [
+    "ASPECT_DIMENSIONS",
+    "ASPECT_RATIOS",
     "DEFAULT_MAX_DOCS_PER_DIRECTORY",
     "DEFAULT_MAX_TOTAL_CANDIDATES",
     "MARKDOWN_SUFFIXES",
@@ -451,6 +487,7 @@ __all__ = [
     "SELECTION_COLLECTION_CANDIDATE",
     "SELECTION_EXPLICIT_PRIMARY",
     "SELECTION_SUPPLEMENTAL",
+    "SHORTS_MAX_DURATION_SEC",
     "VideoSpecError",
     "VideoSpecResult",
     "default_distribution",

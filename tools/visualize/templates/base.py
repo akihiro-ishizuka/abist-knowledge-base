@@ -143,3 +143,31 @@ def fit_to_frame(group: VGroup, margin: float = 0.6) -> VGroup:
 
 def stack(*mobjects, buff: float = 0.5) -> VGroup:
     return VGroup(*mobjects).arrange(DOWN, buff=buff)
+
+
+def is_portrait() -> bool:
+    """縦型フレーム（9:16）かどうか。
+
+    `render_scene._frame_config` が `config.frame_width/height` を設定済みなので、
+    テンプレートは spec を見ずに実際のフレーム形状から判断できる。
+    """
+    return config.frame_width < config.frame_height
+
+
+def content_width(margin: float = 0.7) -> float:
+    """本文に使える幅（フレーム単位）。縦型では自動的に狭くなる。"""
+    return max(1.0, config.frame_width - margin * 2)
+
+
+def safe_area_rect(margin_x: float = 0.6, margin_y: float = 0.5) -> tuple[float, float]:
+    """セーフエリアの幅・高さ。字幕やフッタはこの内側に置く。"""
+    return (
+        max(1.0, config.frame_width - margin_x * 2),
+        max(1.0, config.frame_height - margin_y * 2),
+    )
+
+
+def card_title(text: str, font: str, *, font_size: float = 48, color: str = COLOR_TITLE) -> Text:
+    """カード系テンプレートの見出し。縦型では自動で一段小さくする。"""
+    size = font_size * (0.78 if is_portrait() else 1.0)
+    return wrapped_text(text, font, size, color, content_width(), weight="BOLD")
