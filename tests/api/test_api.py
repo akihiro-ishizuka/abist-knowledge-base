@@ -442,41 +442,67 @@ def _wait_healthy(base_url: str, *, timeout_sec: float = 30.0) -> None:
 
 
 def test_api_serve_subprocess_health(tmp_root: Path) -> None:
-    """実プロセスの `abist-kb api serve` が /api/v1/health を返すこと。"""
+    """実プロセスの `abist-kb api serve` が /api/v1/health を返すこと。
+
+    `_free_port()` は「bind して port を得てから閉じる」ため、実際にサーバーが
+    bind するまでの間に OS が同じ port を別プロセスへ渡しうる(TOCTOU)。
+    テストを並行実行したり子プロセスを多用したりすると窓が広がり、
+    サーバーが起動できずに health が返らない形で散発的に失敗する。
+    port を取り直して数回やり直す。
+    """
     import subprocess
     import urllib.request
 
-    port = _free_port()
-    base_url = f"http://127.0.0.1:{port}"
-    proc = subprocess.Popen(
-        _abist_kb_argv(
-            "--root",
-            str(tmp_root),
-            "api",
-            "serve",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-        ),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    try:
-        _wait_healthy(base_url)
-        with urllib.request.urlopen(f"{base_url}/api/v1/health", timeout=5.0) as resp:
-            assert resp.status == 200
-            assert resp.read() == b'{"status":"ok"}'
-    finally:
-        proc.terminate()
+    attempts = 3
+    last_error: Exception | None = None
+    for attempt in range(attempts):
+        port = _free_port()
+        base_url = f"http://127.0.0.1:{port}"
+        proc = subprocess.Popen(
+            _abist_kb_argv(
+                "--root",
+                str(tmp_root),
+                "api",
+                "serve",
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(port),
+            ),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
         try:
-            proc.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait(timeout=5)
+            _wait_healthy(base_url, timeout_sec=20.0)
+        except AssertionError as exc:
+            last_error = exc
+            proc.terminate()
+            try:
+                _, stderr = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                stderr = ""
+            if attempt == attempts - 1:
+                raise AssertionError(
+                    f"API が {attempts} 回とも起動しませんでした。最後の stderr: {stderr[-500:]}"
+                ) from exc
+            continue
+        try:
+            with urllib.request.urlopen(f"{base_url}/api/v1/health", timeout=5.0) as resp:
+                assert resp.status == 200
+                assert resp.read() == b'{"status":"ok"}'
+            return
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=5)
+    raise AssertionError(f"API health を確認できませんでした: {last_error}")
 
 
 def test_sse_cross_process_db_poll_sees_worker_terminal(tmp_root: Path) -> None:
