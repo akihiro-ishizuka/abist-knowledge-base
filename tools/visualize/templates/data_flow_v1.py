@@ -2,6 +2,7 @@
 
 build_final_layout(spec) は最終状態の Mobject ツリーを組むだけの純粋レイアウト関数。
 """
+
 from __future__ import annotations
 
 from manim import (
@@ -11,13 +12,13 @@ from manim import (
     TAU,
     UP,
     Arrow,
+    BackgroundRectangle,
     Create,
     CurvedArrow,
     FadeIn,
     GrowArrow,
-    Scene,
-    BackgroundRectangle,
     Polygon,
+    Scene,
     SurroundingRectangle,
     Text,
     VGroup,
@@ -33,12 +34,16 @@ from templates.base import (
     COLOR_METRIC,
     COLOR_TITLE,
     COLOR_WARN,
+    body_width,
     fit_to_frame,
-    hold_to,
+    is_portrait,
+    node_width,
     resolve_font,
     source_footer,
+    title_width,
     wrapped_text,
 )
+from templates import choreography  # noqa: E402  (base の後に読む: 循環を避ける)
 from templates.layout import (
     EDGE_ADJACENT,
     EDGE_BACK,
@@ -50,18 +55,10 @@ from templates.layout import (
 )
 
 MAX_STEPS_PER_ROW = 4
-#: 箱1つの最大幅(Manim の単位系)。4個 + buff 1.1x3 が frame_width 14.222 に収まる値。
-#: 以前はテキストを組んでから囲っていたため、description が長いと箱が際限なく
-#: 横に伸び、MAX_STEPS_PER_ROW の折り返しが破綻していた。
-BOX_MAX_WIDTH = 2.6
-#: 図の下に積む statement / metric の折り返し幅。
-EXTRA_MAX_WIDTH = 12.6
-#: タイトルの折り返し幅。
-TITLE_MAX_WIDTH = 12.0
 
 
 def _step_box(beat: dict, font: str) -> VGroup:
-    inner_width = BOX_MAX_WIDTH - 0.5  # 枠の buff 0.25 を左右で引く
+    inner_width = node_width() - 0.5  # 枠の buff 0.25 を左右で引く
     parts = [wrapped_text(beat["label"], font, 26, COLOR_BODY, inner_width)]
     if beat.get("description"):
         parts.append(wrapped_text(beat["description"], font, 16, COLOR_BODY, inner_width))
@@ -105,7 +102,7 @@ def _emphasis_style(beat: dict) -> tuple[str, float]:
 
 def _decision_node(beat: dict, font: str) -> VGroup:
     """条件分岐のひし形。分岐先はラベル付き transition で表す。"""
-    inner = wrapped_text(beat["label"], font, 24, COLOR_BODY, BOX_MAX_WIDTH - 0.5)
+    inner = wrapped_text(beat["label"], font, 24, COLOR_BODY, node_width() - 0.5)
     half_w = inner.width * 0.85 + 0.35
     half_h = inner.height * 1.15 + 0.30
     center = inner.get_center()
@@ -137,9 +134,7 @@ def _edge_mobject(
     - cross_band_back: 行をまたぐ後戻り。左マージン側を大きな弧で回す
     """
     if kind == EDGE_ADJACENT:
-        return Arrow(
-            src.get_right(), dst.get_left(), buff=0.12, color=COLOR_ACCENT, stroke_width=4
-        )
+        return Arrow(src.get_right(), dst.get_left(), buff=0.12, color=COLOR_ACCENT, stroke_width=4)
 
     span = abs(dst_pos[1] - src_pos[1])
     if kind == EDGE_SKIP_FORWARD:
@@ -191,11 +186,11 @@ def _edge_mobject(
 
 def _extra_mobject(beat: dict, font: str):
     if beat["type"] == "statement":
-        return wrapped_text(beat["text"], font, 24, COLOR_BODY, EXTRA_MAX_WIDTH)
+        return wrapped_text(beat["text"], font, 24, COLOR_BODY, body_width())
     unit = beat.get("unit") or ""
     return VGroup(
-        Text(f'{beat["label"]}:', font=font, font_size=24, color=COLOR_BODY),
-        Text(f'{beat["value"]}{unit}', font=font, font_size=28, color=COLOR_METRIC, weight="BOLD"),
+        Text(f"{beat['label']}:", font=font, font_size=24, color=COLOR_BODY),
+        Text(f"{beat['value']}{unit}", font=font, font_size=28, color=COLOR_METRIC, weight="BOLD"),
     ).arrange(RIGHT, buff=0.3)
 
 
@@ -232,7 +227,10 @@ def build_final_layout(spec: dict) -> VGroup:
     # 配置は変わる。
     edges = [(t["from"], t["to"]) for t in transitions]
     ranks = assign_ranks(labels, edges)
-    placement = layout_grid(labels, ranks, max_ranks_per_band=MAX_STEPS_PER_ROW)
+    # 縦型は1段1ノードの縦チェーンにする。横型と同じ4列で組むと、フレーム幅
+    # 4.5 に対して箱が並びきらず `fit_to_frame` が図全体を潰す。
+    steps_per_row = 1 if is_portrait() else MAX_STEPS_PER_ROW
+    placement = layout_grid(labels, ranks, max_ranks_per_band=steps_per_row)
 
     # label -> (band, col)。矢印の描き分け(classify_edge)に使う。
     positions: dict[str, tuple[int, int]] = {
@@ -275,10 +273,14 @@ def build_final_layout(spec: dict) -> VGroup:
             arrows.add(edge)
 
     diagram = VGroup(rows, arrows)
-    title = wrapped_text(spec["title"], font, 40, COLOR_TITLE, TITLE_MAX_WIDTH)
+    title = wrapped_text(spec["title"], font, 40, COLOR_TITLE, title_width())
     parts = [title, diagram]
     if extras:
-        parts.append(VGroup(*[_extra_mobject(b, font) for b in extras]).arrange(DOWN, aligned_edge=LEFT, buff=0.3))
+        parts.append(
+            VGroup(*[_extra_mobject(b, font) for b in extras]).arrange(
+                DOWN, aligned_edge=LEFT, buff=0.3
+            )
+        )
     parts.append(source_footer(spec, font))
     layout = VGroup(*parts).arrange(DOWN, buff=0.6)
     return fit_to_frame(layout)
@@ -301,11 +303,21 @@ def make_scene_classes(spec: dict):
             diagram = layout[1]
             rest = layout[2:]
             rows, arrows = diagram
+            boxes = [box for row in rows for box in row]
+            budget = choreography.budget_for(
+                spec, beat_count=len(boxes), edge_count=len(arrows)
+            )
+            clock = choreography.BeatClock(self)
+
+            choreography.enter_scene(self, spec)
             self.play(FadeIn(title), run_time=0.8)
+            # 段（バンド）ごとにまとめて出す。1つずつ play すると再生回数ぶんの
+            # 固定コストが積み上がるうえ、流れの塊が見えない。
             for row in rows:
-                for box in row:
-                    self.play(FadeIn(box, shift=UP * 0.2), run_time=0.5)
+                clock.mark()
+                choreography.stagger_in(self, list(row), run_time=0.8)
             for arrow in arrows:
+                clock.mark()
                 # GrowArrow は Arrow 専用。曲線・折れ線は Create で描き起こす。
                 # ラベル付きの矢印は VGroup(edge, label) なので、矢印を出してから
                 # ラベルをフェードインさせる。
@@ -314,11 +326,14 @@ def make_scene_classes(spec: dict):
                     self.play(_edge_animation(edge), run_time=0.4)
                     self.play(FadeIn(label), run_time=0.25)
                 else:
+                    edge = arrow
                     self.play(_edge_animation(arrow), run_time=0.4)
+                # データが流れる感じを出す（元の Mobject は変えないので最終フレームは同じ）。
+                choreography.flow_pulse(self, edge, color=COLOR_ACCENT, budget=budget)
             for part in rest:
                 self.play(FadeIn(part), run_time=0.5)
             self.wait(1.5)
-            hold_to(self, spec)
+            choreography.finish(self, spec, items=boxes, clock=clock)
 
     class DataFlowStatic(Scene):
         def construct(self):

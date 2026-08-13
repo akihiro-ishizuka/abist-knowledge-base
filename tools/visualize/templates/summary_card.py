@@ -33,7 +33,7 @@ def _row(beat: dict, font: str, size: float, body_width: float) -> VGroup:
         body = VGroup(
             Text(beat["label"], font=font, font_size=size, color=COLOR_BODY),
             Text(
-                f'{beat["value"]}{unit}',
+                f"{beat['value']}{unit}",
                 font=font,
                 font_size=size * 1.15,
                 color=COLOR_METRIC,

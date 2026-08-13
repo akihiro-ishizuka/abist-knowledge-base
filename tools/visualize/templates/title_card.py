@@ -29,13 +29,19 @@ def build_final_layout(spec: dict) -> VGroup:
 
     title = card_title(spec["title"], font, font_size=54)
     rule = Line(
-        [-content_width() / 2, 0, 0], [content_width() / 2, 0, 0], color=COLOR_ACCENT, stroke_width=3
+        [-content_width() / 2, 0, 0],
+        [content_width() / 2, 0, 0],
+        color=COLOR_ACCENT,
+        stroke_width=3,
     )
     parts: list = [title, rule]
     if subtitles:
         parts.append(
             VGroup(
-                *[wrapped_text(b["text"], font, size, COLOR_BODY, content_width()) for b in subtitles]
+                *[
+                    wrapped_text(b["text"], font, size, COLOR_BODY, content_width())
+                    for b in subtitles
+                ]
             ).arrange(DOWN, buff=0.28)
         )
     parts.append(source_footer(spec, font))

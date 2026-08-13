@@ -14,10 +14,11 @@ from pathlib import Path
 import pytest
 
 _TEMPLATES_DIR = Path(__file__).resolve().parents[2] / "tools" / "visualize" / "templates"
-#: 描画テンプレート本体(共通基盤の base.py / layout.py は対象外)。
-_TEMPLATE_FILES = sorted(
-    p for p in _TEMPLATES_DIR.glob("*.py") if p.name not in {"__init__.py", "base.py", "layout.py"}
-)
+#: 共通基盤。シーンを描かないので `build_final_layout` / `make_scene_classes` は持たない。
+#: （LaTeX 不使用など、他の規約は共通基盤にも適用される）
+_SHARED_MODULES = {"__init__.py", "base.py", "layout.py", "choreography.py", "theme.py"}
+#: 描画テンプレート本体。
+_TEMPLATE_FILES = sorted(p for p in _TEMPLATES_DIR.glob("*.py") if p.name not in _SHARED_MODULES)
 
 
 def _ids(paths: list[Path]) -> list[str]:

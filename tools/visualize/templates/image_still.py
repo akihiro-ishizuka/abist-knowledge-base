@@ -10,10 +10,24 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
-from manim import DOWN, FadeIn, Group, ImageMobject, Rectangle, Scene, Text, VGroup, config
+from manim import (
+    DOWN,
+    FadeIn,
+    Group,
+    ImageMobject,
+    Rectangle,
+    Restore,
+    Scene,
+    Text,
+    VGroup,
+    config,
+    linear,
+)
 
+from templates import choreography
 from templates.base import (
     COLOR_ACCENT,
     COLOR_BODY,
@@ -21,7 +35,6 @@ from templates.base import (
     COLOR_RULE,
     card_title,
     content_width,
-    hold_to,
     resolve_font,
     source_footer,
     wrapped_text,
@@ -53,7 +66,11 @@ def _image_or_placeholder(spec: dict, beat: dict, max_height: float):
         return image
     font = resolve_font(spec)
     frame = Rectangle(
-        width=max_width * 0.8, height=max_height, color=COLOR_RULE, stroke_width=2, fill_opacity=0.05
+        width=max_width * 0.8,
+        height=max_height,
+        color=COLOR_RULE,
+        stroke_width=2,
+        fill_opacity=0.05,
     )
     label = Text(PLACEHOLDER_TEXT, font=font, font_size=22, color=COLOR_FOOTER)
     label.move_to(frame.get_center())
@@ -69,9 +86,7 @@ def build_final_layout(spec: dict) -> Group:
     for beat in images:
         layout.add(_image_or_placeholder(spec, beat, max_height))
         if beat.get("caption"):
-            layout.add(
-                wrapped_text(beat["caption"], font, 22, COLOR_BODY, content_width())
-            )
+            layout.add(wrapped_text(beat["caption"], font, 22, COLOR_BODY, content_width()))
         credit = beat.get("license") or beat.get("attribution")
         if credit:
             layout.add(Text(credit, font=font, font_size=16, color=COLOR_ACCENT))
@@ -82,15 +97,45 @@ def build_final_layout(spec: dict) -> Group:
     return layout
 
 
+#: Ken Burns の寄り幅。持ち込んだ図をゆっくり見せるための微速ズーム。
+KEN_BURNS_SCALE = 1.06
+#: 寄る速さ（秒）。1枚を読ませる時間に合わせる。
+KEN_BURNS_SEC = 4.0
+
+
+def _ken_burns(scene, target, spec: dict) -> None:
+    """静止画をゆっくり寄る／引く（決定論的に向きを決める）。
+
+    静止画をそのまま何秒も映すと、動画の中でそこだけ時間が止まって見える。
+    **向きは scene_kind と title のハッシュで決める**（乱数を使うと同じ spec から
+    同じ映像が出なくなり、成果物ハッシュでの再利用判定が壊れる）。
+    """
+    budget = choreography.budget_for(spec, beat_count=1)
+    if not budget.get("focus"):  # minimal のときは動かさない
+        return
+    digest = hashlib.sha256(str(spec.get("title", "")).encode("utf-8")).digest()
+    zoom_in = digest[0] % 2 == 0
+    factor = KEN_BURNS_SCALE if zoom_in else 1.0 / KEN_BURNS_SCALE
+    target.save_state()
+    scene.play(target.animate.scale(factor), run_time=KEN_BURNS_SEC, rate_func=linear)
+    # **元へ戻す。** 最終フレームは `build_final_layout` と一致していなければならない。
+    scene.play(Restore(target), run_time=0.4)
+
+
 def make_scene_classes(spec: dict):
     class ImageStillAnim(Scene):
         def construct(self):
             layout = build_final_layout(spec)
+            choreography.enter_scene(self, spec)
             for part in layout:
                 self.play(FadeIn(part), run_time=0.55)
                 self.wait(0.5)
+            # 画像そのものにゆっくり寄る（1枚だけの静止画面を動かす）。
+            images = [m for m in layout if isinstance(m, ImageMobject)]
+            if images:
+                _ken_burns(self, images[0], spec)
             self.wait(1.6)
-            hold_to(self, spec)
+            choreography.finish(self, spec)
 
     class ImageStillStatic(Scene):
         def construct(self):

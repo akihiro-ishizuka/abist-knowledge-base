@@ -27,14 +27,17 @@ SOURCE_FONT_SIZE = 20
 
 
 def _source_lines(spec: dict, font: str) -> VGroup:
-    refs = sorted({f'{s["path"]}:{s["start_line"]}-{s["end_line"]}' for s in spec.get("sources", [])})
+    refs = sorted(
+        {
+            f"{s['path'].replace(chr(92), '/').rsplit('/', 1)[-1]}:"
+            f"{s['start_line']}-{s['end_line']}"
+            for s in spec.get("sources", [])
+        }
+    )
     if not refs:
-        return VGroup(Text("出典なし（装飾のみ）", font=font, font_size=SOURCE_FONT_SIZE, color=COLOR_FOOTER))
+        return VGroup()
     return VGroup(
-        *[
-            wrapped_text(ref, font, SOURCE_FONT_SIZE, COLOR_FOOTER, content_width())
-            for ref in refs
-        ]
+        *[wrapped_text(ref, font, SOURCE_FONT_SIZE, COLOR_FOOTER, content_width()) for ref in refs]
     ).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
 
 

@@ -263,6 +263,8 @@ def test_scene_kinds_match_list_scene_kinds_contract():
         "code",
         "formula",
         "image",
+        "thumbnail",
+        "chart",
     ]
     for info in SCENE_KINDS:
         assert set(info.keys()) == {"kind", "description", "template", "required", "beat_types"}

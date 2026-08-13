@@ -42,9 +42,9 @@ def _point_row(beat: dict, font: str, size: float, body_width: float) -> VGroup:
     if beat["type"] == "metric":
         unit = beat.get("unit") or ""
         body = VGroup(
-            Text(f'{beat["label"]}', font=font, font_size=size, color=COLOR_BODY),
+            Text(f"{beat['label']}", font=font, font_size=size, color=COLOR_BODY),
             Text(
-                f'{beat["value"]}{unit}',
+                f"{beat['value']}{unit}",
                 font=font,
                 font_size=size * 1.15,
                 color=COLOR_METRIC,
@@ -77,7 +77,7 @@ def make_scene_classes(spec: dict):
             self.play(FadeIn(title, shift=DOWN * 0.2), run_time=0.8)
             self.play(FadeIn(footer), run_time=0.4)
             beats = [b for b in spec["beats"] if b["type"] in ("statement", "metric")]
-            for row, beat in zip(rows, beats):
+            for row, beat in zip(rows, beats, strict=False):
                 self.play(FadeIn(row, shift=RIGHT * 0.25), run_time=0.5)
                 if beat.get("emphasis") in ("key", "warn"):
                     self.play(Indicate(row, scale_factor=1.08), run_time=0.4)

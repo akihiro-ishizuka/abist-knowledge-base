@@ -10,7 +10,7 @@ build_final_layout(spec) は最終状態の Mobject ツリーを組むだけの�
 
 from __future__ import annotations
 
-from manim import DOWN, LEFT, RIGHT, UP, Create, Dot, FadeIn, Line, Scene, Text, VGroup
+from manim import DOWN, LEFT, RIGHT, Create, Dot, FadeIn, Line, Scene, Text, VGroup
 
 from templates.base import (
     COLOR_ACCENT,
@@ -19,20 +19,16 @@ from templates.base import (
     COLOR_METRIC,
     COLOR_TITLE,
     COLOR_WARN,
+    body_width,
     fit_to_frame,
-    hold_to,
     resolve_font,
     scale_font,
     source_footer,
+    title_width,
     wrapped_text,
 )
+from templates import choreography  # noqa: E402  (base の後に読む)
 
-#: 本文列の折り返し幅（Manim の単位系）。日付列とスパインの分を差し引いた値。
-BODY_MAX_WIDTH = 9.6
-#: 図の下に積む statement / metric の折り返し幅。
-EXTRA_MAX_WIDTH = 12.6
-#: タイトルの折り返し幅。
-TITLE_MAX_WIDTH = 12.0
 #: 点の半径。
 DOT_RADIUS = 0.07
 
@@ -48,11 +44,11 @@ def _emphasis_color(beat: dict, default: str) -> str:
 
 def _extra_mobject(beat: dict, font: str):
     if beat["type"] == "statement":
-        return wrapped_text(beat["text"], font, 24, COLOR_BODY, EXTRA_MAX_WIDTH)
+        return wrapped_text(beat["text"], font, 24, COLOR_BODY, body_width())
     unit = beat.get("unit") or ""
     return VGroup(
-        Text(f'{beat["label"]}:', font=font, font_size=24, color=COLOR_BODY),
-        Text(f'{beat["value"]}{unit}', font=font, font_size=28, color=COLOR_METRIC, weight="BOLD"),
+        Text(f"{beat['label']}:", font=font, font_size=24, color=COLOR_BODY),
+        Text(f"{beat['value']}{unit}", font=font, font_size=28, color=COLOR_METRIC, weight="BOLD"),
     ).arrange(RIGHT, buff=0.3)
 
 
@@ -76,12 +72,12 @@ def build_final_layout(spec: dict) -> VGroup:
         )
         parts = [
             wrapped_text(
-                beat["label"], font, label_size, _emphasis_color(beat, COLOR_BODY), BODY_MAX_WIDTH
+                beat["label"], font, label_size, _emphasis_color(beat, COLOR_BODY), body_width()
             )
         ]
         if beat.get("description"):
             parts.append(
-                wrapped_text(beat["description"], font, desc_size, COLOR_BODY, BODY_MAX_WIDTH)
+                wrapped_text(beat["description"], font, desc_size, COLOR_BODY, body_width())
             )
         body = VGroup(*parts).arrange(DOWN, aligned_edge=LEFT, buff=0.12)
         bodies.append(body)
@@ -116,7 +112,7 @@ def build_final_layout(spec: dict) -> VGroup:
         )
 
     timeline = VGroup(segments, dots, rows)
-    title = wrapped_text(spec["title"], font, 40, COLOR_TITLE, TITLE_MAX_WIDTH)
+    title = wrapped_text(spec["title"], font, 40, COLOR_TITLE, title_width())
     parts_top: list = [title, timeline]
     if extras:
         parts_top.append(
@@ -137,10 +133,16 @@ def make_scene_classes(spec: dict):
             timeline = layout[1]
             rest = layout[2:]
             segments, dots, rows = timeline
+            entries = [VGroup(rows[i * 2], rows[i * 2 + 1]) for i in range(len(dots))]
+            budget = choreography.budget_for(spec, beat_count=len(dots))
+            clock = choreography.BeatClock(self)
+
+            choreography.enter_scene(self, spec)
             self.play(FadeIn(title, shift=DOWN * 0.2), run_time=0.9)
             # 区間線を1本ずつ伸ばしてから次の点を出すことで「時間が進む」感覚を作る。
             # timeline は3種の中で唯一アニメーションが意味を持つ kind。
             for i in range(len(dots)):
+                clock.mark()
                 if i:
                     self.play(Create(segments[i - 1]), run_time=0.3)
                 at_text, body = rows[i * 2], rows[i * 2 + 1]
@@ -150,11 +152,13 @@ def make_scene_classes(spec: dict):
                     FadeIn(body, shift=RIGHT * 0.25),
                     run_time=0.45,
                 )
+                # 「今どこの話か」を1点に絞る（過去の点は沈むが消えない）。
+                choreography.focus(self, entries, entries[i], budget=budget)
                 self.wait(0.35)
             for part in rest:
                 self.play(FadeIn(part), run_time=0.5)
             self.wait(1.5)
-            hold_to(self, spec)
+            choreography.finish(self, spec, items=entries, clock=clock)
 
     class TimelineStatic(Scene):
         def construct(self):

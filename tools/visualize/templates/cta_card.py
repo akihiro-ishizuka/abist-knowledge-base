@@ -31,9 +31,7 @@ def build_final_layout(spec: dict) -> VGroup:
     size = scale_font(30, len(actions), soft=2, hard=5)
     width = content_width() - BOX_PADDING * 2
 
-    lines = VGroup(
-        *[wrapped_text(b["text"], font, size, COLOR_BODY, width) for b in actions]
-    )
+    lines = VGroup(*[wrapped_text(b["text"], font, size, COLOR_BODY, width) for b in actions])
     if len(lines):
         lines.arrange(DOWN, buff=0.3)
     box = RoundedRectangle(

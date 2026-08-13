@@ -26,6 +26,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 from templates import layout  # noqa: E402  (sys.path を通した後でなければ import できない)
+from templates import theme  # noqa: E402
 
 TEMPLATES = {
     "step_explanation": "templates.step_explanation",
@@ -44,6 +45,8 @@ TEMPLATES = {
     "code_block": "templates.code_block",
     "formula_block": "templates.formula_block",
     "image_still": "templates.image_still",
+    "chart_v1": "templates.chart_v1",
+    "thumbnail_card": "templates.thumbnail_card",
 }
 
 
@@ -120,6 +123,9 @@ def _frame_config(spec: dict) -> dict:
         "frame_rate": QUALITY_FRAME_RATES[quality],
         "frame_width": frame_width,
         "frame_height": frame_height,
+        # 背景はテーマが決める。ディップ（暗転）もこの色へ落とすので、
+        # ここで config に入れておくと choreography 側が引き直せる。
+        "background_color": theme.get_theme(spec.get("theme")).background,
     }
 
 
@@ -169,7 +175,10 @@ def main() -> int:
             scene_cls = anim_cls
 
         with tempconfig(conf):
-            scene_cls().render()
+            # インスタンスを保持する: シーンが記録した beat の実時刻を後で取り出す。
+            scene = scene_cls()
+            scene.render()
+            beat_times = getattr(scene, "kb_beat_times", None)
 
         ext = "png" if is_png else "mp4"
         produced = _find_output(media_dir, ext)
@@ -185,6 +194,8 @@ def main() -> int:
             "output": final.name,
             "python": platform.python_version(),
             "manim": manim.__version__,
+            # beat が画面に出た実時刻（秒）。効果音の beat アンカーがこれに載る。
+            "beat_times": beat_times if isinstance(beat_times, list) else None,
         })
         return 0
     except Exception:

@@ -39,24 +39,21 @@ from templates.base import (
     COLOR_RULE,
     COLOR_TITLE,
     COLOR_WARN,
+    body_width,
     fit_to_frame,
-    hold_to,
+    node_width,
     resolve_font,
     scale_font,
     source_footer,
+    title_width,
     wrapped_text,
 )
+from templates import choreography  # noqa: E402  (base の後に読む)
 
-#: 1つの箱の最大幅（Manim の単位系）。
-BOX_MAX_WIDTH = 2.7
 #: クラスタを横に並べるときの間隔。
 CLUSTER_BUFF = 1.3
 #: 1行に並べるクラスタ数の上限（超えたら折り返す）。
 MAX_CLUSTERS_PER_ROW = 4
-#: 図の下に積む statement / metric の折り返し幅。
-EXTRA_MAX_WIDTH = 12.6
-#: タイトルの折り返し幅。
-TITLE_MAX_WIDTH = 12.0
 #: group を持たない要素をまとめる内部キー（枠を描かない）。
 _UNGROUPED = "\x00ungrouped"
 
@@ -71,7 +68,7 @@ def _emphasis_style(beat: dict) -> tuple[str, float]:
 
 
 def _entity_box(beat: dict, font: str, label_size: float) -> VGroup:
-    inner_width = BOX_MAX_WIDTH - 0.5
+    inner_width = node_width() - 0.5
     parts = [wrapped_text(beat["name"], font, label_size, COLOR_BODY, inner_width)]
     if beat.get("description"):
         parts.append(
@@ -89,7 +86,7 @@ def _entity_box(beat: dict, font: str, label_size: float) -> VGroup:
 
 def _extra_mobject(beat: dict, font: str):
     if beat["type"] == "statement":
-        return wrapped_text(beat["text"], font, 24, COLOR_BODY, EXTRA_MAX_WIDTH)
+        return wrapped_text(beat["text"], font, 24, COLOR_BODY, body_width())
     unit = beat.get("unit") or ""
     label = Text(f"{beat['label']}:", font=font, font_size=24, color=COLOR_BODY)
     value = Text(
@@ -120,7 +117,7 @@ def _relation_mobject(src: VGroup, dst: VGroup, label: str | None, font: str) ->
     text = Text(label, font=font, font_size=14, color=COLOR_ACCENT)
     # ラベルは矢印の中点から法線方向へ逃がす。中点に重ねると、短い矢印
     # (同じクラスタ内の上下関係など)が背景板の下に完全に隠れてしまう。
-    offset = UP * 0.22 if horizontal else RIGHT * 0.55
+    offset = UP * 0.38 if horizontal else RIGHT * 0.55
     text.move_to(arrow.get_center() + offset)
     backdrop = BackgroundRectangle(text, fill_opacity=0.85, buff=0.04)
     return VGroup(arrow, VGroup(backdrop, text))
@@ -153,7 +150,7 @@ def build_final_layout(spec: dict) -> VGroup:
             boxes[beat["name"]] = box
             stack.add(box)
         # 同じクラスタ内の要素同士にも関係を引けるよう、矢印が見える間隔を確保する
-        stack.arrange(DOWN, buff=0.9)
+        stack.arrange(DOWN, buff=0.5 if len(stack) == 4 else 0.9)
         if key == _UNGROUPED:
             clusters.add(VGroup(stack))
             continue
@@ -168,7 +165,9 @@ def build_final_layout(spec: dict) -> VGroup:
     rows = VGroup()
     for start in range(0, len(clusters), MAX_CLUSTERS_PER_ROW):
         row = VGroup(*clusters[start : start + MAX_CLUSTERS_PER_ROW])
-        row.arrange(RIGHT, buff=CLUSTER_BUFF, aligned_edge=UP)
+        # 高さの違うクラスタは中央を揃える。起点を上端へ寄せると、下段ノードへ
+        # 向かう扇状の矢印が途中の箱を横切るため。
+        row.arrange(RIGHT, buff=CLUSTER_BUFF)
         rows.add(row)
     rows.arrange(DOWN, buff=0.9, aligned_edge=LEFT)
 
@@ -182,7 +181,7 @@ def build_final_layout(spec: dict) -> VGroup:
         edges.add(_relation_mobject(src, dst, beat.get("label"), font))
 
     diagram = VGroup(rows, edges)
-    title = wrapped_text(spec["title"], font, 40, COLOR_TITLE, TITLE_MAX_WIDTH)
+    title = wrapped_text(spec["title"], font, 40, COLOR_TITLE, title_width())
     parts: list = [title, diagram]
     if extras:
         extra_group = VGroup(*[_extra_mobject(b, font) for b in extras])
@@ -200,6 +199,18 @@ def make_scene_classes(spec: dict):
             diagram = layout[1]
             rest = layout[2:]
             rows, edges = diagram
+            all_boxes = [
+                box
+                for row in rows
+                for cluster in row
+                for box in (cluster[2] if len(cluster) == 3 else cluster[0])
+            ]
+            budget = choreography.budget_for(
+                spec, beat_count=len(all_boxes), edge_count=len(edges)
+            )
+            clock = choreography.BeatClock(self)
+
+            choreography.enter_scene(self, spec)
             self.play(FadeIn(title, shift=DOWN * 0.2), run_time=0.9)
             # 「場(グループ)を作る -> 住人(要素)を置く -> 関係を引く」の順。
             # 構造図の理解順序と一致する。
@@ -210,16 +221,19 @@ def make_scene_classes(spec: dict):
                         self.play(Create(frame), FadeIn(name), run_time=0.4)
                     else:
                         stack = cluster[0]
-                    for box in stack:
-                        self.play(FadeIn(box, shift=UP * 0.15), run_time=0.35)
+                    # 同じクラスタの住人はまとめて出す（塊として見せる）。
+                    choreography.stagger_in(self, list(stack), run_time=0.7)
             for edge in edges:
+                clock.mark()
                 animations = [GrowArrow(edge[0])]
                 animations += [FadeIn(part) for part in edge[1:]]
                 self.play(*animations, run_time=0.4)
+                # 関係線に光を通して、どこと繋がったかを見せる。
+                choreography.flow_pulse(self, edge, color=COLOR_ACCENT, budget=budget)
             for part in rest:
                 self.play(FadeIn(part), run_time=0.5)
             self.wait(1.5)
-            hold_to(self, spec)
+            choreography.finish(self, spec, items=all_boxes, clock=clock)
 
     class DomainMapStatic(Scene):
         def construct(self):

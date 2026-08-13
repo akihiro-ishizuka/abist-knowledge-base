@@ -205,6 +205,29 @@ SCENE_KINDS: list[dict[str, Any]] = [
         "required": _VIDEO_CARD_REQUIRED,
         "beat_types": ["image"],
     },
+    {
+        "kind": "thumbnail",
+        "description": (
+            "サムネイル用の1枚絵（一覧で何の動画か分かるための看板）。"
+            "大きな題字とアクセントだけを置き、出典フッタは載せない。"
+            "事実を主張しないので statement は decorative:true で書く"
+        ),
+        "template": "thumbnail_card",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["statement"],
+    },
+    {
+        "kind": "chart",
+        "description": (
+            "数値のグラフ。chart_series（label と values[{name, value}]）で系列を書き、"
+            "chart.variant で bar / grouped_bar / progress / line を選ぶ。"
+            "**数値には出典が必須**（decorative では免除されない）。"
+            "同じ数値を文字で並べるだけなら key_points を使うこと"
+        ),
+        "template": "chart_v1",
+        "required": _VIDEO_CARD_REQUIRED,
+        "beat_types": ["chart_series", "statement"],
+    },
 ]
 
 #: スキーマ予約のみ(未実装)。指定されたら専用エラーで案内する
@@ -236,6 +259,20 @@ MAX_DOMAIN_ENTITIES = 10
 MAX_DOMAIN_RELATIONS = 12
 #: domain のグループ数上限。
 MAX_DOMAIN_GROUPS = 4
+#: chart の系列数上限（棒が細くなって読めなくなる手前）。
+MAX_CHART_SERIES = 8
+#: 1系列に載せる点の数の上限（折れ線の横軸の目盛り数）。
+MAX_CHART_POINTS = 12
+#: chart の描き方。閉じた列挙（テンプレートに実装のある形だけ）。
+CHART_VARIANTS: tuple[str, ...] = ("bar", "grouped_bar", "progress", "line")
+#: 縦型（9:16）の図解1枚に載せてよいノード数の上限。
+#: `tools/visualize/templates/layout.MAX_ELEMENTS_PORTRAIT` の写し。縦型はフレーム幅が
+#: 4.5 単位しかなく、横型と同じ密度で組むと `fit_to_frame` が図全体を潰す。
+MAX_PORTRAIT_ELEMENTS = 4
+#: 縦型の密度検査の対象になる beat 種別（箱・点として置かれるもの）。
+_PORTRAIT_NODE_BEATS = frozenset(
+    {"flow_step", "decision", "domain_entity", "timeline_point", "chart_series"}
+)
 _SOURCE_ID_RE = re.compile(r"^[a-zA-Z0-9_-]{1,32}$")
 _HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 
@@ -380,6 +417,18 @@ EMPHASIS_VALUES: tuple[str, ...] = ("normal", "key", "warn")
 
 #: 出力品質。png/mp4 とも同じ 16:9 の寸法を使うので、レイアウトは変わらない。
 QUALITY_VALUES: tuple[str, ...] = ("draft", "standard", "high")
+
+#: モーション段（`tools/visualize/templates/layout.MOTION_LEVELS` の写し）。
+#: 閉じた列挙にするのは、台本を書くエージェントが自由な演出名を書けてしまうと
+#: 実装の無い指定でレンダリングが落ちるため。
+MOTION_VALUES: tuple[str, ...] = ("minimal", "standard", "rich")
+#: 配色テーマ（`tools/visualize/templates/theme.THEMES` の写し）。
+#: **色コードは受け付けない。** 読めない配色を選ばせないための制約。
+THEME_VALUES: tuple[str, ...] = ("dark", "navy", "warm")
+#: シーン間の繋ぎ方。
+TRANSITION_STYLES: tuple[str, ...] = ("dip", "none")
+#: 繋ぎに使ってよい秒数の上限。長いと「何も映っていない時間」が尺を食う。
+MAX_TRANSITION_SEC = 1.0
 
 
 def _validate_emphasis(beat: dict[str, Any], at: str, errors: list[SceneSpecError]) -> None:
@@ -913,6 +962,64 @@ def _validate_beats(
                     "説明用に書き下ろしたコードなら decorative:true を付けてください"
                 ),
             )
+        elif beat_type == "chart_series":
+            label = beat.get("label")
+            if not isinstance(label, str) or not (1 <= len(label) <= 24):
+                errors.append(SceneSpecError(f"{at}.label", "invalid", "label は 1〜24 文字です"))
+            values = beat.get("values")
+            if not isinstance(values, list) or not values:
+                errors.append(
+                    SceneSpecError(f"{at}.values", "invalid", "values を1つ以上指定してください")
+                )
+            else:
+                if len(values) > MAX_CHART_POINTS:
+                    errors.append(
+                        SceneSpecError(
+                            f"{at}.values",
+                            "invalid",
+                            f"values は {MAX_CHART_POINTS} 個までです（1画面で読める上限）",
+                        )
+                    )
+                for value_index, entry in enumerate(values):
+                    where = f"{at}.values[{value_index}]"
+                    if not _is_plain_object(entry):
+                        errors.append(SceneSpecError(where, "invalid", "オブジェクトで指定します"))
+                        continue
+                    name = entry.get("name")
+                    if not isinstance(name, str) or not (1 <= len(name) <= 20):
+                        errors.append(
+                            SceneSpecError(f"{where}.name", "invalid", "name は 1〜20 文字です")
+                        )
+                    number = entry.get("value")
+                    if (
+                        not isinstance(number, int | float)
+                        or isinstance(number, bool)
+                        or number != number  # NaN
+                        or number in (float("inf"), float("-inf"))
+                    ):
+                        errors.append(
+                            SceneSpecError(f"{where}.value", "invalid", "value は数値です")
+                        )
+                    elif number < 0:
+                        # 棒の長さで表す以上、負値は描けない（描くと嘘の図になる）。
+                        errors.append(
+                            SceneSpecError(f"{where}.value", "invalid", "value は 0 以上です")
+                        )
+            unit = beat.get("unit")
+            if unit is not None and (not isinstance(unit, str) or len(unit) > 8):
+                errors.append(SceneSpecError(f"{at}.unit", "invalid", "unit は 8 文字以内です"))
+            # **数値は decorative で逃げられない**（metric と同じ扱い）。
+            # グラフは根拠が無くても「それらしく」見えてしまうのが危ない。
+            _validate_source_refs(
+                beat.get("source_refs"),
+                at,
+                source_ids,
+                errors,
+                required=True,
+                require_hint=(
+                    "グラフの数値には出典(source_refs)が必須です。出典のない数値は描画できません"
+                ),
+            )
         elif beat_type == "formula":
             text = beat.get("text")
             if not isinstance(text, str) or not (1 <= len(text) <= 120):
@@ -1154,6 +1261,104 @@ def validate_scene_spec(spec: Any) -> SceneSpecResult:
                     f"aspect_ratio は {' / '.join(ASPECT_RATIOS)} のいずれかを指定してください",
                 )
             )
+        elif frame.get("aspect_ratio") == "9:16":
+            # 縦型は「1画面1メッセージ」を機械的に守らせる。密度は描画では直せない
+            # （`fit_to_frame` が全体を縮めるので、詰め込むほど読めなくなる）。
+            nodes = [
+                b
+                for b in (spec.get("beats") or [])
+                if _is_plain_object(b) and b.get("type") in _PORTRAIT_NODE_BEATS
+            ]
+            if len(nodes) > MAX_PORTRAIT_ELEMENTS:
+                errors.append(
+                    SceneSpecError(
+                        "beats",
+                        "PORTRAIT_TOO_DENSE",
+                        f"縦型（9:16）の図は要素 {MAX_PORTRAIT_ELEMENTS} 個までです"
+                        f"（指定: {len(nodes)}）。シーンを分けてください",
+                    )
+                )
+
+    for key, allowed in (("motion", MOTION_VALUES), ("theme", THEME_VALUES)):
+        value = spec.get(key)
+        if value is not None and value not in allowed:
+            errors.append(
+                SceneSpecError(
+                    key,
+                    "invalid",
+                    f"{key} は {' / '.join(allowed)} のいずれかを指定してください（指定: {value}）",
+                )
+            )
+
+    transition = spec.get("transition")
+    if transition is not None:
+        if not _is_plain_object(transition):
+            errors.append(
+                SceneSpecError("transition", "invalid", "transition はオブジェクトで指定します")
+            )
+        else:
+            if transition.get("style") not in TRANSITION_STYLES:
+                errors.append(
+                    SceneSpecError(
+                        "transition.style",
+                        "invalid",
+                        f"style は {' / '.join(TRANSITION_STYLES)} のいずれかです",
+                    )
+                )
+            seconds = transition.get("duration_sec")
+            if seconds is not None and (
+                not isinstance(seconds, int | float)
+                or isinstance(seconds, bool)
+                or not 0 <= seconds <= MAX_TRANSITION_SEC
+            ):
+                errors.append(
+                    SceneSpecError(
+                        "transition.duration_sec",
+                        "invalid",
+                        f"duration_sec は 0〜{MAX_TRANSITION_SEC} 秒です",
+                    )
+                )
+
+    if spec.get("scene_kind") == "chart":
+        chart = spec.get("chart")
+        if not _is_plain_object(chart):
+            errors.append(
+                SceneSpecError("chart", "invalid", "chart はオブジェクトで指定してください")
+            )
+        else:
+            if chart.get("variant") not in CHART_VARIANTS:
+                errors.append(
+                    SceneSpecError(
+                        "chart.variant",
+                        "invalid",
+                        f"variant は {' / '.join(CHART_VARIANTS)} のいずれかです",
+                    )
+                )
+            value_label = chart.get("value_label")
+            if value_label is not None and not (
+                isinstance(value_label, str) and 1 <= len(value_label) <= 20
+            ):
+                errors.append(
+                    SceneSpecError("chart.value_label", "invalid", "value_label は 1〜20 文字です")
+                )
+        series = [
+            b
+            for b in (spec.get("beats") or [])
+            if _is_plain_object(b) and b.get("type") == "chart_series"
+        ]
+        if len(series) > MAX_CHART_SERIES:
+            errors.append(
+                SceneSpecError(
+                    "beats",
+                    "invalid",
+                    f"chart_series は {MAX_CHART_SERIES} 系列までです"
+                    f"（指定: {len(series)}）。シーンを分けてください",
+                )
+            )
+
+    accent_index = spec.get("accent_index")
+    if accent_index is not None and (not _is_integer(accent_index) or accent_index < 0):
+        errors.append(SceneSpecError("accent_index", "invalid", "accent_index は 0 以上の整数です"))
 
     for key in ("chapter_index", "chapter_total"):
         value = spec.get(key)
@@ -1203,6 +1408,14 @@ def validate_scene_spec(spec: Any) -> SceneSpecResult:
 
 __all__ = [
     "ASPECT_RATIOS",
+    "CHART_VARIANTS",
+    "MAX_CHART_POINTS",
+    "MAX_CHART_SERIES",
+    "MAX_PORTRAIT_ELEMENTS",
+    "MAX_TRANSITION_SEC",
+    "MOTION_VALUES",
+    "THEME_VALUES",
+    "TRANSITION_STYLES",
     "MAX_BEATS",
     "MAX_CODE_CHARS",
     "MAX_QUOTE_CHARS",

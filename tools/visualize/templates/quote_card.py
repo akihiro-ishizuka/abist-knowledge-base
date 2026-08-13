@@ -29,15 +29,18 @@ QUOTE_CLOSE = "」"
 
 def _quote_block(beat: dict, font: str, size: float, width: float) -> VGroup:
     body = wrapped_text(
-        f'{QUOTE_OPEN}{beat["text"]}{QUOTE_CLOSE}', font, size, COLOR_BODY, width - 0.5
+        f"{QUOTE_OPEN}{beat['text']}{QUOTE_CLOSE}", font, size, COLOR_BODY, width - 0.5
     )
     bar = Line(
-        body.get_top() + LEFT * 0.3, body.get_bottom() + LEFT * 0.3, color=COLOR_ACCENT, stroke_width=5
+        body.get_top() + LEFT * 0.3,
+        body.get_bottom() + LEFT * 0.3,
+        color=COLOR_ACCENT,
+        stroke_width=5,
     )
     parts: list = [VGroup(bar, body)]
     if beat.get("attribution"):
         parts.append(
-            Text(f'— {beat["attribution"]}', font=font, font_size=size * 0.62, color=COLOR_FOOTER)
+            Text(f"— {beat['attribution']}", font=font, font_size=size * 0.62, color=COLOR_FOOTER)
         )
     return VGroup(*parts).arrange(DOWN, aligned_edge=RIGHT, buff=0.24)
 

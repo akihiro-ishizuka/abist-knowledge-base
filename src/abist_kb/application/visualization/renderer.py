@@ -82,6 +82,9 @@ class RenderOutcome:
     #: 書き出した manifest の内容と、その JSON の sha256(ドリフト検知用)。
     manifest: dict[str, Any] | None = None
     manifest_sha256: str | None = None
+    #: beat が画面に出た**実時刻**（秒）。効果音の beat アンカーがこれに載る。
+    #: 推定（尺を beat 数で等分）ではなく描画側の計測値なので、音と絵がずれない。
+    beat_times: list[float] = field(default_factory=list)
 
 
 _UNSET = object()
@@ -294,6 +297,11 @@ def render_scene(
         sources=list(final_spec.get("sources") or []),
         manifest=manifest,
         manifest_sha256=sha256_file(manifest_path),
+        beat_times=[
+            float(t)
+            for t in ((payload or {}).get("beat_times") or [])
+            if isinstance(t, int | float) and not isinstance(t, bool)
+        ],
     )
 
 

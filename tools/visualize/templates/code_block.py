@@ -64,9 +64,7 @@ def build_final_layout(spec: dict) -> VGroup:
         lines, truncated = clip_code(beat["text"])
         if truncated:
             lines = [*lines, ELLIPSIS_LINE]
-        body = Text(
-            "\n".join(lines), font=mono, font_size=20, color=COLOR_BODY, line_spacing=0.6
-        )
+        body = Text("\n".join(lines), font=mono, font_size=20, color=COLOR_BODY, line_spacing=0.6)
         max_width = content_width() - 0.6
         if body.width > max_width:
             body.scale_to_fit_width(max_width)

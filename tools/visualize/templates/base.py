@@ -2,36 +2,55 @@
 
 LaTeX（Tex / MathTex）は使わない。テキストは必ず Pango 系（Text / MarkupText）。
 """
+
 from __future__ import annotations
 
-import os
-
 import functools
+import os
+from dataclasses import replace
 
-from manim import DOWN, LEFT, VGroup, Text, config
+from manim import DOWN, LEFT, Text, VGroup, config
 
-from templates.layout import display_width, wrap_cjk
+from templates.layout import wrap_cjk
+from templates.theme import DEFAULT_THEME, Theme, accent_for, get_theme
 
 # 既定は Windows 10/11 標準搭載の日本語フォント。優先順位:
 #   spec["font"] > 環境変数 KB_VISUALIZE_FONT > DEFAULT_FONT（無ければ FALLBACK_FONT）
 DEFAULT_FONT = "Yu Gothic UI"
 FALLBACK_FONT = "Meiryo"
 
-# 配色（テンプレート間で統一する）
-COLOR_TITLE = "#ffffff"
-COLOR_BODY = "#e6e6e6"
-COLOR_ACCENT = "#5b9bd5"
-COLOR_METRIC = "#f0c987"
-COLOR_FOOTER = "#9a9a9a"
-COLOR_BOX = "#5b9bd5"
+# 配色。正本は `templates/theme.py`。ここの `COLOR_*` は既定テーマ（dark）の別名で、
+# テーマを見ない既存テンプレートがそのまま動くように残している。
+# テーマを反映したい箇所は `resolve_theme(spec)` を使う。
+_DEFAULT_THEME = get_theme(DEFAULT_THEME)
+COLOR_TITLE = _DEFAULT_THEME.title
+COLOR_BODY = _DEFAULT_THEME.body
+COLOR_ACCENT = _DEFAULT_THEME.accent
+COLOR_METRIC = _DEFAULT_THEME.metric
+COLOR_FOOTER = _DEFAULT_THEME.footer
+COLOR_BOX = _DEFAULT_THEME.box
 #: 区切り線・クラスタ枠など、主張させたくない罫線の色。
-COLOR_RULE = "#4a4a4a"
+COLOR_RULE = _DEFAULT_THEME.rule
 #: 条件分岐(ひし形)の枠色。
-COLOR_DECISION = "#c9a0dc"
+COLOR_DECISION = _DEFAULT_THEME.decision
 #: emphasis="key" の強調色。
-COLOR_KEY = "#f0c987"
+COLOR_KEY = _DEFAULT_THEME.key
 #: emphasis="warn" の注意色。
-COLOR_WARN = "#e06c75"
+COLOR_WARN = _DEFAULT_THEME.warn
+
+
+def resolve_theme(spec: dict) -> Theme:
+    """spec / 環境変数 / 既定 の順でテーマを決め、章別アクセントを反映する。
+
+    `resolve_font` と同じ流儀。**色コードは受け付けない**（名前だけ）ので、
+    エージェントが読めない配色を選ぶ余地が無い。
+    """
+    name = spec.get("theme") or os.environ.get("KB_VISUALIZE_THEME") or DEFAULT_THEME
+    theme = get_theme(name)
+    accent = accent_for(theme, spec.get("accent_index"))
+    if accent == theme.accent:
+        return theme
+    return replace(theme, accent=accent, box=accent)
 
 #: 出典フッタの1行あたりの最大桁数(半角換算)。全角で約52文字。
 FOOTER_MAX_COLS = 104
@@ -103,8 +122,17 @@ def source_footer(spec: dict, font: str) -> VGroup:
     図が読めなくなる最大の要因だった)。件数は減らさず、折り返して高さへ逃がす。
     フッタが広すぎる場合もフッタ単体だけを縮め、本文は巻き込まない。
     """
-    refs = sorted({f'{s["path"]}:{s["start_line"]}-{s["end_line"]}' for s in spec.get("sources", [])})
-    body = "出典: " + " / ".join(refs) if refs else "出典なし（装飾のみ）"
+    refs = sorted(
+        {
+            f"{s['path'].replace(chr(92), '/').rsplit('/', 1)[-1]}:"
+            f"{s['start_line']}-{s['end_line']}"
+            for s in spec.get("sources", [])
+        }
+    )
+    if not refs:
+        # 装飾カードに内部検証用の文言を表示しない。
+        return VGroup()
+    body = "出典: " + " / ".join(refs)
     lines = wrap_cjk(body, FOOTER_MAX_COLS)
     group = VGroup(
         *[Text(line, font=font, font_size=16, color=COLOR_FOOTER) for line in lines]
@@ -157,6 +185,35 @@ def is_portrait() -> bool:
 def content_width(margin: float = 0.7) -> float:
     """本文に使える幅（フレーム単位）。縦型では自動的に狭くなる。"""
     return max(1.0, config.frame_width - margin * 2)
+
+
+# 各テンプレートが使う折り返し幅。以前は 16:9 のフレーム幅（14.222）から逆算した
+# 定数を各ファイルに直書きしていたため、縦型（フレーム幅 4.5）では指定幅が
+# フレームより広くなり、`fit_to_frame` が**図全体**を潰していた。
+# フレームから毎回引き直すことで、縦型でも文字サイズを保ったまま行が短くなる。
+
+
+def title_width() -> float:
+    """見出しの折り返し幅。"""
+    return content_width(1.1)
+
+
+def body_width() -> float:
+    """本文・補足の折り返し幅。"""
+    return content_width(0.8)
+
+
+def table_width() -> float:
+    """表・グリッド全体の最大幅。"""
+    return content_width(0.6)
+
+
+def node_width(preferred: float = 2.6) -> float:
+    """フロー図・関係図の箱1つぶんの幅。
+
+    縦型では横に2つ並べるだけでも溢れるので、フレーム幅から上限を掛け直す。
+    """
+    return max(1.4, min(preferred, content_width() / 2.2))
 
 
 def safe_area_rect(margin_x: float = 0.6, margin_y: float = 0.5) -> tuple[float, float]:

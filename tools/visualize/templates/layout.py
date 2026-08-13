@@ -171,6 +171,7 @@ def classify_edge(src: tuple[int, int], dst: tuple[int, int]) -> str:
         return EDGE_WRAP_DOWN
     return EDGE_CROSS_BAND_BACK
 
+
 #: 1つの帯(band)に並べる rank の数。これを超えたら次の帯へ折り返す。
 MAX_RANKS_PER_BAND = 4
 
@@ -337,3 +338,69 @@ def subtitle_max_chars(aspect_ratio: str) -> int:
     画面幅に対して文字が小さくなりすぎ、Shorts で読めない。
     """
     return 12 if is_portrait(aspect_ratio) else 20
+
+
+# -- モーション演出の予算 ---------------------------------------------------------
+#
+# 図に動きを付けると描画時間が伸びる。描画は RENDER リースで直列化されるため、
+# 1シーンの増分がそのまま動画全体の待ち時間になる。**要素が増えたら演出を自動的に
+# 落とす**ことで最悪ケースを抑える。ここは判断だけ(manim 非依存)で、実際の
+# アニメーションは `templates/choreography.py` が持つ。
+
+#: モーション段。閉じた列挙(エージェントが勝手な値を入れられない)。
+MOTION_LEVELS: tuple[str, ...] = ("minimal", "standard", "rich")
+DEFAULT_MOTION = "standard"
+
+#: これを超える beat 数では演出を切る(1画面に載る量として既に限界)。
+MOTION_BEAT_LIMIT = 20
+#: カメラを動かす rich を許す beat 数の上限。寄る先が多すぎると目が回る。
+RICH_BEAT_LIMIT = 12
+#: 焦点化をアニメーションで見せる beat 数の上限。超えたら瞬時に切り替える。
+ANIMATED_FOCUS_BEAT_LIMIT = 12
+#: エッジに光を流す演出を許すエッジ数の上限。
+FLOW_PULSE_EDGE_LIMIT = 16
+#: 演出のために足してよい秒数の上限(1シーンあたり)。
+MAX_CHOREO_EXTRA_SEC = 8.0
+
+_FOCUS_RUN_TIME = 0.35
+_PER_BEAT_EXTRA_SEC = 0.35
+
+
+def resolve_motion(requested: str | None, *, quality: str, beat_count: int) -> str:
+    """spec の要求と実際の条件から、実行するモーション段を決める。
+
+    下書き(draft)は速さが要るので演出を切る。beat が多い図は、動かすより
+    静かに見せたほうが読める。
+    """
+    level = requested if requested in MOTION_LEVELS else DEFAULT_MOTION
+    if quality == "draft" or beat_count > MOTION_BEAT_LIMIT:
+        return "minimal"
+    if level == "rich" and beat_count > RICH_BEAT_LIMIT:
+        return "standard"
+    return level
+
+
+def choreo_budget(beat_count: int, motion: str, *, edge_count: int = 0) -> dict:
+    """そのシーンで実行してよい演出と、見込みの追加秒数。
+
+    `focus_run_time == 0.0` は「減光はするがアニメーションはしない」の意味。
+    要素が多い図で毎回 0.35 秒かけると、それだけで尺が倍になる。
+    """
+    if motion == "minimal":
+        return {
+            "focus": False,
+            "focus_run_time": 0.0,
+            "flow_pulse": False,
+            "camera": False,
+            "extra_sec": 0.0,
+        }
+    animated_focus = beat_count <= ANIMATED_FOCUS_BEAT_LIMIT
+    flow_pulse = edge_count <= FLOW_PULSE_EDGE_LIMIT
+    extra = min(MAX_CHOREO_EXTRA_SEC, beat_count * _PER_BEAT_EXTRA_SEC)
+    return {
+        "focus": True,
+        "focus_run_time": _FOCUS_RUN_TIME if animated_focus else 0.0,
+        "flow_pulse": flow_pulse,
+        "camera": motion == "rich",
+        "extra_sec": round(extra, 2),
+    }
