@@ -48,10 +48,14 @@ reports/
 # tools/ は tools/visualize/(このプロジェクトのソース)と旧システムの
 # コンテンツが混在するため、旧コンテンツのパスだけを個別に無視する。
 bk/
-# Keep scripts/ ignored for cutover scratch, but track the Windows bootstrap.
+# Keep scripts/ ignored for cutover scratch, but track the Windows bootstrap and
+# the generators of committed binary assets（音源は生成器が唯一の出所。
+# 生成器を追跡しないと、コミット済みの wav をどう作ったのか復元できない）。
 scripts/*
 !scripts/bootstrap.bat
 !scripts/bootstrap-visualize.bat
+!scripts/generate-video-sfx.py
+!scripts/generate-video-bgm.py
 work/
 tools/*.md
 tools/issue_bodies/

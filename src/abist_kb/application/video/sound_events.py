@@ -33,7 +33,22 @@ EVENT_TO_CATEGORY: dict[str, str] = {
     "success": "complete",
     "error": "error",
     "outro": "ending",
+    # v3。動きに同期する細かい音（意味イベントとは別レーンで扱う）。
+    "beat_reveal": "tick",
+    "scene_change": "whoosh",
+    "chart_draw": "chart",
 }
+
+#: 別レーンで扱うイベント。**意味イベントの枠を食わない。**
+#: 同じ上限で数えると、ビートごとに鳴る細かい音のせいで「警告」「決定」といった
+#: 意味のある音のほうが間引かれてしまう。
+TICK_EVENTS: frozenset[str] = frozenset({"beat_reveal"})
+#: tick の1シーン上限。
+TICK_MAX_PER_SCENE = 6
+#: tick 同士の最短間隔（秒）。意味イベントより詰めてよいが、連打はさせない。
+MIN_TICK_INTERVAL_SEC = 0.6
+#: tick の音量（dB）。意味のある音より確実に小さくする。
+TICK_GAIN_DB = -22.0
 
 #: 強度ごとの1シーン上限。
 MAX_PER_SCENE = {"off": 0, "subtle": 2, "normal": 3}
@@ -55,6 +70,18 @@ EVENT_PRIORITY: dict[str, int] = {
 #: 既定音量（dB）。ナレーション中はさらに下げる。
 DEFAULT_GAIN_DB = -16.0
 NARRATION_DUCK_DB = -6.0
+# 意味ごとに聴感上の存在感を調整する。長いロゴ音は控えめ、判断・警告は明瞭にする。
+EVENT_GAIN_DB: dict[str, float] = {
+    "intro": -11.0,
+    "chapter_change": -13.0,
+    "key_point": -15.0,
+    "comparison_change": -13.0,
+    "decision": -12.0,
+    "warning": -11.0,
+    "success": -12.0,
+    "error": -10.0,
+    "outro": -10.0,
+}
 #: ナレーション開始と重なったときにずらす秒数。
 NARRATION_SHIFT_SEC = 0.2
 
@@ -220,9 +247,19 @@ def resolve_sound_events(
             key=lambda e: -EVENT_PRIORITY.get(str(e.get("event")), 0),
         )
         placed: list[SoundCue] = []
+        ticks: list[SoundCue] = []
         for event in ordered:
             name = str(event.get("event"))
-            if len(placed) >= limit:
+            is_tick = name in TICK_EVENTS
+            # tick は控えめ設定では鳴らさない（「意味のある音だけ」が subtle の趣旨）。
+            if is_tick and intensity != "normal":
+                dropped.append({"scene_id": scene_id, "event": name, "reason": "intensity"})
+                continue
+            if is_tick:
+                if len(ticks) >= TICK_MAX_PER_SCENE:
+                    dropped.append({"scene_id": scene_id, "event": name, "reason": "max_per_scene"})
+                    continue
+            elif len(placed) >= limit:
                 dropped.append({"scene_id": scene_id, "event": name, "reason": "max_per_scene"})
                 continue
             category = EVENT_TO_CATEGORY.get(name)
@@ -246,7 +283,7 @@ def resolve_sound_events(
                 dropped.append({"scene_id": scene_id, "event": name, "reason": "unresolved_anchor"})
                 continue
 
-            gain = DEFAULT_GAIN_DB
+            gain = TICK_GAIN_DB if is_tick else EVENT_GAIN_DB.get(name, DEFAULT_GAIN_DB)
             narration_start = (narration_starts or {}).get(scene_id)
             if narration_start is not None and abs(at - narration_start) < NARRATION_SHIFT_SEC:
                 # ナレーションの出だしと重なるならずらして、さらに音量を下げる
@@ -255,8 +292,16 @@ def resolve_sound_events(
                 warnings.append(f"{scene_id}: ナレーションと重なるため {name} をずらしました")
 
             # 最短間隔を守る（近すぎるものは優先度の低い方＝後から来た方を落とす）
-            too_close = [c for c in placed if abs(c.t_sec - at) < MIN_INTERVAL_SEC]
-            if too_close:
+            # シーン境界も含めた動画全体で最短間隔を守る。以前は scene ごとに
+            # リセットしていたため、前シーン末尾と次シーン冒頭が重なっていた。
+            # tick は自分たち同士の間隔だけを見る（別レーンなので意味音とは重なってよい）。
+            if is_tick:
+                neighbours = [c for c in [*cues, *ticks] if c.event in TICK_EVENTS]
+                interval = MIN_TICK_INTERVAL_SEC
+            else:
+                neighbours = [c for c in [*cues, *placed] if c.event not in TICK_EVENTS]
+                interval = MIN_INTERVAL_SEC
+            if any(abs(c.t_sec - at) < interval for c in neighbours):
                 dropped.append({"scene_id": scene_id, "event": name, "reason": "min_interval"})
                 continue
 
@@ -264,16 +309,20 @@ def resolve_sound_events(
                 scene_id=scene_id,
                 event=name,
                 anchor=anchor,
-                t_sec=round(min(at, start + duration - 0.05), 3),
+                # 音の尻尾が映像尺を延ばさないよう、音源全体をシーン内へ収める。
+                t_sec=round(
+                    min(at, start + max(0.0, duration - asset.duration_ms / 1000)),
+                    3,
+                ),
                 sound_id=asset.id,
                 gain_db=round(gain, 1),
                 sha256=asset.sha256,
             )
-            placed.append(cue)
+            (ticks if is_tick else placed).append(cue)
             recent.append(asset.id)
             recent[:] = recent[-4:]
 
-        cues.extend(sorted(placed, key=lambda c: c.t_sec))
+        cues.extend(sorted([*placed, *ticks], key=lambda c: c.t_sec))
 
     return ResolveOutcome(
         cues=sorted(cues, key=lambda c: c.t_sec), dropped=dropped, warnings=warnings
@@ -298,6 +347,11 @@ def used_attributions(cues: list[SoundCue], assets: list[SoundAsset]) -> list[di
 
 __all__ = [
     "DEFAULT_GAIN_DB",
+    "MIN_TICK_INTERVAL_SEC",
+    "TICK_EVENTS",
+    "TICK_GAIN_DB",
+    "TICK_MAX_PER_SCENE",
+    "EVENT_GAIN_DB",
     "EVENT_TO_CATEGORY",
     "MAX_PER_SCENE",
     "MIN_INTERVAL_SEC",
