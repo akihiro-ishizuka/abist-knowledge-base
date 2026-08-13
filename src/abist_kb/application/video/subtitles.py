@@ -1,7 +1,11 @@
-"""字幕（SRT / VTT / 焼き込み）。
+"""テロップ（画面焼き込み字幕）と SRT / VTT。
 
-ナレーション文と**実測タイムライン**から字幕を組む。
-尺は Phase 4 の `SceneTiming` が決めたものを使い、ここで独自に推測しない。
+**この動画にナレーション音声は無い。** 台本の `narration.text` は画面に出す
+テロップであり、音を切ったままでも内容が伝わることが前提。焼き込みが既定で、
+SRT/VTT は手動アップロード時の字幕登録用に併せて書き出す。
+
+シーンの尺は Phase 4 の `SceneTiming` が決めたものを使い、ここで独自に推測しない。
+そのシーンの持ち時間を、キューへ**文字量に比例して**割り振るのがここの仕事。
 
 日本語の折り返しは purring の `layout.wrap_cjk` と同じ考え方
 （CJK 幅を数え、禁則を追い出しで処理）を使う。
@@ -16,10 +20,37 @@ from typing import Any
 
 #: 1行あたりの最大文字数（全角換算）。読みやすさの実用値。
 DEFAULT_MAX_CHARS_PER_LINE = 20
+#: アスペクト比ごとの1行最大文字数。
+#: `tools/visualize/templates/layout.subtitle_max_chars` の写し（別 venv のため
+#: import できない）。値がずれると縦型で行が溢れるので整合テストで縛る。
+SUBTITLE_MAX_CHARS: dict[str, int] = {"16:9": 20, "9:16": 12}
+#: アスペクト比ごとの焼き込み文字サイズ（ASS の公称値）。
+#:
+#: **公称値は見た目の大きさに比例しない。** libass は台本が解像度を宣言していない
+#: とき `PlayResY = 288` を基準に字面と余白を拡大する。縦型（高さ 1920）は横型
+#: （1080）の約1.8倍に描かれるので、公称値は**小さく**しないと1行が画面幅を超え、
+#: libass が勝手に折り返して行数が増える（実際に 34 で3行になり、出典フッタを
+#: 覆っていた）。値は実測で決めている。`estimated_caption_width_px` が
+#: `usable_caption_width_px` に収まることをテストで縛る。
+BURN_IN_FONT_SIZE: dict[str, int] = {"16:9": 26, "9:16": 12}
+#: **実測値**: 公称サイズ 1 あたりの全角1文字の字送り（画素）。
+#: 1080x1920 に 12pt / 20pt、1920x1080 に 26pt を焼いて計測した。
+_CHAR_ADVANCE_PER_SIZE: dict[str, float] = {"16:9": 2.55, "9:16": 4.25}
+#: libass が解像度宣言の無い台本に使う基準の高さと、既定の左右マージン。
+_ASS_PLAY_RES_Y = 288
+_ASS_DEFAULT_SIDE_MARGIN = 10
+#: 焼き込みの縁取り幅（背景が明るい図の上でも読めるように）。
+BURN_IN_OUTLINE: dict[str, int] = {"16:9": 2, "9:16": 3}
+#: 焼き込みの下マージン。
+BURN_IN_MARGIN_V: dict[str, int] = {"16:9": 22, "9:16": 40}
 #: 1キューの最大行数。
 DEFAULT_MAX_LINES = 2
 #: 1キューの最短表示時間（短すぎると読めない）。
 MIN_CUE_SEC = 1.0
+#: シーン末尾に空ける時間。画面が切り替わる瞬間に文字を残さない。
+TAIL_MARGIN_SEC = 0.4
+#: 配分の重みに足す下駄。短いキューが一瞬で消えないようにする。
+_CUE_WIDTH_OVERHEAD = 8
 
 #: 文の区切り（ここで優先的に割る）。
 _SENTENCE_END = "。．!？?！"
@@ -95,19 +126,35 @@ def chunk_narration(
     return cues
 
 
+def _allocate(chunks: list[list[str]], usable: float) -> list[float]:
+    """キューへ持ち時間を**文字量に比例して**割り振る。
+
+    等分だと、短い一言が長々と居座る一方で長い文が読み切れずに消える。表示幅に
+    比例させ、短いキューには下駄（`_CUE_WIDTH_OVERHEAD`）を履かせて一瞬で消えない
+    ようにする。合計は必ず `usable` に一致させる（隙間を作らない）。
+    """
+    weights = [_display_width("".join(lines)) + _CUE_WIDTH_OVERHEAD for lines in chunks]
+    total_weight = sum(weights) or 1
+    return [usable * weight / total_weight for weight in weights]
+
+
 def build_track(
     scenes: list[dict[str, Any]],
     *,
     offsets: dict[str, float],
     durations: dict[str, float],
-    max_chars: int = DEFAULT_MAX_CHARS_PER_LINE,
+    max_chars: int | None = None,
     max_lines: int = DEFAULT_MAX_LINES,
+    aspect_ratio: str = "16:9",
 ) -> SubtitleTrack:
-    """シーンのナレーションから字幕トラックを組む。
+    """シーンのテロップ文から字幕トラックを組む。
 
-    **シーンの実測尺を等分する。** 文字数比で配分すると、短い文が一瞬で消えて
-    読めなくなるため、下限（`MIN_CUE_SEC`）を守りつつ均等に割る。
+    シーンの実測尺を**文字量に比例して**配分する。末尾は `TAIL_MARGIN_SEC` だけ
+    空け、画面が切り替わる瞬間に文字が残らないようにする。
     """
+    resolved_max_chars = max_chars or SUBTITLE_MAX_CHARS.get(
+        aspect_ratio, DEFAULT_MAX_CHARS_PER_LINE
+    )
     cues: list[SubtitleCue] = []
     warnings: list[str] = []
     index = 1
@@ -123,26 +170,28 @@ def build_track(
             warnings.append(f"{scene_id}: タイムラインが無いため字幕を作れません")
             continue
 
-        chunks = chunk_narration(narration, max_chars=max_chars, max_lines=max_lines)
+        chunks = chunk_narration(narration, max_chars=resolved_max_chars, max_lines=max_lines)
         if not chunks:
             continue
-        per_cue = duration / len(chunks)
-        if per_cue < MIN_CUE_SEC:
+        usable = max(duration - TAIL_MARGIN_SEC, duration * 0.5)
+        spans = _allocate(chunks, usable)
+        if min(spans) < MIN_CUE_SEC:
             warnings.append(
                 f"{scene_id}: 字幕が {len(chunks)} 枚に対しシーンが短いため"
                 "表示時間が下限を下回ります"
             )
-        for position, lines in enumerate(chunks):
-            cue_start = start + per_cue * position
-            cue_end = cue_start + max(per_cue, MIN_CUE_SEC * 0.5)
+        cursor = start
+        for lines, span in zip(chunks, spans, strict=True):
+            cue_end = min(cursor + max(span, MIN_CUE_SEC * 0.5), start + duration)
             cues.append(
                 SubtitleCue(
                     index=index,
-                    start_sec=round(cue_start, 3),
-                    end_sec=round(min(cue_end, start + duration), 3),
+                    start_sec=round(cursor, 3),
+                    end_sec=round(cue_end, 3),
                     lines=lines,
                 )
             )
+            cursor = cue_end
             index += 1
     return SubtitleTrack(cues=cues, warnings=warnings)
 
@@ -190,21 +239,60 @@ def write_subtitles(
     return {"srt": srt, "vtt": vtt}
 
 
-def burn_in_filter(srt_path: Path, *, font_size: int = 28) -> str:
+def estimated_caption_width_px(aspect_ratio: str) -> float:
+    """1行を最大文字数まで詰めたときの、焼き込み後の実描画幅（画素）。
+
+    これが映像の幅を超えると libass が勝手に折り返し、行数が増えて本文や出典に
+    かぶる。設定を変えたときに気付けるよう、テストでここを見る。
+    """
+    nominal = BURN_IN_FONT_SIZE.get(aspect_ratio, BURN_IN_FONT_SIZE["16:9"])
+    chars = SUBTITLE_MAX_CHARS.get(aspect_ratio, DEFAULT_MAX_CHARS_PER_LINE)
+    advance = _CHAR_ADVANCE_PER_SIZE.get(aspect_ratio, _CHAR_ADVANCE_PER_SIZE["16:9"])
+    return chars * nominal * advance
+
+
+def usable_caption_width_px(aspect_ratio: str) -> float:
+    """字幕に使える横幅（画素）。左右マージンも映像の高さで拡大される。"""
+    from abist_kb.domain.video_project_spec import frame_pixels
+
+    width, height = frame_pixels(aspect_ratio, "standard")
+    margin = _ASS_DEFAULT_SIDE_MARGIN * height / _ASS_PLAY_RES_Y
+    return max(1.0, width - margin * 2)
+
+
+def burn_in_filter(
+    srt_path: Path, *, aspect_ratio: str = "16:9", font_size: int | None = None
+) -> str:
     """焼き込み用の ffmpeg フィルタ。
+
+    無音で観る前提なので、これが本体の字幕。図の上に重なっても読めるよう、
+    縁取りを必ず付ける（影ではなく縁取り: 背景の明暗に依存しない）。
 
     Windows のパスは `subtitles` フィルタでエスケープが要る
     （`C:\\x` の `:` がオプション区切りと解釈されるため）。
     """
     escaped = str(srt_path.resolve()).replace("\\", "/").replace(":", r"\:")
-    style = f"FontName=Yu Gothic UI,FontSize={font_size},Outline=2,Shadow=0"
+    size = font_size or BURN_IN_FONT_SIZE.get(aspect_ratio, BURN_IN_FONT_SIZE["16:9"])
+    outline = BURN_IN_OUTLINE.get(aspect_ratio, BURN_IN_OUTLINE["16:9"])
+    margin = BURN_IN_MARGIN_V.get(aspect_ratio, BURN_IN_MARGIN_V["16:9"])
+    style = (
+        f"FontName=Yu Gothic UI,FontSize={size},Bold=1,"
+        f"Outline={outline},Shadow=0,"
+        "PrimaryColour=&H00FFFFFF,OutlineColour=&H00141414,"
+        f"MarginV={margin}"
+    )
     return f"subtitles='{escaped}':force_style='{style}'"
 
 
 __all__ = [
+    "BURN_IN_FONT_SIZE",
+    "BURN_IN_MARGIN_V",
+    "BURN_IN_OUTLINE",
     "DEFAULT_MAX_CHARS_PER_LINE",
     "DEFAULT_MAX_LINES",
     "MIN_CUE_SEC",
+    "SUBTITLE_MAX_CHARS",
+    "TAIL_MARGIN_SEC",
     "SubtitleCue",
     "SubtitleTrack",
     "build_track",

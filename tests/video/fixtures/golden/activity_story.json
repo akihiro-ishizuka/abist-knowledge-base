@@ -1,0 +1,932 @@
+{
+  "title": "設計効率化 2026年活動まとめ",
+  "inputs": {
+    "kb_paths": [
+      "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+      "esa/設計効率化/議事録/設計効率化/TS様_2026_Q1/2026_07_31_工数実績.md",
+      "esa/設計効率化/議事録/設計効率化/TS様・TMEJ様案件_2026/2026_05_25_面着_1日目.md",
+      "esa/設計効率化/議事録/設計効率化/BRAID様/2026_06_09_製品紹介.md"
+    ]
+  },
+  "story_requirements": {
+    "required_topics": [
+      "三桜",
+      "TMEJ",
+      "TMK",
+      "TY",
+      "SUBARU",
+      "TMC",
+      "PZ",
+      "Claude Code",
+      "Asquery",
+      "BRAID"
+    ],
+    "required_scene_kinds": [
+      "timeline"
+    ],
+    "scene_count": {
+      "min": 12,
+      "max": 14
+    },
+    "source_path_pattern": "2026",
+    "sound_events": {
+      "min": 18,
+      "max": 24
+    }
+  },
+  "script": {
+    "title": "設計効率化 2026年活動まとめ",
+    "scenes": [
+      {
+        "id": "s01",
+        "role": "intro",
+        "title": "設計効率化 2026年活動まとめ",
+        "narration": {
+          "text": "2026年5月から7月、顧客向け自動化、設計レビュー支援、新技術評価、社内DXが並行して進みました。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "2026年5〜7月",
+          "12の主要活動を5つの領域で整理"
+        ],
+        "claims": [],
+        "diagram": {
+          "kind": "title",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 38,
+            "end": 53
+          }
+        }
+      },
+      {
+        "id": "s02",
+        "role": "body",
+        "title": "活動は5つの領域へ拡大",
+        "narration": {
+          "text": "活動は3案件ではありません。顧客業務の自動化を中心に、レビュー支援、技術評価、社内開発基盤まで12の主要活動が同時進行しました。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "顧客業務の自動化：三桜・TS・TMC",
+          "設計レビュー支援：検図・PZ",
+          "技術評価：SUBARU・BRAID",
+          "社内開発基盤：Claude Code・Asquery"
+        ],
+        "claims": [
+          {
+            "text": "顧客業務の自動化：三桜・TS・TMC",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "設計レビュー支援：検図・PZ",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "技術評価：SUBARU・BRAID",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "社内開発基盤：Claude Code・Asquery",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "key_points",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 38,
+            "end": 55
+          }
+        }
+      },
+      {
+        "id": "s03",
+        "role": "diagram",
+        "title": "5月から7月、調査から実装判断へ",
+        "narration": {
+          "text": "5月は現場課題の把握、6月は自動設計技術の調査、7月は顧客展開、現地確認、受託判断へ進みました。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [],
+        "claims": [],
+        "diagram": {
+          "kind": "timeline",
+          "sources": [
+            {
+              "path": "esa/設計効率化/議事録/設計効率化/TS様・TMEJ様案件_2026/2026_05_25_面着_1日目.md",
+              "start": 17,
+              "end": 34
+            },
+            {
+              "path": "esa/設計効率化/議事録/設計効率化/BRAID様/2026_06_09_製品紹介.md",
+              "start": 35,
+              "end": 52
+            },
+            {
+              "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+              "start": 40,
+              "end": 53
+            }
+          ],
+          "points": [
+            {
+              "at": "5/25",
+              "label": "現場課題を確認",
+              "description": "TMEJで面着を開始",
+              "source_index": 0
+            },
+            {
+              "at": "6/9",
+              "label": "新技術を調査",
+              "description": "生成設計AURAとの接点を整理",
+              "source_index": 1
+            },
+            {
+              "at": "7/22〜23",
+              "label": "顧客現場で前進",
+              "description": "標準図受領・TY初回訪問",
+              "source_index": 2
+            },
+            {
+              "at": "7/27〜28",
+              "label": "展開と判断",
+              "description": "三桜版展開・各案件の次工程を決定",
+              "source_index": 2
+            }
+          ]
+        }
+      },
+      {
+        "id": "s04",
+        "role": "chapter",
+        "title": "三桜：4つの現場業務を改善",
+        "narration": {
+          "text": "三桜工業向けは一つの案件ではなく、蛇腹設計、評価業務、曲げ治具、検図支援という4つの異なる現場業務を対象にしています。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "蛇腹設計：形状候補の提案と図面出力を支援",
+          "評価業務：報告・権限・組織管理を仕組み化",
+          "曲げ治具：CATIA作図の定型作業を自動化",
+          "検図支援：人の確認をAIで補助"
+        ],
+        "claims": [
+          {
+            "text": "蛇腹設計：形状候補の提案と図面出力を支援",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "評価業務：報告・権限・組織管理を仕組み化",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "曲げ治具：CATIA作図の定型作業を自動化",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "検図支援：人の確認をAIで補助",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "key_points",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 63,
+            "end": 71
+          }
+        }
+      },
+      {
+        "id": "s05",
+        "role": "body",
+        "title": "三桜：展開済み成果と残る確認",
+        "narration": {
+          "text": "蛇腹ツールは顧客へ展開し、評価業務では15項目の要望を整理しました。一方、曲げ治具は確認待ち、検図は人を置き換えず支援する方向へ絞りました。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "蛇腹：最新版を7月27日に顧客展開",
+          "評価：要望15項目を受領し実装条件を整理",
+          "曲げ治具：修正版を展開、顧客確認待ち",
+          "検図：自動判定ではなくレビュー支援へ"
+        ],
+        "claims": [
+          {
+            "text": "蛇腹：最新版を7月27日に顧客展開",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "評価：要望15項目を受領し実装条件を整理",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "曲げ治具：修正版を展開、顧客確認待ち",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "検図：自動判定ではなくレビュー支援へ",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "key_points",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 846,
+            "end": 849
+          }
+        }
+      },
+      {
+        "id": "s06",
+        "role": "chapter",
+        "title": "TS：3拠点で異なる設計作業を支援",
+        "narration": {
+          "text": "TS向けも一枚岩ではありません。TMEJは3つの既存ツール改善、TMKは図枠マクロ統合、TYは既存スクリプトの棚卸しと移行判断が中心です。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "TMEJ：工作図・自動打点配分・NP図を改善",
+          "TMK：拠点別の図枠マクロを統合",
+          "TY：VBS資産を調査し移行対象を選別",
+          "共通課題：WBSと対象範囲を現場で確定"
+        ],
+        "claims": [
+          {
+            "text": "TMEJ：工作図・自動打点配分・NP図を改善",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "TMK：拠点別の図枠マクロを統合",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "TY：VBS資産を調査し移行対象を選別",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "共通課題：WBSと対象範囲を現場で確定",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "key_points",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 342,
+            "end": 468
+          }
+        }
+      },
+      {
+        "id": "s07",
+        "role": "comparison",
+        "title": "TS：7月は実装・環境・範囲を確定",
+        "narration": {
+          "text": "TMEJは実績107時間で改善を継続。TMKは実行環境のブロッカーを解消。TYは80件を確認し、契約前提との違いを明らかにしました。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "同じ自動化でも到達点は異なる",
+          "数値は資料記録に限定"
+        ],
+        "claims": [],
+        "diagram": {
+          "kind": "comparison",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/TS様_2026_Q1/2026_07_31_工数実績.md",
+            "start": 214,
+            "end": 226
+          },
+          "items": [
+            {
+              "side": "TMEJ",
+              "aspect": "対象",
+              "text": "工作図・配分・NP図"
+            },
+            {
+              "side": "TMK",
+              "aspect": "対象",
+              "text": "図枠・設計DX"
+            },
+            {
+              "side": "TY",
+              "aspect": "対象",
+              "text": "VBS資産80件"
+            },
+            {
+              "side": "TMEJ",
+              "aspect": "到達",
+              "text": "21タスクを管理"
+            },
+            {
+              "side": "TMK",
+              "aspect": "到達",
+              "text": "マクロ実行を再開"
+            },
+            {
+              "side": "TY",
+              "aspect": "到達",
+              "text": "PS化対象2件を確認"
+            }
+          ]
+        }
+      },
+      {
+        "id": "s08",
+        "role": "problem",
+        "title": "SUBARU：作る前に受託リスクを判断",
+        "narration": {
+          "text": "SUBARU向けでは、タイヤ包絡面テンプレートを調査しました。モデリングとプログラムを分けられず見積根拠もないため、無理に受注せず見送りを決めました。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "対象：タイヤ包絡面の検討テンプレート",
+          "課題：GSDモデリングとマクロを分離できない",
+          "判断：根拠ある工数見積が困難",
+          "結論：7月23日に受託見送りを決定"
+        ],
+        "claims": [
+          {
+            "text": "対象：タイヤ包絡面の検討テンプレート",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "課題：GSDモデリングとマクロを分離できない",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "判断：根拠ある工数見積が困難",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "結論：7月23日に受託見送りを決定",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "key_points",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 472,
+            "end": 512
+          }
+        }
+      },
+      {
+        "id": "s09",
+        "role": "chapter",
+        "title": "TMC：図面チェックと自律作図を検証",
+        "narration": {
+          "text": "トヨタ自動車向けでは、設変書と図面の自動チェックに加え、CATIAを操作する設計エージェントを検証しました。形状は作れても、出図品質には未到達です。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "設変書チェック：品番ロジックを実装",
+          "方式課題：PDFかCATDrawingかを選定中",
+          "CATIAエージェント：形状生成は広く対応",
+          "図面品質：寸法・断面・表類が未達"
+        ],
+        "claims": [
+          {
+            "text": "設変書チェック：品番ロジックを実装",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "方式課題：PDFかCATDrawingかを選定中",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "CATIAエージェント：形状生成は広く対応",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "図面品質：寸法・断面・表類が未達",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "key_points",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 543,
+            "end": 643
+          }
+        }
+      },
+      {
+        "id": "s10",
+        "role": "body",
+        "title": "検図・PZ：人を支えるAIへ再定義",
+        "narration": {
+          "text": "検図支援は、図面を完全自動判定する構想から、注記や品番などの見落としを知らせ、人のレビューを助けるAIへ再定義しました。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "対象：注記・品番・法規情報のレビュー",
+          "前提：図面と3Dを人が確認する業務",
+          "方針：合否を断定せず見落としを通知",
+          "次段階：対象を絞ったPoCを設計"
+        ],
+        "claims": [
+          {
+            "text": "対象：注記・品番・法規情報のレビュー",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "前提：図面と3Dを人が確認する業務",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "方針：合否を断定せず見落としを通知",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "次段階：対象を絞ったPoCを設計",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "key_points",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 292,
+            "end": 338
+          }
+        }
+      },
+      {
+        "id": "s11",
+        "role": "chapter",
+        "title": "社内DX：AI活用を個人技から共通基盤へ",
+        "narration": {
+          "text": "社内ではClaude Codeの利用が拡大し、採用コードは9万2千673行。次の課題は、安全設定と再利用の仕組みを個人任せにしないことです。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "Claude Code：採用92,673行、採用率99.4%",
+          "安全設定：アンケート17件を方針へ反映",
+          "課題：共通設定の投入は未実施",
+          "狙い：業務ツールを組織で再利用"
+        ],
+        "claims": [
+          {
+            "text": "Claude Code：採用92,673行、採用率99.4%",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "安全設定：アンケート17件を方針へ反映",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "課題：共通設定の投入は未実施",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "狙い：業務ツールを組織で再利用",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "key_points",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 661,
+            "end": 709
+          }
+        }
+      },
+      {
+        "id": "s12",
+        "role": "body",
+        "title": "Asqueryとストア：知識とツールを届ける",
+        "narration": {
+          "text": "Asqueryは社内知識への質問を支える仕組みです。認証を強化しながら、作成したツールを配るストアと、操作履歴を残す監査基盤も設計しました。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "Asquery：社内知識への質問を支援",
+          "認証：メール・ワンタイム・JWTを実装中",
+          "ツールストア：設計と役割分担へ移行",
+          "監査：操作履歴を残す方式も確定"
+        ],
+        "claims": [
+          {
+            "text": "Asquery：社内知識への質問を支援",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "認証：メール・ワンタイム・JWTを実装中",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "ツールストア：設計と役割分担へ移行",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "監査：操作履歴を残す方式も確定",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "key_points",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 713,
+            "end": 810
+          }
+        }
+      },
+      {
+        "id": "s13",
+        "role": "body",
+        "title": "BRAID：生成設計の適用可能性を調査",
+        "narration": {
+          "text": "新技術調査ではBRAIDのAURAを確認しました。変更の多い二次構造部品で、物理・製造制約を満たす形状候補を生成し、設計の反復を減らせるかを評価しています。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "対象：支持・補強・固定に使う二次構造部品",
+          "課題：設計変更が多く、初期形状作成も重い",
+          "技術：制約を満たす形状候補を自動生成",
+          "到達：社内展開後の評価候補として整理"
+        ],
+        "claims": [
+          {
+            "text": "対象：支持・補強・固定に使う二次構造部品",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "課題：設計変更が多く、初期形状作成も重い",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "技術：制約を満たす形状候補を自動生成",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "到達：社内展開後の評価候補として整理",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "key_points",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/BRAID様/2026_06_09_製品紹介.md",
+            "start": 35,
+            "end": 95
+          }
+        }
+      },
+      {
+        "id": "s14",
+        "role": "ending",
+        "title": "個別自動化から、改善を回す仕組みへ",
+        "narration": {
+          "text": "この3か月は、個別ツールを作るだけでなく、現場確認、受託判断、人を支えるAI、社内共有基盤まで、改善を継続して回す形へ活動が広がった期間でした。",
+          "source_refs": [
+            "s1"
+          ]
+        },
+        "on_screen_text": [
+          "実装：顧客へ届けて現場で確認",
+          "判断：難しい案件は見送り理由を明確化",
+          "支援：人を残したAIレビューへ具体化",
+          "基盤：知識・ツール・監査を組織で共有"
+        ],
+        "claims": [
+          {
+            "text": "実装：顧客へ届けて現場で確認",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "判断：難しい案件は見送り理由を明確化",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "支援：人を残したAIレビューへ具体化",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          },
+          {
+            "text": "基盤：知識・ツール・監査を組織で共有",
+            "kind": "fact",
+            "source_refs": [
+              "s1"
+            ]
+          }
+        ],
+        "diagram": {
+          "kind": "summary",
+          "source": {
+            "path": "esa/設計効率化/議事録/設計効率化/チーム内定例/2026_07_28_チーム内定例.md",
+            "start": 842,
+            "end": 913
+          }
+        }
+      }
+    ],
+    "sound_events": [
+      {
+        "scene_id": "s01",
+        "event": "intro",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s02",
+        "event": "chapter_change",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s02",
+        "event": "key_point",
+        "anchor": "beat-2.reveal",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s03",
+        "event": "chapter_change",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s03",
+        "event": "key_point",
+        "anchor": "beat-2.reveal",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s03",
+        "event": "success",
+        "anchor": "scene.end",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s04",
+        "event": "chapter_change",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s04",
+        "event": "key_point",
+        "anchor": "beat-2.reveal",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s05",
+        "event": "success",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s06",
+        "event": "chapter_change",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s06",
+        "event": "key_point",
+        "anchor": "beat-2.reveal",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s07",
+        "event": "comparison_change",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s08",
+        "event": "warning",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s08",
+        "event": "decision",
+        "anchor": "beat-2.reveal",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s09",
+        "event": "chapter_change",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s09",
+        "event": "warning",
+        "anchor": "beat-2.reveal",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s10",
+        "event": "decision",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s10",
+        "event": "key_point",
+        "anchor": "beat-2.reveal",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s11",
+        "event": "chapter_change",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s11",
+        "event": "success",
+        "anchor": "beat-2.reveal",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s12",
+        "event": "key_point",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s13",
+        "event": "chapter_change",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s14",
+        "event": "success",
+        "anchor": "scene.start",
+        "intensity": "normal"
+      },
+      {
+        "scene_id": "s14",
+        "event": "outro",
+        "anchor": "scene.end",
+        "intensity": "normal"
+      }
+    ]
+  }
+}

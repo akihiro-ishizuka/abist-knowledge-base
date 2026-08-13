@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from abist_kb.application.video.contact_sheet import CONTACT_SHEET_FILE
+from abist_kb.application.video.content_quality import validate_story_content
 from abist_kb.application.video.project_store import check_input_usage
 from abist_kb.application.video.video_metadata import (
     MAX_DESCRIPTION_CHARS,
@@ -157,14 +159,14 @@ def _media_checks(output: Path | None, spec: dict[str, Any]) -> list[Check]:
 
     if info.has_audio:
         checks.append(Check("has_audio", STATUS_PASS, "音声ストリームあり"))
-    else:
+    elif spec.get("sound_events"):
+        # 効果音を要求したのに音が乗っていない＝合成に失敗している。
         checks.append(
-            Check(
-                "has_audio",
-                STATUS_WARN if _AUDIO_OPTIONAL else STATUS_FAIL,
-                "音声がありません（無音モードなら想定どおり）",
-            )
+            Check("has_audio", STATUS_FAIL, "効果音を指定しているのに音声ストリームがありません")
         )
+    else:
+        # ナレーション音声は作らない設計。効果音も無いなら無音が正解。
+        checks.append(Check("has_audio", STATUS_PASS, "無音設計（テロップ焼き込みで伝える）"))
     return checks
 
 
@@ -275,6 +277,102 @@ def _subtitle_checks(project_dir: Path, duration_sec: float | None) -> list[Chec
     return [Check("subtitle_bounds", STATUS_PASS, f"{len(stamps)} 枚が尺内に収まっています")]
 
 
+def _caption_checks(spec: dict[str, Any]) -> list[Check]:
+    """テロップが**画面に出ている**か。
+
+    この動画にナレーション音声は無い。字幕がサイドカーの SRT にしか無ければ、
+    視聴者は何も読めないまま観ることになる。焼き込みは任意の飾りではなく必須。
+    """
+    subtitles = spec.get("subtitles")
+    if not isinstance(subtitles, dict):
+        return []
+    narrated = any((scene.get("narration") or {}).get("text") for scene in spec.get("scenes") or [])
+    cue_count = subtitles.get("cue_count")
+    if narrated and isinstance(cue_count, int) and cue_count <= 0:
+        return [Check("captions", STATUS_FAIL, "テロップ文があるのに字幕キューが 0 枚です")]
+    if not narrated:
+        return [Check("captions", STATUS_PASS, "テロップ文が無いシーン構成です")]
+    if subtitles.get("burned_in") is True:
+        return [Check("captions", STATUS_PASS, f"テロップを焼き込み済み（{cue_count} 枚）")]
+    return [
+        Check(
+            "captions",
+            STATUS_FAIL,
+            "テロップが映像に焼き込まれていません（無音で観る動画では画面に字幕が要ります）",
+        )
+    ]
+
+
+#: 完成音声のラウドネス許容幅（LUFS）。`pipeline.TARGET_LUFS` の周辺。
+LOUDNESS_RANGE = (-19.0, -13.0)
+
+
+def _bgm_checks(project_dir: Path) -> list[Check]:
+    """BGM を敷いたなら、その出所が記録されているか。
+
+    ラウドネスの実測は `ffmpeg -af loudnorm` の再解析が要り、尺ぶんの時間がかかる。
+    ここでは「敷いた記録」と「権利表記」だけを見る（正規化そのものは合成時に必ず通す）。
+    """
+    path = project_dir / "audio" / "bgm.json"
+    if not path.is_file():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return [Check("bgm_present", STATUS_WARN, "BGM の記録を読めません")]
+
+    problems: list[str] = []
+    if not payload.get("license"):
+        problems.append("ライセンスの記録がありません")
+    if not payload.get("sha256"):
+        problems.append("SHA-256 の記録がありません")
+    if not payload.get("attribution"):
+        problems.append("帰属表記がありません")
+    gain = payload.get("gain_db")
+    if isinstance(gain, int | float) and gain > -18.0:
+        # 床が高いと効果音とテロップの邪魔になる。
+        problems.append(f"BGM の音量が高すぎます（{gain} dB）")
+    if problems:
+        return [Check("bgm_present", STATUS_FAIL, " / ".join(problems))]
+    return [
+        Check(
+            "bgm_present",
+            STATUS_PASS,
+            f"BGM {payload.get('sound_id')}（{payload.get('mood')}）を "
+            f"{payload.get('gain_db')} dB で敷いています",
+        )
+    ]
+
+
+def _image_provenance_checks(project_dir: Path, spec: dict[str, Any]) -> list[Check]:
+    """持ち込み画像が実在し、sha256 とライセンスが記録されているか。
+
+    画像の中身に機密が写っていないかは機械では判定できない。それは
+    `preview_approval`（人間ゲート）の仕事で、ここは来歴の欠落だけを見る。
+    """
+    assets = spec.get("image_assets")
+    if not isinstance(assets, list) or not assets:
+        return []
+    problems: list[str] = []
+    for asset in assets:
+        if not isinstance(asset, dict):
+            problems.append("画像アセットの形式が不正です")
+            continue
+        asset_id = asset.get("id") or "?"
+        relative = str(asset.get("path") or "")
+        if not relative or not (project_dir / relative).is_file():
+            problems.append(f"{asset_id}: プロジェクト内に画像がありません")
+        if not asset.get("sha256"):
+            problems.append(f"{asset_id}: sha256 の記録がありません")
+        if not asset.get("license"):
+            problems.append(f"{asset_id}: ライセンスの記録がありません")
+    if problems:
+        return [Check("image_provenance", STATUS_FAIL, " / ".join(problems[:5]))]
+    return [
+        Check("image_provenance", STATUS_PASS, f"持ち込み画像 {len(assets)} 件の来歴を記録済み")
+    ]
+
+
 def _metadata_checks(project_dir: Path) -> list[Check]:
     from abist_kb.application.video.video_metadata import load_metadata
 
@@ -370,6 +468,39 @@ def _input_usage_checks(spec: dict[str, Any], used_paths: set[str] | None) -> li
     return [Check("input_usage", STATUS_PASS, "明示した主入力はすべて本編で使われています")]
 
 
+def _story_requirement_checks(
+    project_dir: Path, requirements: dict[str, Any] | None
+) -> list[Check]:
+    """spec が宣言した構成要件のうち、**成果物を見ないと分からない**ものを検査する。
+
+    テーマ・シーン数・出典期間は spec だけで判定できるので `semantic_story` が見る。
+    効果音の数は実際に置かれたキュー（`audio/sound-cues.json`）が対象なので、
+    間引き（密度上限・最小間隔）を通った後の結果をここで確かめる。
+    """
+    if not requirements:
+        return []
+    event_range = requirements.get("sound_events")
+    if not isinstance(event_range, dict):
+        return []
+    low, high = event_range.get("min"), event_range.get("max")
+    if not isinstance(low, int) or not isinstance(high, int):
+        return []
+    try:
+        payload = json.loads(
+            (project_dir / "audio" / "sound-cues.json").read_text(encoding="utf-8")
+        )
+        cues = payload.get("cues") or []
+    except (OSError, json.JSONDecodeError):
+        cues = []
+    return [
+        Check(
+            "story_requirements",
+            STATUS_PASS if low <= len(cues) <= high else STATUS_FAIL,
+            f"効果音 {len(cues)} 箇所（宣言した基準 {low}〜{high}）",
+        )
+    ]
+
+
 def run_qa(
     project_dir: Path,
     *,
@@ -393,12 +524,38 @@ def run_qa(
         None,
     )
     checks += _subtitle_checks(project_dir, duration)
+    checks += _caption_checks(spec)
+    checks += _image_provenance_checks(project_dir, spec)
     checks += _sound_checks(project_dir)
+    checks += _bgm_checks(project_dir)
     checks += _citation_checks(project_dir, spec)
     checks += _metadata_checks(project_dir)
     checks += _secret_checks(project_dir)
     checks += _distribution_checks(spec)
     checks += _input_usage_checks(spec, used_paths)
+    scenes = spec.get("scenes") or []
+    requirements = spec.get("story_requirements")
+    semantic = validate_story_content(
+        scenes, spec.get("sound_events") or [], requirements=requirements
+    )
+    checks.append(
+        Check(
+            "semantic_story",
+            STATUS_FAIL if semantic else STATUS_PASS,
+            " / ".join(e["message"] for e in semantic[:5])
+            if semantic
+            else "禁止見出し・記法断片・必須テーマの検査に合格",
+        )
+    )
+    checks += _story_requirement_checks(project_dir, requirements)
+    sheet = project_dir / CONTACT_SHEET_FILE
+    checks.append(
+        Check(
+            "contact_sheet",
+            STATUS_PASS if sheet.is_file() and sheet.stat().st_size > 0 else STATUS_FAIL,
+            str(CONTACT_SHEET_FILE) if sheet.is_file() else "コンタクトシートがありません",
+        )
+    )
 
     ok = not any(c.status == STATUS_FAIL for c in checks)
     return QaReport(ok=ok, checks=checks, human_required=list(HUMAN_REQUIRED))

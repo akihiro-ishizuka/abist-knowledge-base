@@ -1,7 +1,8 @@
-"""Phase 3: 台本・絵コンテ・SceneSpec 生成。
+"""台本の受け入れと SceneSpec 生成。
 
-**LLM 出力を直接レンダリングしない**ことと、**出典に結び付かない主張を落とす**
-ことの回帰テスト。LLM は固定モックで検証する（外部設定はブロッカーにしない）。
+**書かれた台本をそのまま描画しない**ことと、**出典に結び付かない主張を落とす**
+ことの回帰テスト。台本を機械生成する経路は持たないので、ここで検証するのは
+「渡された台本をどう受け入れるか」だけ。
 """
 
 from __future__ import annotations
@@ -12,11 +13,7 @@ from pathlib import Path
 import pytest
 
 from abist_kb.application.video.input_resolver import resolve_inputs
-from abist_kb.application.video.script_planner import (
-    outline_document,
-    parse_llm_draft,
-    plan_video,
-)
+from abist_kb.application.video.script_planner import author_script, outline_document
 from abist_kb.domain.line_range import range_hash
 from abist_kb.domain.scene_spec import validate_scene_spec
 from abist_kb.domain.script_draft import validate_script_draft
@@ -133,32 +130,54 @@ class TestDraftValidation:
         assert result.warnings
 
 
-class TestRuleBasedPlanning:
-    def test_generates_chaptered_scenes_without_llm(self, docs: Path) -> None:
-        """LLM 無しでも章立てできる（外部設定はブロッカーにしない）。"""
-        plan, draft = plan_video(
-            _resolved(docs, kb_paths=["manuals/guide.md"]), docs_dir=docs, title="操作説明"
-        )
-        assert plan.ok, plan.errors
-        roles = [s["role"] for s in plan.scenes]
-        assert "intro" in roles
-        assert "summary" in roles
-        assert any(s["kind"] == "flow" for s in plan.scenes), "手順から flow を作る"
-        assert draft is not None
+class TestAuthoredScript:
+    """作者（エージェント）が書いた台本の受け入れ。
+
+    台本を機械生成する経路は無いので、ここで見るのは「渡された台本をどう
+    受け入れ、何を落とすか」だけ。
+    """
+
+    def _script(self, path: str) -> dict:
+        return {
+            "title": "操作説明",
+            "scenes": [
+                {"id": "s01", "role": "intro", "title": "はじめに"},
+                {
+                    "id": "s02",
+                    "role": "body",
+                    "title": "登録の手順",
+                    "narration": {"text": "登録は3手順で終わります。", "source_refs": ["s1"]},
+                    "claims": [
+                        {"text": "ログインする", "kind": "fact", "source_refs": ["s1"]},
+                        {"text": "画面を開く", "kind": "fact", "source_refs": ["s1"]},
+                    ],
+                    "diagram": {
+                        "kind": "explain",
+                        "source": {"path": path, "start": 1, "end": 8},
+                    },
+                },
+            ],
+            "sound_events": [{"scene_id": "s02", "event": "key_point"}],
+        }
 
     def test_scene_specs_are_validated(self, docs: Path) -> None:
-        plan, _ = plan_video(
-            _resolved(docs, kb_paths=["manuals/guide.md"]), docs_dir=docs, title="t"
+        result = author_script(
+            self._script("manuals/guide.md"),
+            _resolved(docs, kb_paths=["manuals/guide.md"]),
+            docs_dir=docs,
         )
-        for scene in plan.scenes:
+        assert result.ok, result.errors
+        for scene in result.scenes:
             assert validate_scene_spec(scene["scene_spec"]).ok, scene["id"]
 
     def test_sources_carry_real_content_hash(self, docs: Path) -> None:
-        """出典の content_hash は実ファイルから計算される。"""
-        plan, _ = plan_video(
-            _resolved(docs, kb_paths=["manuals/guide.md"]), docs_dir=docs, title="t"
+        """出典の content_hash は**実ファイル**から計算される（作者は書かない）。"""
+        result = author_script(
+            self._script("manuals/guide.md"),
+            _resolved(docs, kb_paths=["manuals/guide.md"]),
+            docs_dir=docs,
         )
-        with_sources = [s for s in plan.scenes if s["scene_spec"]["sources"]]
+        with_sources = [s for s in result.scenes if s["scene_spec"]["sources"]]
         assert with_sources
         source = with_sources[0]["scene_spec"]["sources"][0]
         text = (docs / source["path"]).read_text(encoding="utf-8")
@@ -166,122 +185,40 @@ class TestRuleBasedPlanning:
         assert source["content_hash"] == expected
 
     def test_used_paths_are_tracked(self, docs: Path) -> None:
-        plan, _ = plan_video(
+        result = author_script(
+            self._script("manuals/guide.md"),
             _resolved(docs, kb_paths=["manuals/guide.md", "manuals/design.md"]),
             docs_dir=docs,
-            title="t",
         )
-        assert plan.used_paths == {"manuals/guide.md", "manuals/design.md"}
+        assert "manuals/guide.md" in result.used_paths
 
-    def test_primary_inputs_come_first(self, docs: Path) -> None:
-        """明示主入力が本編の骨格になる（検索補完に埋もれない）。"""
-        resolved = resolve_inputs(
-            {"kb_paths": ["manuals/design.md"], "kb_directories": ["manuals"]}, docs_dir=docs
+    def test_a_claim_without_a_source_never_reaches_the_render(self, docs: Path) -> None:
+        """出典の無い主張は描画対象に残らない（作者が誰であっても同じ）。"""
+        script = self._script("manuals/guide.md")
+        script["scenes"][1]["claims"].append({"text": "捏造された事実", "kind": "fact"})
+
+        result = author_script(
+            script, _resolved(docs, kb_paths=["manuals/guide.md"]), docs_dir=docs
         )
-        plan, _ = plan_video(resolved.inputs, docs_dir=docs, title="t")
-        assert plan.ok
-        assert "manuals/design.md" in plan.used_paths
 
-
-class TestLlmPath:
-    def test_mock_llm_draft_is_used(self, docs: Path) -> None:
-        """固定モックの LLM 出力が採用されること。"""
-
-        def fake_chat(*, outlines, title, purpose):
-            return json.dumps(
-                {
-                    "title": "モック台本",
-                    "scenes": [
-                        {"id": "s01", "role": "intro", "title": "はじめに"},
-                        {
-                            "id": "s02",
-                            "role": "body",
-                            "title": "本編",
-                            "claims": [
-                                {"text": "登録は3手順です", "kind": "fact", "source_refs": ["s1"]}
-                            ],
-                            "diagram": {
-                                "kind": "explain",
-                                "source": {"path": outlines[0].path, "start": 1, "end": 5},
-                            },
-                        },
-                    ],
-                    "sound_events": [{"scene_id": "s02", "event": "key_point"}],
-                },
-                ensure_ascii=False,
-            )
-
-        plan, draft = plan_video(
-            _resolved(docs, kb_paths=["manuals/guide.md"]),
-            docs_dir=docs,
-            title="t",
-            chat_fn=fake_chat,
-        )
-        assert plan.ok, plan.errors
-        assert draft["title"] == "モック台本"
-        assert "登録は3手順です" in json.dumps(plan.scenes, ensure_ascii=False)
-
-    def test_llm_failure_falls_back_to_rules(self, docs: Path) -> None:
-        """LLM が使えなくても動画は作れる。"""
-
-        def broken(*, outlines, title, purpose):
-            raise RuntimeError("provider 未設定")
-
-        plan, _ = plan_video(
-            _resolved(docs, kb_paths=["manuals/guide.md"]),
-            docs_dir=docs,
-            title="t",
-            chat_fn=broken,
-        )
-        assert plan.ok
-        assert any("ルールベース" in w for w in plan.warnings)
-
-    def test_malformed_llm_json_falls_back(self, docs: Path) -> None:
-        plan, _ = plan_video(
-            _resolved(docs, kb_paths=["manuals/guide.md"]),
-            docs_dir=docs,
-            title="t",
-            chat_fn=lambda **_: "これは JSON ではない",
-        )
-        assert plan.ok
-        assert any("ルールベース" in w for w in plan.warnings)
-
-    def test_llm_output_is_never_rendered_directly(self, docs: Path) -> None:
-        """LLM が出典の無い主張を返しても描画対象に残らない。"""
-
-        def evil(*, outlines, title, purpose):
-            return json.dumps(
-                {
-                    "title": "t",
-                    "scenes": [
-                        {
-                            "id": "s01",
-                            "role": "body",
-                            "claims": [{"text": "捏造された事実", "kind": "fact"}],
-                            "diagram": {
-                                "kind": "explain",
-                                "source": {"path": outlines[0].path, "start": 1, "end": 3},
-                            },
-                        }
-                    ],
-                },
-                ensure_ascii=False,
-            )
-
-        plan, _ = plan_video(
-            _resolved(docs, kb_paths=["manuals/guide.md"]),
-            docs_dir=docs,
-            title="t",
-            chat_fn=evil,
-        )
-        rendered = json.dumps(plan.scenes, ensure_ascii=False)
+        rendered = json.dumps(result.scenes, ensure_ascii=False)
         assert "捏造された事実" not in rendered, "出典の無い主張が描画対象に残っている"
 
-    @pytest.mark.parametrize("raw", ['{"a": 1}', '```json\n{"a": 1}\n```', '```\n{"a": 1}\n```'])
-    def test_parse_fenced_json(self, raw: str) -> None:
-        parsed, error = parse_llm_draft(raw)
-        assert error is None
-        assert parsed == {"a": 1}
+    def test_a_broken_script_does_not_silently_shrink(self, docs: Path) -> None:
+        """描けないシーンは黙って消えず、どのシーンかが分かる形で返る。"""
+        script = self._script("manuals/guide.md")
+        script["scenes"][1]["diagram"] = {
+            "kind": "timeline",
+            "points": [],
+            "source": {"path": "manuals/guide.md", "start": 1, "end": 8},
+        }
+
+        result = author_script(
+            script, _resolved(docs, kb_paths=["manuals/guide.md"]), docs_dir=docs
+        )
+
+        assert not result.ok
+        assert any(e.get("sceneId") == "s02" for e in result.errors)
 
 
 class TestOutline:

@@ -1,28 +1,36 @@
-"""台本・絵コンテ・シーン別 SceneSpec の生成。
+"""台本の受け入れと、シーン別 SceneSpec の生成。
 
-**LLM 出力は直接レンダリングしない。** 経路は必ずこの順:
+**台本はエージェントが書く。** 見出しや箇条書きを機械的に拾って台本を組み立てる
+経路は持たない —— 何を語り、どう見せるかは書き手の判断であって、正規表現で
+決められることではなかった。
+
+**書かれた台本をそのまま描画はしない。** 経路は必ずこの順:
 
 ```
-ResolvedInput（Phase 1）
-  → ScriptDraft（LLM もしくはルールベース）
+ResolvedInput（題材の解決）
+  → ScriptDraft（作者が書く）
   → validate_script_draft（出典不良の主張を落とす）
   → build_scene_specs（SceneSpec 1.0 として検証）
+  → validate_story_content（レンダリング前の意味品質検査）
   → VideoProjectSpec.scenes
 ```
-
-LLM が使えない環境でも**ルールベースで台本を組める**ので、
-`ChatProvider` の設定はブロッカーにならない。
 """
 
 from __future__ import annotations
 
-import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from abist_kb.application.video.chapter_planner import build_chaptered_draft, count_materials
+from abist_kb.application.video.caption_timing import caption_chars, estimate_caption_duration
+from abist_kb.application.video.content_quality import (
+    clean_display_text,
+    clean_heading,
+    is_forbidden_heading,
+    is_semantic_text,
+    validate_story_content,
+)
 from abist_kb.application.video.duration_planner import plan_duration
 from abist_kb.application.video.input_resolver import ResolvedInput
 from abist_kb.domain.line_range import range_hash
@@ -51,6 +59,7 @@ class DocumentOutline:
     total_lines: int
     headings: list[tuple[int, str, int]] = field(default_factory=list)  # (level, text, line)
     bullets: list[tuple[str, int]] = field(default_factory=list)  # (text, line)
+    semantic_lines: list[tuple[str, int, str]] = field(default_factory=list)
 
 
 def outline_document(docs_dir: Path, item: ResolvedInput) -> DocumentOutline | None:
@@ -63,15 +72,41 @@ def outline_document(docs_dir: Path, item: ResolvedInput) -> DocumentOutline | N
     lines = text.splitlines()
     headings: list[tuple[int, str, int]] = []
     bullets: list[tuple[str, int]] = []
+    semantic_lines: list[tuple[str, int, str]] = []
+    in_frontmatter = bool(lines and lines[0].strip() == "---")
     for number, line in enumerate(lines, start=1):
+        if in_frontmatter:
+            if number > 1 and line.strip() == "---":
+                in_frontmatter = False
+            continue
         heading = _HEADING_RE.match(line)
         if heading:
-            headings.append((len(heading.group(1)), heading.group(2), number))
+            cleaned = clean_heading(heading.group(2))
+            if cleaned and not is_forbidden_heading(cleaned):
+                headings.append((len(heading.group(1)), cleaned, number))
+                semantic_lines.append((cleaned, number, "heading"))
             continue
         bullet = _BULLET_RE.match(line)
-        if bullet and len(bullet.group(1)) <= 60:
-            bullets.append((bullet.group(1), number))
-    title = headings[0][1] if headings else Path(item.path).stem
+        if bullet:
+            cleaned = clean_display_text(bullet.group(1))
+            if len(cleaned) <= 180 and is_semantic_text(cleaned):
+                bullets.append((cleaned, number))
+                semantic_lines.append((cleaned, number, "action"))
+            continue
+        stripped = line.strip()
+        if stripped.startswith("|") and stripped.endswith("|"):
+            cells = [clean_display_text(c) for c in stripped.strip("|").split("|")]
+            cells = [c for c in cells if c and not re.fullmatch(r":?-{2,}:?", c)]
+            if len(cells) >= 2:
+                candidate = "：".join(cells[:4])
+                if len(candidate) <= 180 and is_semantic_text(candidate):
+                    semantic_lines.append((candidate, number, "table"))
+            continue
+        if stripped.startswith(">"):
+            cleaned = clean_display_text(stripped)
+            if len(cleaned) <= 180 and is_semantic_text(cleaned):
+                semantic_lines.append((cleaned, number, "decision"))
+    title = headings[0][1] if headings else clean_heading(Path(item.path).stem)
     return DocumentOutline(
         path=item.path,
         title=title,
@@ -79,6 +114,7 @@ def outline_document(docs_dir: Path, item: ResolvedInput) -> DocumentOutline | N
         total_lines=max(len(lines), 1),
         headings=headings,
         bullets=bullets,
+        semantic_lines=semantic_lines,
     )
 
 
@@ -95,129 +131,6 @@ def _source_entry(outline: DocumentOutline, docs_dir: Path, start: int, end: int
         "end_line": hi,
         "content_hash": result.hash if result.ok else "",
     }
-
-
-def plan_draft_from_documents(
-    outlines: list[DocumentOutline],
-    *,
-    title: str,
-    purpose: str | None = None,
-) -> dict[str, Any]:
-    """LLM を使わずに台本下書きを組む（決定的・出典つき）。
-
-    `ChatProvider` が無い環境でも動画を作れるようにするための経路。
-    LLM 版と**同じ `ScriptDraft` 形式**を返すので、後段は共通。
-    """
-    scenes: list[dict[str, Any]] = []
-    sound_events: list[dict[str, Any]] = []
-
-    scenes.append(
-        {
-            "id": "s01",
-            "role": "intro",
-            "title": title,
-            "narration": {"text": purpose or f"{title}について説明します。", "source_refs": []},
-            "on_screen_text": [title],
-            "claims": [],
-        }
-    )
-    sound_events.append({"scene_id": "s01", "event": "intro", "anchor": "scene.start"})
-
-    index = 2
-    for outline in outlines:
-        scene_id = f"s{index:02d}"
-        # 見出しがあれば要点、無ければ箇条書きの先頭を使う
-        points = [text for _level, text, _line in outline.headings[1:5]]
-        if not points:
-            points = [text for text, _line in outline.bullets[:MAX_STATEMENTS_PER_SCENE]]
-        points = points[:MAX_STATEMENTS_PER_SCENE]
-        if not points:
-            index += 1
-            continue
-
-        first_line = outline.headings[0][2] if outline.headings else 1
-        last_line = min(outline.total_lines, first_line + 40)
-        scenes.append(
-            {
-                "id": scene_id,
-                "role": "body",
-                "title": outline.title,
-                "narration": {
-                    "text": f"{outline.title}について、要点を確認します。",
-                    "source_refs": ["s1"],
-                },
-                "on_screen_text": points[:2],
-                "claims": [{"text": p, "kind": "fact", "source_refs": ["s1"]} for p in points],
-                "diagram": {
-                    "kind": "explain",
-                    "source": {"path": outline.path, "start": first_line, "end": last_line},
-                },
-            }
-        )
-        sound_events.append(
-            {"scene_id": scene_id, "event": "chapter_change", "anchor": "scene.start"}
-        )
-        if len(points) >= 3:
-            sound_events.append(
-                {"scene_id": scene_id, "event": "key_point", "anchor": "beat-2.reveal"}
-            )
-        index += 1
-
-        # 手順が並んでいれば flow シーンを足す
-        steps = [text for text, _line in outline.bullets[:MAX_FLOW_STEPS]]
-        if len(steps) >= 2:
-            flow_id = f"s{index:02d}"
-            scenes.append(
-                {
-                    "id": flow_id,
-                    "role": "diagram",
-                    "title": f"{outline.title}の流れ",
-                    "narration": {
-                        "text": "手順の流れは次のとおりです。",
-                        "source_refs": ["s1"],
-                    },
-                    "on_screen_text": [],
-                    "claims": [],
-                    "diagram": {
-                        "kind": "flow",
-                        "steps": steps,
-                        "source": {"path": outline.path, "start": first_line, "end": last_line},
-                    },
-                }
-            )
-            index += 1
-
-    scenes.append(
-        {
-            "id": f"s{index:02d}",
-            "role": "summary",
-            "title": "まとめ",
-            "narration": {
-                "text": "以上が概要です。詳細は出典の資料を参照してください。",
-                "source_refs": [],
-            },
-            "on_screen_text": ["まとめ"],
-            "claims": [],
-        }
-    )
-    sound_events.append({"scene_id": f"s{index:02d}", "event": "success", "anchor": "scene.start"})
-    sound_events.append({"scene_id": f"s{index:02d}", "event": "outro", "anchor": "scene.end"})
-    return {"title": title, "scenes": scenes, "sound_events": sound_events}
-
-
-def parse_llm_draft(raw: str) -> tuple[dict[str, Any] | None, str | None]:
-    """LLM の応答から JSON を取り出す（```json フェンス対応）。"""
-    text = raw.strip()
-    fence = re.search(r"```(?:json)?\s*(.+?)```", text, re.S)
-    if fence:
-        text = fence.group(1).strip()
-    try:
-        parsed = json.loads(text)
-    except json.JSONDecodeError as exc:
-        return None, f"JSON として解釈できません: {exc}"
-    if not isinstance(parsed, dict):
-        return None, "台本はオブジェクトである必要があります"
-    return parsed, None
 
 
 #: 動画専用カードの kind -> template。SceneSpec 側の SCENE_KINDS と対応する。
@@ -328,6 +241,23 @@ def _scene_spec_from(
     outline = outline_by_path.get(source_info.get("path"))
     title = scene.get("title") or scene["id"]
 
+    source_specs = diagram.get("sources") if isinstance(diagram.get("sources"), list) else None
+    sources: list[dict[str, Any]] = []
+    if source_specs:
+        for index, info in enumerate(source_specs, start=1):
+            if not isinstance(info, dict):
+                continue
+            source_outline = outline_by_path.get(info.get("path"))
+            if source_outline is None:
+                continue
+            entry = _source_entry(
+                source_outline, docs_dir, info.get("start", 1), info.get("end", 1)
+            )
+            entry["id"] = f"s{index}"
+            sources.append(entry)
+            if outline is None:
+                outline = source_outline
+
     if outline is None:
         # 出典に紐づかないシーン（表紙・エンドカード）は装飾のみで描く
         card = _card_spec_from(scene, diagram, diagram.get("kind"), title, [])
@@ -347,11 +277,108 @@ def _scene_spec_from(
     source = _source_entry(
         outline, docs_dir, source_info.get("start", 1), source_info.get("end", 1)
     )
+    if not sources:
+        sources = [source]
     kind = diagram.get("kind", "explain")
 
-    card = _card_spec_from(scene, diagram, kind, title, [source])
+    card = _card_spec_from(scene, diagram, kind, title, sources)
     if card is not None:
         return card
+
+    if kind == "timeline":
+        beats = []
+        for point in diagram.get("points") or []:
+            if not isinstance(point, dict):
+                continue
+            source_index = int(point.get("source_index", 0))
+            ref = f"s{source_index + 1}"
+            beat = {
+                "type": "timeline_point",
+                "at": clean_display_text(str(point.get("at") or ""))[:24],
+                "label": clean_display_text(str(point.get("label") or ""))[:40],
+                "source_refs": [ref],
+            }
+            description = clean_display_text(str(point.get("description") or ""))
+            if description:
+                beat["description"] = description[:200]
+            beats.append(beat)
+        if len(beats) < 2:
+            return None
+        return {
+            "schema_version": "1.0",
+            "scene_kind": "timeline",
+            "output_format": "mp4",
+            "template": "timeline_v1",
+            "title": title,
+            "sources": sources,
+            "beats": beats,
+        }
+
+    if kind == "comparison":
+        beats = [
+            {
+                "type": "comparison_item",
+                "side": clean_display_text(str(item.get("side") or ""))[:20],
+                "aspect": clean_display_text(str(item.get("aspect") or ""))[:20],
+                "text": clean_display_text(str(item.get("text") or ""))[:60],
+                "source_refs": ["s1"],
+            }
+            for item in (diagram.get("items") or [])
+            if isinstance(item, dict)
+        ]
+        if len(beats) < 2:
+            return None
+        return {
+            "schema_version": "1.0",
+            "scene_kind": "comparison",
+            "output_format": "mp4",
+            "template": "comparison_v1",
+            "title": title,
+            "sources": sources,
+            "beats": beats,
+        }
+
+    if kind == "domain":
+        beats: list[dict[str, Any]] = []
+        for entity in diagram.get("entities") or []:
+            if not isinstance(entity, dict):
+                continue
+            beat: dict[str, Any] = {
+                "type": "domain_entity",
+                "name": clean_display_text(str(entity.get("name") or ""))[:24],
+                "source_refs": ["s1"],
+            }
+            description = clean_display_text(str(entity.get("description") or ""))
+            group = clean_display_text(str(entity.get("group") or ""))
+            if description:
+                beat["description"] = description[:60]
+            if group:
+                beat["group"] = group[:20]
+            beats.append(beat)
+        for relation in diagram.get("relations") or []:
+            if not isinstance(relation, dict):
+                continue
+            beat = {
+                "type": "domain_relation",
+                "from": clean_display_text(str(relation.get("from") or ""))[:24],
+                "to": clean_display_text(str(relation.get("to") or ""))[:24],
+                "source_refs": ["s1"],
+            }
+            label = clean_display_text(str(relation.get("label") or ""))
+            if label:
+                beat["label"] = label[:16]
+            beats.append(beat)
+        if len([beat for beat in beats if beat["type"] == "domain_entity"]) < 2:
+            return None
+        return {
+            "schema_version": "1.0",
+            "scene_kind": "domain",
+            "output_format": "mp4",
+            "template": "domain_map_v1",
+            "title": title,
+            "sources": sources,
+            "beats": beats,
+        }
 
     if kind == "flow":
         steps = [s for s in (diagram.get("steps") or []) if isinstance(s, str)][:MAX_FLOW_STEPS]
@@ -370,7 +397,7 @@ def _scene_spec_from(
             "output_format": "mp4",
             "template": "data_flow_v1",
             "title": title,
-            "sources": [source],
+            "sources": sources,
             "beats": beats,
         }
 
@@ -390,7 +417,7 @@ def _scene_spec_from(
         "output_format": "mp4",
         "template": "step_explanation",
         "title": title,
-        "sources": [source],
+        "sources": sources,
         "beats": beats,
     }
 
@@ -412,11 +439,16 @@ def build_scenes(
     outlines: list[DocumentOutline],
     *,
     docs_dir: Path,
+    strict: bool = False,
 ) -> PlanResult:
     """検証済み台本から `VideoProjectSpec.scenes` を組む。
 
-    **SceneSpec は必ず `validate_scene_spec` を通す。** 通らないシーンは
-    落として warning にする（動画全体は失敗させない）。
+    **SceneSpec は必ず `validate_scene_spec` を通す。**
+
+    `strict=False`（無人経路の既定）では、通らないシーンを落として warning にする
+    （1シーンの不備で動画全体を失敗させない）。`strict=True`（作者がいる経路）では
+    落とさずにエラーとして返す。作者にとっては「黙って消えたシーン」より
+    「どこがなぜ描けないか」の方が要るため。
     """
     if not draft_result.ok or draft_result.draft is None:
         return PlanResult(
@@ -429,18 +461,42 @@ def build_scenes(
     scenes: list[dict[str, Any]] = []
     used: set[str] = set()
     warnings = list(draft_result.warnings)
+    errors: list[dict[str, str]] = []
 
     for scene in draft_result.draft["scenes"]:
         scene_spec = _scene_spec_from(scene, outline_by_path, docs_dir)
         if scene_spec is None:
-            warnings.append(f"{scene['id']}: 描画できる内容が無いため除外しました")
+            if strict:
+                errors.append(
+                    {
+                        "sceneId": scene["id"],
+                        "path": f"scenes[{scene['id']}]",
+                        "code": "EMPTY_SCENE",
+                        "message": "描画できる内容がありません",
+                    }
+                )
+            else:
+                warnings.append(f"{scene['id']}: 描画できる内容が無いため除外しました")
             continue
         validated = validate_scene_spec(scene_spec)
         if not validated.ok:
-            warnings.append(
-                f"{scene['id']}: SceneSpec 検証に失敗したため除外しました "
-                f"({validated.errors[0].code})"
-            )
+            if strict:
+                errors.extend(
+                    {
+                        "sceneId": scene["id"],
+                        "path": f"scenes[{scene['id']}].{error.path}"
+                        if error.path
+                        else scene["id"],
+                        "code": error.code,
+                        "message": error.message,
+                    }
+                    for error in validated.errors
+                )
+            else:
+                warnings.append(
+                    f"{scene['id']}: SceneSpec 検証に失敗したため除外しました "
+                    f"({validated.errors[0].code})"
+                )
             continue
         for source in scene_spec.get("sources") or []:
             used.add(source["path"])
@@ -459,6 +515,8 @@ def build_scenes(
                 entry[key] = scene_spec[key]
         scenes.append(entry)
 
+    if errors:
+        return PlanResult(ok=False, errors=errors, warnings=warnings)
     if not scenes:
         return PlanResult(
             ok=False,
@@ -478,109 +536,193 @@ def build_scenes(
     )
 
 
-def plan_video(
+#: エラーコードごとの直し方。エージェントが検証結果だけを見て自力で直せるように、
+#: 「何が悪いか」に加えて「どう直すか」を必ず添える。
+FIX_HINTS: dict[str, str] = {
+    "EMPTY_SCENE": "そのシーンに描ける中身がありません。diagram の points / items / steps か、"
+    "on_screen_text を埋めてください",
+    "INVALID_SCRIPT_DRAFT": "台本の形が ScriptDraft と合っていません。scenes[] の各要素に "
+    "id / role / title を入れてください",
+    "MISSING_SOURCE_REF": "事実を述べる beat には source_refs が要ります。装飾なら "
+    "decorative: true を付けてください",
+    "UNKNOWN_SOURCE_REF": "存在しない出典 id を参照しています。sources に無い id は使えません",
+    "TOO_MANY_BEATS": "1シーンに載せすぎです。シーンを分けてください",
+    "INVALID_BEAT_TYPE": "その scene_kind では使えない beat 種別です。list_scene_kinds で"
+    "使える beat を確認してください",
+    "TEXT_TOO_LONG": "画面に収まりません。短く言い換えてください",
+    "INVALID_SCENE_SPEC": "SceneSpec の制約に反しています。list_scene_kinds の上限"
+    "（要素数・文字数）を確認してください",
+    "MARKUP_IN_VIDEO_TEXT": "Markdown / HTML の断片が残っています。素のテキストにしてください",
+    "FORBIDDEN_VIDEO_HEADING": "「凡例」「目次」など資料の構造見出しは動画に出せません。"
+    "内容を表す見出しに書き換えてください",
+    "CONTEXTLESS_SECTION_NUMBER": "章番号だけの見出しは意味が伝わりません。内容を書いてください",
+    "MISSING_STORY_TOPIC": "story_requirements で宣言した必須テーマが台本に出てきません。"
+    "触れるか、要件から外してください",
+    "MISSING_REQUIRED_SCENE_KIND": "宣言した必須シーン種別がありません。該当する種別の"
+    "シーンを足してください",
+    "INVALID_STORY_SCENE_COUNT": "宣言したシーン数の範囲から外れています",
+    "SOURCE_OUTSIDE_TARGET_PERIOD": "宣言した対象期間の外の資料を引いています",
+    "INVALID_SOUND_EVENT_COUNT": "宣言した効果音イベント数の範囲から外れています",
+    "INSUFFICIENT_SOURCES": "読み取れる Markdown がありません。inputs を見直してください",
+    "UNKNOWN_IMAGE_ASSET": "未登録の画像を参照しています。image_assets に登録してから "
+    "asset_id で参照してください",
+}
+
+#: 直し方が分からないコードに使う汎用の案内。
+DEFAULT_FIX_HINT = "検証エラーの message を読んで該当箇所を直してください"
+
+
+def fix_hint_for(code: str | None) -> str:
+    return FIX_HINTS.get(str(code or ""), DEFAULT_FIX_HINT)
+
+
+@dataclass(frozen=True, slots=True)
+class AuthorResult:
+    """作者（エージェント）が書いた台本の受け入れ結果。"""
+
+    ok: bool
+    scenes: list[dict[str, Any]] = field(default_factory=list)
+    sound_events: list[dict[str, Any]] = field(default_factory=list)
+    used_paths: set[str] = field(default_factory=set)
+    warnings: list[str] = field(default_factory=list)
+    #: `{sceneId?, path, code, message, fixHint}`。作者が自力で直せる粒度で返す。
+    errors: list[dict[str, str]] = field(default_factory=list)
+    #: シーンごとの `{id, kind, role, title, captionChars, estimatedSec}`。
+    scene_estimates: list[dict[str, Any]] = field(default_factory=list)
+    estimated_duration_sec: float = 0.0
+    duration_plan: dict[str, Any] | None = None
+
+
+def _with_fix_hints(errors: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {**error, "fixHint": error.get("fixHint") or fix_hint_for(error.get("code"))}
+        for error in errors
+    ]
+
+
+def _estimate_scenes(scenes: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], float]:
+    """テロップ量からシーン別の尺を見積もる（ナレーション音声は無い）。"""
+    estimates: list[dict[str, Any]] = []
+    total = 0.0
+    for scene in scenes:
+        text = (scene.get("narration") or {}).get("text") or ""
+        seconds = estimate_caption_duration(text)
+        total += seconds
+        estimates.append(
+            {
+                "id": scene.get("id"),
+                "kind": scene.get("kind"),
+                "role": scene.get("role"),
+                "title": scene.get("title"),
+                "captionChars": caption_chars(text),
+                "estimatedSec": seconds,
+                "sourcePaths": sorted(
+                    {
+                        str(source.get("path"))
+                        for source in (scene.get("scene_spec") or {}).get("sources") or []
+                    }
+                ),
+            }
+        )
+    return estimates, round(total, 2)
+
+
+def author_script(
+    raw_draft: dict[str, Any],
     resolved_inputs: list[ResolvedInput],
     *,
     docs_dir: Path,
-    title: str,
-    purpose: str | None = None,
-    chat_fn: Any | None = None,
     target_duration_sec: dict[str, float] | None = None,
-) -> tuple[PlanResult, dict[str, Any] | None]:
-    """題材から台本を作り、SceneSpec まで組む。
+    story_requirements: dict[str, Any] | None = None,
+    strict: bool = True,
+) -> AuthorResult:
+    """作者が書いた台本を検証し、`VideoProjectSpec.scenes` まで組む。
 
-    `chat_fn` が無ければ**ルールベース**で組む（外部設定はブロッカーにしない）。
-    LLM を使う場合も出力は `validate_script_draft` を必ず通す。
+    **台本をそのまま描画はしない。** 経路はルールベースの下書きと完全に同じ:
 
-    `target_duration_sec` を渡すと**目標尺から逆算した章立て**で組む。
-    関連情報だけでは目標尺に届かない場合は `INSUFFICIENT_CONTENT_FOR_DURATION`
-    を返して止まる（水増しした説明で尺を埋めない）。
+    ```
+    ScriptDraft（作者）
+      → validate_script_draft（出典不良の主張を落とす）
+      → build_scenes → validate_scene_spec（SceneSpec 1.0 として検証）
+      → validate_story_content（レンダリング前の意味品質検査）
+    ```
+
+    出典の `content_hash` は作者から受け取らない。作者が宣言した `{path, start, end}`
+    から実ファイルを読んで計算する（作者が書いたハッシュを信じると、文書が変わっても
+    検証を素通りしてしまう）。
     """
-    outlines = [o for o in (outline_document(docs_dir, i) for i in resolved_inputs) if o]
+    outlines = [o for o in (outline_document(docs_dir, item) for item in resolved_inputs) if o]
     if not outlines:
-        return (
-            PlanResult(
-                ok=False,
-                errors=[
+        return AuthorResult(
+            ok=False,
+            errors=_with_fix_hints(
+                [
                     {
                         "path": "inputs",
                         "code": "INSUFFICIENT_SOURCES",
                         "message": "読み取れる Markdown がありません",
                     }
-                ],
+                ]
             ),
-            None,
         )
 
-    # 明示主入力を先頭へ（本編の骨格にするため）
-    primary = [i for i in resolved_inputs if i.selection == SELECTION_EXPLICIT_PRIMARY]
-    primary_paths = {i.path for i in primary}
+    primary_paths = {i.path for i in resolved_inputs if i.selection == SELECTION_EXPLICIT_PRIMARY}
     outlines.sort(key=lambda o: (o.path not in primary_paths, o.path))
 
-    raw_draft: dict[str, Any] | None = None
-    warnings: list[str] = []
-    if chat_fn is not None:
-        try:
-            raw = chat_fn(outlines=outlines, title=title, purpose=purpose)
-            parsed, error = parse_llm_draft(raw) if isinstance(raw, str) else (raw, None)
-            if error:
-                warnings.append(f"LLM 応答を解釈できないためルールベースへ切り替えます: {error}")
-            else:
-                raw_draft = parsed
-        except Exception as exc:  # noqa: BLE001 - provider の失敗で動画生成を止めない
-            warnings.append(f"LLM が利用できないためルールベースへ切り替えます: {exc}")
-
     duration_plan = None
-    if raw_draft is None and target_duration_sec is not None:
-        # 目標尺から逆算した章立て。素材が足りなければここで止まる
-        # （入力文書を機械的に増やして尺を埋めることはしない）。
-        duration_plan = plan_duration(
-            target_duration_sec, available_materials=count_materials(outlines)
-        )
-        if not duration_plan.ok:
-            return (
-                PlanResult(
-                    ok=False,
-                    errors=[
-                        {
-                            "path": "format.target_duration_sec",
-                            "code": duration_plan.code or "INVALID_VIDEO_SPEC",
-                            "message": duration_plan.message or "",
-                        }
-                    ],
-                    warnings=warnings,
-                    duration_plan=duration_plan.to_dict(),
-                ),
-                None,
-            )
-        warnings.extend(duration_plan.warnings)
-        raw_draft = build_chaptered_draft(outlines, duration_plan, title=title, purpose=purpose)
-
-    if raw_draft is None:
-        raw_draft = plan_draft_from_documents(outlines, title=title, purpose=purpose)
+    if target_duration_sec is not None:
+        # 尺の目安（何シーン・テロップ何字）を作者へ返すためだけに使う。
+        # 「素材が足りるか」の門番はルールベースで組み立てていたとき固有の関心なので、
+        # ここでは見ない（何を語るかは作者が決める）。
+        duration_plan = plan_duration(target_duration_sec)
 
     validated = validate_script_draft(raw_draft, source_ids={"s1"})
-    result = build_scenes(validated, outlines, docs_dir=docs_dir)
-    return (
-        PlanResult(
-            ok=result.ok,
+    result = build_scenes(validated, outlines, docs_dir=docs_dir, strict=strict)
+    if not result.ok:
+        return AuthorResult(
+            ok=False,
+            warnings=result.warnings,
+            errors=_with_fix_hints(result.errors),
+            duration_plan=duration_plan.to_dict() if duration_plan else None,
+        )
+
+    semantic_errors = validate_story_content(
+        result.scenes, result.sound_events, requirements=story_requirements
+    )
+    estimates, total_sec = _estimate_scenes(result.scenes)
+    if semantic_errors:
+        return AuthorResult(
+            ok=False,
             scenes=result.scenes,
             sound_events=result.sound_events,
             used_paths=result.used_paths,
-            warnings=[*warnings, *result.warnings],
-            errors=result.errors,
+            warnings=result.warnings,
+            errors=_with_fix_hints(semantic_errors),
+            scene_estimates=estimates,
+            estimated_duration_sec=total_sec,
             duration_plan=duration_plan.to_dict() if duration_plan else None,
-        ),
-        raw_draft,
+        )
+
+    return AuthorResult(
+        ok=True,
+        scenes=result.scenes,
+        sound_events=result.sound_events,
+        used_paths=result.used_paths,
+        warnings=result.warnings,
+        scene_estimates=estimates,
+        estimated_duration_sec=total_sec,
+        duration_plan=duration_plan.to_dict() if duration_plan else None,
     )
 
 
 __all__ = [
+    "DEFAULT_FIX_HINT",
+    "FIX_HINTS",
+    "AuthorResult",
     "DocumentOutline",
     "PlanResult",
+    "author_script",
     "build_scenes",
+    "fix_hint_for",
     "outline_document",
-    "parse_llm_draft",
-    "plan_draft_from_documents",
-    "plan_video",
 ]

@@ -8,8 +8,10 @@
 `INSUFFICIENT_CONTENT_FOR_DURATION` を返して止まる —— 水増しした説明で尺を
 埋めるのは、出典必須ポリシー（KB に無いことを描かない）と正面から衝突する。
 
-日本語ナレーション速度は `tts_provider.CHARS_PER_SECOND` を**唯一の正本**として
-参照する。ここで別の定数を置くと、見積もりと実測がずれた原因を追えなくなる。
+文字量の見積もりは `caption_timing.READING_CHARS_PER_SECOND` を**唯一の正本**として
+参照する。ナレーション音声は無く、台本の文はテロップとして画面に出るので、基準は
+「喋る速さ」ではなく「読める速さ」。読み上げ速度で割り当てると、視聴者が読み切れない
+量のテロップを載せた構成が「目標尺どおり」として通ってしまう。
 
 純関数のみ（ファイルにも DB にも触れない）。
 """
@@ -18,7 +20,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from abist_kb.infrastructure.video.tts_provider import CHARS_PER_SECOND
+from abist_kb.application.video.caption_timing import (
+    READING_CHARS_PER_SECOND as CHARS_PER_SECOND,
+)
 
 #: 役割ごとの尺の配分。合計 1.0。
 #:
@@ -110,10 +114,10 @@ class DurationPlan:
 
 
 def narration_chars_for(seconds: float) -> int:
-    """尺（秒）に対するナレーション目標文字数。
+    """尺（秒）に対するテロップの目標文字数。
 
-    `CHARS_PER_SECOND`（= 6.5 文字/秒 ≒ 390 文字/分）を正本とし、
-    間の分だけ `NARRATION_FILL_RATIO` で割り引く。
+    `READING_CHARS_PER_SECOND`（= 4.5 文字/秒 ≒ 270 文字/分の黙読）を正本とし、
+    間・図の見せ場の分だけ `NARRATION_FILL_RATIO` で割り引く。
     """
     return max(0, int(seconds * NARRATION_FILL_RATIO * CHARS_PER_SECOND))
 

@@ -49,7 +49,7 @@ def render_video_job_handler(run: JobRunContext) -> None:
 
     `run.job.params` のキー:
     `project_dir` / `docs_dir` / `repo_root` / `reports_dir`（str）、
-    任意で `tts` / `sound_intensity` / `capture_profile` / `manual_audio_dir`。
+    任意で `sound_intensity` / `capture_profile`。
 
     既存プロジェクト（`project-spec.json` がある）を描画する経路と、
     入力から作り直す経路の両方を1本のハンドラで扱う。
@@ -81,12 +81,8 @@ def render_video_job_handler(run: JobRunContext) -> None:
         docs_dir=docs_dir,
         repo_root=repo_root,
         reports_dir=reports_dir,
-        tts=str(params.get("tts") or "none"),
         sound_intensity=str(params.get("sound_intensity") or "subtle"),
         capture_profile=params.get("capture_profile"),
-        manual_audio_dir=(
-            Path(params["manual_audio_dir"]) if params.get("manual_audio_dir") else None
-        ),
         should_cancel=run.cancel_requested,
         on_progress=lambda phase, current, _total, message: run.emit(
             phase=phase, current=current, total=total, message=message

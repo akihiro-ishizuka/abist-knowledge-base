@@ -79,6 +79,23 @@ def scene_spec_digest(scene_spec: dict[str, Any]) -> str:
     return sha256_text(json.dumps(scene_spec, ensure_ascii=False, sort_keys=True))
 
 
+def scene_content_digest(scene: dict[str, Any]) -> str:
+    """シーンが**視聴者に見せるもの**全体のハッシュ。
+
+    `scene_spec_digest` は Manim が描く中身だけを見る（再描画が要るかの判定）。
+    こちらはテロップ文と画面テキストも含める —— ナレーション文は焼き込まれる
+    テロップなので、それが変われば完成した動画は変わる。台本を差し替えた作者へ
+    「どのシーンが変わったか」を返すのはこちら。
+    """
+    payload = {
+        "scene_spec": scene.get("scene_spec") or {},
+        "narration": (scene.get("narration") or {}).get("text"),
+        "on_screen_text": scene.get("on_screen_text") or [],
+        "title": scene.get("title"),
+    }
+    return sha256_text(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+
+
 def plan_resume(project_dir: Path, *, force_scene_ids: set[str] | None = None) -> ResumePlan:
     """既存の成果物のうち、どれを再利用できるかを判定する。"""
     spec = load_project(project_dir)
@@ -147,5 +164,6 @@ __all__ = [
     "plan_resume",
     "record_scene_digest",
     "savings",
+    "scene_content_digest",
     "scene_spec_digest",
 ]

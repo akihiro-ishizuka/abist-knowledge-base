@@ -158,6 +158,21 @@ class TestChaptersAndMetadata:
         assert chapters[0].start_sec == 0.0
         assert [c.start_sec for c in chapters] == sorted(c.start_sec for c in chapters)
 
+    def test_scene_title_does_not_secretly_become_a_chapter(self) -> None:
+        """顧客名で始まる本編シーンを章扉に格上げしない。
+
+        以前は「設計効率化」+「2026」というタイトルのときだけ、顧客名リテラルで
+        始まるシーンを章として拾っていた。章は kind / role からのみ決まる。
+        """
+        scenes = [
+            {"id": "s01", "kind": "title", "title": "表紙", "scene_spec": {"beats": []}},
+            {"id": "s02", "kind": "key_points", "title": "三桜工業様の進捗", "scene_spec": {}},
+        ]
+        chapters = build_chapters(
+            scenes, {"s01": 0.0, "s02": 8.0}, title="設計効率化 2026年活動まとめ"
+        )
+        assert [c.title for c in chapters] == ["はじめに（設計効率化 2026年活動まとめ）"]
+
     def test_timestamps_are_formatted_for_manual_upload(self) -> None:
         chapters = build_chapters(_spec()["scenes"], {"s02": 65.0, "s04": 3725.0}, title="t")
         stamps = [c.timestamp for c in chapters]
@@ -250,6 +265,84 @@ class TestQa:
         report = run_qa(project, spec=_spec())
         assert "preview_approval" in report.human_required
         assert "public_candidate_review" in report.human_required
+
+    def test_captions_must_be_burned_in_for_a_silent_video(self, project: Path) -> None:
+        """無音で観る動画なのに画面へ字幕が出ていないのは欠陥。"""
+        spec = _spec(
+            subtitles={"srt": "subtitles/narration.srt", "burned_in": False, "cue_count": 3}
+        )
+        report = run_qa(project, spec=spec)
+        check = next(c for c in report.checks if c.id == "captions")
+        assert check.status == STATUS_FAIL
+
+    def test_burned_in_captions_pass(self, project: Path) -> None:
+        spec = _spec(
+            subtitles={"srt": "subtitles/narration.srt", "burned_in": True, "cue_count": 3}
+        )
+        report = run_qa(project, spec=spec)
+        check = next(c for c in report.checks if c.id == "captions")
+        assert check.status == STATUS_PASS
+
+    def test_missing_cues_for_narrated_scenes_fails(self, project: Path) -> None:
+        """テロップ文があるのにキューが0枚なら、字幕が作れていない。"""
+        spec = _spec(
+            subtitles={"srt": "subtitles/narration.srt", "burned_in": True, "cue_count": 0}
+        )
+        report = run_qa(project, spec=spec)
+        check = next(c for c in report.checks if c.id == "captions")
+        assert check.status == STATUS_FAIL
+
+    def _silent_probe(self, project: Path, monkeypatch) -> None:
+        """無音の 1920x1080/30fps 動画があることにする（ffprobe を叩かない）。"""
+        from types import SimpleNamespace
+
+        (project / "output.mp4").write_bytes(b"fake")
+        monkeypatch.setattr(
+            "abist_kb.application.video.qa.probe",
+            lambda _path: SimpleNamespace(
+                duration_sec=150.0, width=1920, height=1080, fps=30.0, has_audio=False
+            ),
+        )
+
+    def test_silent_output_is_not_a_defect_without_sound_events(
+        self, project: Path, monkeypatch
+    ) -> None:
+        """効果音を求めていないなら、音声ストリームが無くても正常。"""
+        self._silent_probe(project, monkeypatch)
+        report = run_qa(project, spec=_spec(sound_events=[]))
+        check = next(c for c in report.checks if c.id == "has_audio")
+        assert check.status == STATUS_PASS
+
+    def test_requested_sound_that_never_landed_is_a_defect(
+        self, project: Path, monkeypatch
+    ) -> None:
+        """効果音を指定したのに音が乗っていないなら合成に失敗している。"""
+        self._silent_probe(project, monkeypatch)
+        spec = _spec(
+            sound_events=[{"scene_id": "s03", "event": "key_point", "anchor": "scene.start"}]
+        )
+        report = run_qa(project, spec=spec)
+        check = next(c for c in report.checks if c.id == "has_audio")
+        assert check.status == STATUS_FAIL
+
+    def test_title_no_longer_triggers_a_hidden_sound_count_check(self, project: Path) -> None:
+        """タイトルが「設計効率化 2026」でも、要件を宣言しなければ音数は問われない。"""
+        report = run_qa(project, spec=_spec(title="設計効率化 2026年活動まとめ"))
+        assert not any(c.id == "story_requirements" for c in report.checks)
+
+    def test_declared_sound_event_range_is_enforced(self, project: Path) -> None:
+        """spec が音数の範囲を宣言したら、実際のキュー数がそれを満たすか検査する。"""
+        spec = _spec(story_requirements={"sound_events": {"min": 14, "max": 18}})
+        report = run_qa(project, spec=spec)
+        check = next(c for c in report.checks if c.id == "story_requirements")
+        assert check.status == STATUS_FAIL
+        assert "14" in check.detail
+
+    def test_satisfied_sound_event_range_passes(self, project: Path) -> None:
+        spec = _spec(story_requirements={"sound_events": {"min": 1, "max": 3}})
+        report = run_qa(project, spec=spec)
+        check = next(c for c in report.checks if c.id == "story_requirements")
+        assert check.status == STATUS_PASS
 
     def test_report_round_trips(self, project: Path) -> None:
         report = run_qa(project, spec=_spec())

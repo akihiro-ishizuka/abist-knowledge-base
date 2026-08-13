@@ -26,6 +26,7 @@ from abist_kb.application.video.project_store import (
     write_state,
 )
 from abist_kb.application.visualization.renderer import render_scene
+from abist_kb.domain.video_project_spec import DEFAULT_VIDEO_QUALITY, VIDEO_QUALITIES
 from abist_kb.infrastructure.video.artifact_store import (
     MANIFEST_FILE,
     scene_dir,
@@ -50,6 +51,8 @@ class SceneRender:
     duration_sec: float | None = None
     code: str | None = None
     message: str | None = None
+    #: beat が画面に出た実時刻（秒）。効果音の beat アンカーの土台になる。
+    beat_times: list[float] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,11 +78,24 @@ def _scene_spec_for(scene: dict[str, Any], spec: dict[str, Any]) -> dict[str, An
     fmt = spec.get("format") or {}
     enriched = {**scene_spec}
     enriched.setdefault("output_format", "mp4")
-    if fmt.get("width") in (2560, 1440):
-        enriched.setdefault("quality", "high")
-    else:
-        enriched.setdefault("quality", "standard")
+    # 品質段はプロジェクトが宣言したものを使う。以前は `format.width` から推測して
+    # いたため、パイプラインが standard の寸法しか組まない限り high へ到達できなかった。
+    quality = fmt.get("quality")
+    enriched["quality"] = quality if quality in VIDEO_QUALITIES else DEFAULT_VIDEO_QUALITY
     enriched["frame"] = {"aspect_ratio": fmt.get("aspect_ratio") or "16:9"}
+    # 見た目に関わる設定はプロジェクトが決め、全シーンへ揃えて配る。
+    # シーンごとにテーマや繋ぎが変わると1本の動画として成立しない。
+    for key in ("theme", "motion"):
+        value = fmt.get(key)
+        if value is not None:
+            enriched[key] = value
+    transition = fmt.get("transition")
+    if isinstance(transition, dict):
+        enriched["transition"] = transition
+    # 章ごとにアクセント色を回す（同じ見た目が続くと章の変わり目が伝わらない）。
+    chapter_index = scene.get("chapter_index")
+    if isinstance(chapter_index, int) and not isinstance(chapter_index, bool):
+        enriched["accent_index"] = chapter_index
     # 尺の下限はシーン側（台本が決めた読み上げ時間）を尊重する
     minimum = scene.get("min_duration_sec")
     if isinstance(minimum, int | float) and not isinstance(minimum, bool) and minimum > 0:
@@ -186,7 +202,13 @@ def render_project(
 
         info = probe(produced)
         results.append(
-            SceneRender(scene_id=scene_id, ok=True, video=produced, duration_sec=info.duration_sec)
+            SceneRender(
+                scene_id=scene_id,
+                ok=True,
+                video=produced,
+                duration_sec=info.duration_sec,
+                beat_times=list(outcome.beat_times),
+            )
         )
         videos.append(produced)
         warnings.extend(outcome.warnings)

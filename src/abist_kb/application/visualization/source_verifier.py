@@ -89,6 +89,9 @@ _PRUNABLE_BEAT_TYPES = (
     "code",
     "formula",
     "image",
+    # グラフの数値。出典が食い違ったまま棒を描くと、根拠のない図が
+    # 「出典つき」の顔をして出てしまう。
+    "chart_series",
 )
 
 #: 「ノードを名乗る beat type」-> 「それを参照するエッジの beat type」。

@@ -105,7 +105,7 @@ def build_thumbnail(
     """`thumbnail.png` と候補フレームを作る。
 
     1. 各章の先頭から候補フレームを抜く（人が選び直せるように残す）
-    2. タイトルカード付近（2 秒地点）を本採用にする
+    2. タイトル表示が完了した後（4 秒地点）を本採用にする
     3. どれも失敗したら黒背景の PNG を書く（**必ず成果物を残す**）
     """
     warnings: list[str] = []
@@ -136,7 +136,11 @@ def build_thumbnail(
         if extract_frame(video, float(at) + 1.5, shot):
             candidates.append(shot)
 
-    if extract_frame(video, min(2.0, max(0.0, total - 0.5)), target):
+    # 本編が始まってから抜く。表紙は題字だけなので、一覧に並べても中身が伝わらない。
+    # 章があればその頭、無ければ全体の 3 割地点。
+    body_start = next((float(c.get("start_sec", 0.0)) for c in (chapters or []) if c), total * 0.3)
+    title_at = max(0.0, min(body_start + total * 0.1, max(0.0, total - 0.5)))
+    if extract_frame(video, title_at, target):
         size = probe(target)
         width = size.width or info.width or 0
         height = size.height or info.height or 0

@@ -45,6 +45,27 @@ ASPECT_RATIOS: tuple[str, ...] = ("16:9", "9:16")
 ASPECT_DIMENSIONS: dict[str, tuple[int, int]] = {"16:9": (16, 9), "9:16": (9, 16)}
 #: 縦型（Shorts）の尺上限。これを超える縦型動画は視聴面の前提が崩れる。
 SHORTS_MAX_DURATION_SEC = 180.0
+
+#: 品質段。**画素寸法の段だけ**を決める（アスペクト比は `format.aspect_ratio` の担当）。
+VIDEO_QUALITIES: tuple[str, ...] = ("draft", "standard", "high")
+DEFAULT_VIDEO_QUALITY = "standard"
+#: アスペクト比 x 品質 の画素寸法。
+#: `tools/visualize/templates/layout.FRAME_PIXELS` の写し（別 venv のため import
+#: できない）。ずれるとレンダリング結果と契約が食い違うので整合テストで縛る。
+FRAME_PIXELS: dict[str, dict[str, tuple[int, int]]] = {
+    "16:9": {"draft": (1280, 720), "standard": (1920, 1080), "high": (2560, 1440)},
+    "9:16": {"draft": (720, 1280), "standard": (1080, 1920), "high": (1440, 2560)},
+}
+#: 品質段ごとのフレームレート（`tools/visualize/render_scene.py` の写し）。
+QUALITY_FRAME_RATES: dict[str, int] = {"draft": 30, "standard": 30, "high": 60}
+
+
+def frame_pixels(aspect_ratio: str, quality: str) -> tuple[int, int]:
+    """アスペクト比と品質から画素寸法を返す（未知の値は既定へ落とす）。"""
+    table = FRAME_PIXELS.get(aspect_ratio, FRAME_PIXELS["16:9"])
+    return table.get(quality, table[DEFAULT_VIDEO_QUALITY])
+
+
 CLASSIFICATIONS: tuple[str, ...] = ("internal", "confidential", "public_candidate_pending")
 REVIEW_STATUSES: tuple[str, ...] = (
     "not_requested",
@@ -327,6 +348,56 @@ def _validate_distribution(spec: dict[str, Any], errors: list[VideoSpecError]) -
         )
 
 
+def _validate_story_requirements(spec: dict[str, Any], errors: list[VideoSpecError]) -> None:
+    """作者が自己申告する構成要件を検証する。
+
+    かつては動画タイトルの部分一致で必須テーマ・シーン数・出典期間を暗黙に強制して
+    いた。同種のタイトルを持つ別動画が誤った要件を継承してしまうため、要件は spec 側の
+    宣言に移した（`content_quality.validate_story_content` が執行する）。
+    全フィールド任意。宣言しなければ汎用チェックだけが走る。
+    """
+    requirements = spec.get("story_requirements")
+    if requirements is None:
+        return
+    if not _is_obj(requirements):
+        errors.append(
+            VideoSpecError("story_requirements", "invalid", "story_requirements はオブジェクトです")
+        )
+        return
+
+    for key in ("required_topics", "required_scene_kinds"):
+        values = requirements.get(key)
+        if values is not None and not _is_str_list(values):
+            errors.append(
+                VideoSpecError(f"story_requirements.{key}", "invalid", f"{key} は文字列配列です")
+            )
+
+    for key in ("scene_count", "sound_events"):
+        span = requirements.get(key)
+        if span is None:
+            continue
+        at = f"story_requirements.{key}"
+        if not _is_obj(span):
+            errors.append(VideoSpecError(at, "invalid", f"{key} は min / max を持つ範囲です"))
+            continue
+        low, high = span.get("min"), span.get("max")
+        if not all(isinstance(v, int) and not isinstance(v, bool) and v >= 0 for v in (low, high)):
+            errors.append(VideoSpecError(at, "invalid", "min / max は 0 以上の整数です"))
+        elif low > high:
+            errors.append(VideoSpecError(at, "invalid", "min は max 以下です"))
+
+    pattern = requirements.get("source_path_pattern")
+    if pattern is not None:
+        at = "story_requirements.source_path_pattern"
+        if not isinstance(pattern, str) or not pattern:
+            errors.append(VideoSpecError(at, "invalid", "source_path_pattern は文字列です"))
+        else:
+            try:
+                re.compile(pattern)
+            except re.error as exc:
+                errors.append(VideoSpecError(at, "invalid", f"正規表現として解釈できません: {exc}"))
+
+
 def _validate_sources(spec: dict[str, Any], errors: list[VideoSpecError]) -> None:
     """`sources` は解決後にのみ入る。空でも valid（Phase 1 では未解決の spec を許す）。"""
     sources = spec.get("sources")
@@ -419,6 +490,7 @@ def fill_defaults(spec: dict[str, Any]) -> dict[str, Any]:
     filled.setdefault("scenes", [])
     filled.setdefault("sound_events", [])
     filled.setdefault("sources", [])
+    filled.setdefault("story_requirements", None)
 
     inputs = {**default_inputs(), **(filled.get("inputs") or {})}
     filled["inputs"] = inputs
@@ -458,6 +530,7 @@ def validate_video_project_spec(spec: Any) -> VideoSpecResult:
     _validate_format(filled, errors)
     _validate_distribution(filled, errors)
     _validate_sources(filled, errors)
+    _validate_story_requirements(filled, errors)
 
     # 機密ソースがあれば public_candidate を強制的に下げる（審査提出の誤爆防止）
     dist = filled.get("distribution") or {}
@@ -478,6 +551,11 @@ def validate_video_project_spec(spec: Any) -> VideoSpecResult:
 __all__ = [
     "ASPECT_DIMENSIONS",
     "ASPECT_RATIOS",
+    "DEFAULT_VIDEO_QUALITY",
+    "FRAME_PIXELS",
+    "QUALITY_FRAME_RATES",
+    "VIDEO_QUALITIES",
+    "frame_pixels",
     "DEFAULT_MAX_DOCS_PER_DIRECTORY",
     "DEFAULT_MAX_TOTAL_CANDIDATES",
     "MARKDOWN_SUFFIXES",

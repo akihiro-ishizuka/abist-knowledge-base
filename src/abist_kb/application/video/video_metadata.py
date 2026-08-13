@@ -67,7 +67,7 @@ def build_chapters(
     """
     chapters: list[Chapter] = []
     for scene in scenes:
-        if scene.get("kind") != "chapter":
+        if scene.get("kind") != "chapter" and scene.get("role") != "chapter":
             continue
         start = offsets.get(str(scene.get("id")))
         if start is None:
