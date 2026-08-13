@@ -252,26 +252,37 @@ def _check_manim() -> CheckResult:
     )
 
 
-#: TTS プロバイダを示す環境変数。未設定でも動画は作れる（none / 手動音声）ので warn。
-_TTS_ENV_VARS = ("ABIST_KB_TTS_PROVIDER", "AZURE_SPEECH_KEY", "GOOGLE_APPLICATION_CREDENTIALS")
+def _check_video_captions() -> CheckResult:
+    """テロップ焼き込みに要るフォントがあるか。
 
-
-def _check_video_tts() -> CheckResult:
-    """動画ナレーションの外部 TTS が設定されているか。
-
-    **未設定は fail にしない。** `none`（無音）・`silence`・手動音声で動画は
-    完成するので、これは「使える経路が増えるか」の情報にすぎない。
-    YouTube 認証の検査は行わない（自動投稿は実装しないため）。
+    **動画にナレーション音声は無い。** 台本の文はテロップとして映像へ焼き込まれ、
+    視聴者は音を切ったままでも内容を追える。だから外部 TTS の設定は検査しない
+    （そもそも使わない）。代わりに、焼き込みに使う日本語フォントの有無を見る。
+    YouTube 認証の検査も行わない（自動投稿は実装しないため）。
     """
-    configured = [name for name in _TTS_ENV_VARS if os.environ.get(name)]
-    if configured:
-        return _result("video_tts", "ok", f"TTS 設定を検出しました: {', '.join(configured)}")
+    from abist_kb.application.video.subtitles import BURN_IN_FONT_SIZE
+
+    font_dirs = [
+        Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "Fonts",
+        Path.home() / "AppData" / "Local" / "Microsoft" / "Windows" / "Fonts",
+    ]
+    found = any(
+        directory.is_dir() and any(directory.glob(pattern))
+        for directory in font_dirs
+        for pattern in ("YuGoth*", "meiryo*", "msgothic*")
+    )
+    if found:
+        return _result(
+            "video_captions",
+            "ok",
+            f"テロップ用の日本語フォントを検出しました（焼き込み {BURN_IN_FONT_SIZE['16:9']}pt）。",
+        )
     return _result(
-        "video_tts",
+        "video_captions",
         "warn",
-        "外部 TTS が未設定です（無音・手動音声での動画生成は可能です）。",
-        hint="音声を付けるなら TTS プロバイダを設定するか、"
-        "manual 音声ディレクトリを用意してください。",
+        "テロップ焼き込みに使う日本語フォント（Yu Gothic UI / Meiryo）が見つかりません。",
+        hint="フォントが無いと焼き込んだ字幕が豆腐になります。"
+        "KB_VISUALIZE_FONT で別のフォントを指定できます。",
     )
 
 
@@ -319,7 +330,7 @@ def _run_checks(settings: Settings) -> list[CheckResult]:
         _check_data_dir(settings),
         _check_ffmpeg(),
         _check_manim(),
-        _check_video_tts(),
+        _check_video_captions(),
         _check_video_capture(),
     ]
 

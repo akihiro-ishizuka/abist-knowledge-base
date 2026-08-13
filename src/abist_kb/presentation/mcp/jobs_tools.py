@@ -546,13 +546,10 @@ class JobTools:
             "docs_dir": str(self._docs_dir),
             "reports_dir": str(self._reports_dir),
             "repo_root": str(self._repo_root),
-            "tts": arguments.get("tts") or "none",
             "sound_intensity": arguments.get("sound_intensity") or "subtle",
         }
         if arguments.get("capture_profile"):
             params["capture_profile"] = str(arguments["capture_profile"])
-        if arguments.get("manual_audio_dir"):
-            params["manual_audio_dir"] = str(arguments["manual_audio_dir"])
         return self._start("start_render_video", params)
 
     # -- job_status -----------------------------------------------------------

@@ -120,10 +120,6 @@ screens:
   video:
     label: 動画
     actions:
-      video_plan:
-        label: 台本案の作成（保存しない）
-        destructive: false
-        surfaces: [mcp, api]
       video_create:
         label: 動画プロジェクト作成
         destructive: false

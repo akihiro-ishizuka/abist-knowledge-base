@@ -97,15 +97,22 @@ class VideoTargetDuration(BaseModel):
     max: float
 
 
-class VideoPlanRequest(BaseModel):
+class VideoCreateRequest(BaseModel):
+    """動画プロジェクトの作成要求。
+
+    **`script` は必須。** 台本はエージェントが書くもので、題材から機械生成する
+    経路は持たない（見出しや箇条書きを拾って組める類のものではなかった）。
+    """
+
     title: str
     inputs: VideoInputs
+    script: dict[str, Any]
     purpose: str | None = None
     target_duration_sec: VideoTargetDuration | None = None
-
-
-class VideoCreateRequest(VideoPlanRequest):
+    story_requirements: dict[str, Any] | None = None
+    image_assets: list[dict[str, Any]] | None = None
     aspect_ratio: str | None = None
+    quality: str | None = None
 
 
 class VideoApproveRequest(BaseModel):
@@ -522,13 +529,6 @@ def register_api_routes(
         )
 
     # --- 動画（video Phase 10）。**外部への送信は一切行わない** ---
-
-    @app.post(f"{router_prefix}/videos/plan")
-    async def video_plan(body: VideoPlanRequest, request: Request) -> dict[str, Any]:
-        return await run_locked(
-            request,
-            lambda: facade.video_plan(get_container(request), **body.model_dump(exclude_none=True)),
-        )
 
     @app.post(f"{router_prefix}/videos")
     async def video_create(body: VideoCreateRequest, request: Request) -> dict[str, Any]:

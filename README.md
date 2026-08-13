@@ -40,3 +40,35 @@ abist-kb index embed --corpus work   # 意味検索が要る場合
 | 対話・スクリプト | CLI `abist-kb`（Typer + Rich） |
 
 Web UI／TUI（NiceGUI／Textual）は削除済みです。`ui web`／`ui tui` コマンドはありません。
+
+## 動画生成
+
+`docs/` の Markdown から、章立ての社内動画（Manim シーン列 + テロップ + 効果音 + BGM）を
+作れます。成果物は `reports/videos/<id>/` に置かれる**手動アップロード用の一式**で、
+外部への自動投稿は行いません。
+
+**台本はエージェントが書きます。** 題材から台本を機械生成する経路はありません
+（何を語りどう見せるかは書き手の判断で、見出しや箇条書きを拾って組める類のもの
+ではありませんでした）。MCP `all` の `validate_video_script` →
+`create_video_project` → `start_render_video` → `get_video_preview` →
+`run_video_qa` が作成ループで、書き方は
+`.claude/skills/creating-kb-videos/SKILL.md` にあります。
+
+書いた台本を手元で描くときは CLI:
+
+```bash
+abist-kb video render --script script.json --min-sec 120 --max-sec 240
+abist-kb video qa <video_id>          # QA を再実行
+abist-kb video show <video_id>        # 成果物パスと配布判定
+```
+
+台本ファイルは `{title, inputs, script, story_requirements?, image_assets?}`。
+見本は `tests/video/fixtures/golden/activity_story.json`。
+
+設計の要点:
+
+- **ナレーション音声は無い。** 台本の文はテロップとして映像へ焼き込まれ、
+  音を切ったままでも内容が伝わる。音は効果音と BGM だけ
+- **出典必須。** 事実を述べる beat には出典が要り、`content_hash` は実ファイルから計算される
+- **効果音・BGM は社内制作**（`scripts/generate-video-*.py` で決定的に再生成できる）
+- 16:9 と 9:16（Shorts）、`draft` / `standard` / `high`（2560x1440・60fps）に対応

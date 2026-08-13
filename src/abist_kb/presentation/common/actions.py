@@ -748,11 +748,6 @@ def _unwrap(result: Any) -> dict[str, Any]:
     return payload
 
 
-def video_plan(container: ServiceContainer, **arguments: Any) -> dict[str, Any]:
-    """台本案を作る（保存しない）。"""
-    return _unwrap(_video_tools(container).plan_video(arguments))
-
-
 def video_create(container: ServiceContainer, **arguments: Any) -> dict[str, Any]:
     """動画プロジェクトを作る（描画はしない）。"""
     return _unwrap(_video_tools(container).create_video_project(arguments))

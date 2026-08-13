@@ -18,8 +18,10 @@ description: Use when turning knowledge-base content into a Manim 図解・ア�
 | --- | --- |
 | 素材を探す・原文を読む | `searching-kb`（search_kb / get_document） |
 | docs/ を最新化する | `downloading-kb-docs` |
-| 図解・アニメ生成 | **このスキル（kb-visualize MCP）** |
-| 数値データのグラフ・チャート | `dataviz` スキル |
+| 図解・アニメ生成（**1シーン**） | **このスキル（kb-visualize MCP）** |
+| 章立ての**動画**（複数シーン・テロップ・効果音・BGM） | `creating-kb-videos` スキル |
+| KB の数値を動画の中でグラフにする | `chart` scene_kind（このスキル） |
+| KB と関係ない数値の可視化 | `dataviz` スキル |
 
 ## ツール一覧
 
@@ -31,8 +33,13 @@ description: Use when turning knowledge-base content into a Manim 図解・ア�
 | `list_visualizations` | 過去の成果物を新しい順に一覧（自己修復つき） | `{ok, count, total, visualizations}` |
 | `get_visualization` | 成果物1件の詳細・出典検証結果・manifest | `{ok, visualization, sources, artifacts, manifest_drift}` |
 
-現在の scene_kind: `explain`（解説アニメ）/ `flow`（データフロー図）/ `timeline`（時系列）/
-`comparison`（比較表）/ `domain`（関係図）。予約済み・未実装の kind は無い。出力は `mp4`（アニメ）か `png`（静止画）。
+出力は `mp4`（アニメ）か `png`（静止画）。予約済み・未実装の kind は無い。
+**正確な一覧と制約は必ず `list_scene_kinds` で確認すること**（このドキュメントは要約）。
+
+図解の kind（5種）に加え、動画の構成要素として使うカード系の kind がある:
+`title` / `chapter` / `key_points` / `quote` / `summary` / `cta` / `ending` /
+`code` / `formula` / `image` / `chart` / `thumbnail`。
+単体でも描けるが、主用途は `creating-kb-videos` で組む章立て動画の1枚。
 
 | scene_kind | 使いどころ | 主な beat |
 | --- | --- | --- |

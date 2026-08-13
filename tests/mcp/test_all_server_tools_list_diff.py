@@ -42,8 +42,10 @@ _NEW_TOOL_NAMES = {
 #: ツールは fixture を書き換えるのではなく、ここへ**純増分として宣言**して許可する
 #: (`test_contract_visualize.py::_NEW_VISUALIZE_TOOL_NAMES` と同じ方式)。
 _NEW_VIDEO_TOOL_NAMES = {
-    "plan_video",
+    "validate_video_script",
     "create_video_project",
+    "update_video_script",
+    "get_video_preview",
     "start_render_video",
     "video_status",
     "get_video",

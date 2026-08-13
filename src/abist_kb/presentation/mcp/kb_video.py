@@ -17,6 +17,7 @@ fixture は1バイトも触らない。追加分は
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 from typing import Any
@@ -28,6 +29,8 @@ from abist_kb.application.video import catalog
 from abist_kb.application.video.approval import approve as run_approve
 from abist_kb.application.video.approval import verify_approval
 from abist_kb.application.video.capture_planner import list_profiles
+from abist_kb.application.video.contact_sheet import CONTACT_SHEET_FILE
+from abist_kb.application.video.content_quality import write_storyboard_review
 from abist_kb.application.video.distribution import (
     evaluate as evaluate_distribution,
 )
@@ -40,20 +43,31 @@ from abist_kb.application.video.distribution import (
 from abist_kb.application.video.distribution import (
     write_report as write_distribution_report,
 )
+from abist_kb.application.video.image_assets import (
+    attach_image_assets,
+    ingest_image_assets,
+    validate_image_asset_refs,
+)
 from abist_kb.application.video.input_resolver import resolve_inputs
+from abist_kb.application.video.pipeline import _format_for
 from abist_kb.application.video.project_store import (
+    STATE_DRAFT,
     create_project,
     load_project,
     read_state,
     save_project,
+    write_state,
 )
 from abist_kb.application.video.qa import load_report as load_qa_report
 from abist_kb.application.video.qa import run_qa, write_report
-from abist_kb.application.video.script_planner import plan_video
+from abist_kb.application.video.resume import scene_content_digest
+from abist_kb.application.video.script_planner import author_script, fix_hint_for
 from abist_kb.application.video.video_metadata import load_metadata
 from abist_kb.domain.video_project_spec import (
     DEFAULT_MAX_DOCS_PER_DIRECTORY,
     DEFAULT_MAX_TOTAL_CANDIDATES,
+    DEFAULT_VIDEO_QUALITY,
+    VIDEO_QUALITIES,
     validate_video_project_spec,
 )
 from abist_kb.infrastructure.db.video_projects_repo import VideoProjectRepository
@@ -64,16 +78,26 @@ from abist_kb.presentation.mcp.payloads import ok_result, tool_result
 MAX_SYNC_SCENES = 2
 
 TOOL_DESCRIPTIONS: dict[str, str] = {
-    "plan_video": (
-        "docs/ 配下の Markdown から動画の台本案を作る（保存しない）。"
-        "target_duration_sec を渡すと章数・シーン数・ナレーション文字量を逆算する。"
-        "関連情報だけで目標尺に届かない場合は INSUFFICIENT_CONTENT_FOR_DURATION を返す"
-        "（説明を水増しして尺を埋めることはしない）。"
+    "validate_video_script": (
+        "自分で書いた台本を、保存もレンダリングもせずに検証する。"
+        "エラーは {sceneId, path, code, message, fixHint} で返るので、"
+        "直してから create_video_project / update_video_script を呼ぶこと。"
+        "シーンごとの推定尺（テロップの読速から算出）も返す。"
     ),
     "create_video_project": (
-        "検証済みの動画プロジェクトを reports/videos/<id> に作る。"
+        "検証済みの動画プロジェクトを reports/videos/<id> に作る。script は必須"
+        "（台本はエージェントが書く。機械生成する経路は無い）。"
         "kb_paths は必ず本編で使う主入力、kb_directories は選抜対象の候補集合、"
         "kb_queries は補完。描画はしない（start_render_video を使う）。"
+    ),
+    "update_video_script": (
+        "既存プロジェクトの台本を差し替える（全置換）。変わったシーンの id を返し、"
+        "state を draft へ戻す。題材（inputs）は変えられない（変えたいなら新しい"
+        "プロジェクトを作ること）。"
+    ),
+    "get_video_preview": (
+        "レンダリング前後の確認材料を返す：絵コンテ（全表示文）・コンタクトシート・"
+        "シーン別成果物・QA 要約。人間が観る前の自己点検に使う。"
     ),
     "start_render_video": (
         "動画レンダリングを非同期ジョブとして投入する。進捗は job_status、"
@@ -127,21 +151,74 @@ _TARGET_DURATION_SCHEMA = {
     "additionalProperties": False,
 }
 
+#: 作者が書く台本（ScriptDraft）。中身の検証は `validate_script_draft` が行うので、
+#: ここでは「scenes を持つオブジェクト」までしか縛らない（スキーマを二重管理しない）。
+_SCRIPT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "scenes": {"type": "array"},
+        "sound_events": {"type": "array"},
+    },
+    "required": ["scenes"],
+}
+
+#: 作者が自己申告する構成要件。宣言したものだけが検査される。
+_STORY_REQUIREMENTS_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "required_topics": {"type": "array", "items": {"type": "string"}},
+        "required_scene_kinds": {"type": "array", "items": {"type": "string"}},
+        "scene_count": {
+            "type": "object",
+            "properties": {"min": {"type": "integer"}, "max": {"type": "integer"}},
+            "additionalProperties": False,
+        },
+        "source_path_pattern": {"type": "string"},
+        "sound_events": {
+            "type": "object",
+            "properties": {"min": {"type": "integer"}, "max": {"type": "integer"}},
+            "additionalProperties": False,
+        },
+    },
+    "additionalProperties": False,
+}
+
+#: 台本作成時に用意した画像。`path` はローカルの原本（リポジトリ外でもよい）。
+_IMAGE_ASSETS_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "id": {"type": "string"},
+            "path": {"type": "string"},
+            "license": {"type": "string"},
+            "attribution": {"type": "string"},
+            "caption": {"type": "string"},
+        },
+        "required": ["id", "path", "license"],
+        "additionalProperties": False,
+    },
+}
+
 
 def list_tools() -> list[types.Tool]:
     return [
         types.Tool(
-            name="plan_video",
-            description=TOOL_DESCRIPTIONS["plan_video"],
+            name="validate_video_script",
+            description=TOOL_DESCRIPTIONS["validate_video_script"],
             inputSchema={
                 "type": "object",
                 "properties": {
                     "title": {"type": "string"},
                     "purpose": {"type": "string"},
                     "inputs": _INPUTS_SCHEMA,
+                    "script": _SCRIPT_SCHEMA,
+                    "story_requirements": _STORY_REQUIREMENTS_SCHEMA,
+                    "image_assets": _IMAGE_ASSETS_SCHEMA,
                     "target_duration_sec": _TARGET_DURATION_SCHEMA,
                 },
-                "required": ["title", "inputs"],
+                "required": ["title", "inputs", "script"],
                 "additionalProperties": False,
             },
         ),
@@ -154,10 +231,39 @@ def list_tools() -> list[types.Tool]:
                     "title": {"type": "string"},
                     "purpose": {"type": "string"},
                     "inputs": _INPUTS_SCHEMA,
+                    "script": _SCRIPT_SCHEMA,
+                    "story_requirements": _STORY_REQUIREMENTS_SCHEMA,
+                    "image_assets": _IMAGE_ASSETS_SCHEMA,
                     "aspect_ratio": {"type": "string", "enum": ["16:9", "9:16"]},
+                    "quality": {"type": "string", "enum": list(VIDEO_QUALITIES)},
                     "target_duration_sec": _TARGET_DURATION_SCHEMA,
                 },
-                "required": ["title", "inputs"],
+                "required": ["title", "inputs", "script"],
+                "additionalProperties": False,
+            },
+        ),
+        types.Tool(
+            name="update_video_script",
+            description=TOOL_DESCRIPTIONS["update_video_script"],
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "video_id": {"type": "string"},
+                    "script": _SCRIPT_SCHEMA,
+                    "story_requirements": _STORY_REQUIREMENTS_SCHEMA,
+                    "image_assets": _IMAGE_ASSETS_SCHEMA,
+                },
+                "required": ["video_id", "script"],
+                "additionalProperties": False,
+            },
+        ),
+        types.Tool(
+            name="get_video_preview",
+            description=TOOL_DESCRIPTIONS["get_video_preview"],
+            inputSchema={
+                "type": "object",
+                "properties": {"video_id": {"type": "string"}},
+                "required": ["video_id"],
                 "additionalProperties": False,
             },
         ),
@@ -168,10 +274,6 @@ def list_tools() -> list[types.Tool]:
                 "type": "object",
                 "properties": {
                     "video_id": {"type": "string"},
-                    "tts": {
-                        "type": "string",
-                        "enum": ["none", "silence", "test_tone", "manual"],
-                    },
                     "sound_intensity": {
                         "type": "string",
                         "enum": ["off", "subtle", "normal"],
@@ -344,7 +446,7 @@ class KbVideoTools:
 
     # --- ツール -------------------------------------------------------
 
-    def plan_video(self, arguments: dict[str, Any]) -> types.CallToolResult:
+    def validate_video_script(self, arguments: dict[str, Any]) -> types.CallToolResult:
         resolved = self._resolve(arguments.get("inputs") or {})
         if not resolved.ok:
             return _error(
@@ -353,38 +455,44 @@ class KbVideoTools:
                 errors=resolved.errors,
                 warnings=resolved.warnings,
             )
-        plan, _draft = plan_video(
+        authored = author_script(
+            arguments.get("script") or {},
             resolved.inputs,
             docs_dir=self._docs_dir,
-            title=str(arguments["title"]),
-            purpose=arguments.get("purpose"),
             target_duration_sec=arguments.get("target_duration_sec"),
+            story_requirements=arguments.get("story_requirements"),
+            strict=True,
         )
-        if not plan.ok:
-            code = (plan.errors[0].get("code") if plan.errors else None) or "INVALID_SCRIPT_DRAFT"
-            return _error(
-                code,
-                (plan.errors[0].get("message") if plan.errors else "台本を作れませんでした"),
-                errors=plan.errors,
-                durationPlan=plan.duration_plan,
+        errors = list(authored.errors)
+        if authored.ok:
+            declared = {str(asset.get("id")) for asset in (arguments.get("image_assets") or [])}
+            errors.extend(
+                {**error, "fixHint": fix_hint_for(error["code"])}
+                for error in validate_image_asset_refs(authored.scenes, registered_ids=declared)
+            )
+        if errors:
+            return tool_result(
+                {
+                    "ok": False,
+                    "code": errors[0].get("code") or "INVALID_SCRIPT_DRAFT",
+                    "message": "台本を検証できませんでした",
+                    "errors": errors,
+                    "warnings": authored.warnings,
+                    "sceneCount": len(authored.scenes),
+                }
             )
         return ok_result(
             {
                 "ok": True,
-                "sceneCount": len(plan.scenes),
-                "scenes": [
-                    {
-                        "id": s["id"],
-                        "kind": s["kind"],
-                        "role": s["role"],
-                        "title": s.get("title"),
-                        "narrationChars": len((s.get("narration") or {}).get("text") or ""),
-                    }
-                    for s in plan.scenes
+                "sceneCount": len(authored.scenes),
+                "scenes": authored.scene_estimates,
+                "estimatedDurationSec": authored.estimated_duration_sec,
+                "durationPlan": authored.duration_plan,
+                "errors": [],
+                "warnings": [
+                    *authored.warnings,
+                    *(w["message"] for w in resolved.warnings),
                 ],
-                "durationPlan": plan.duration_plan,
-                "resolvedInputs": len(resolved.inputs),
-                "warnings": [*plan.warnings, *(w["message"] for w in resolved.warnings)],
             }
         )
 
@@ -398,16 +506,59 @@ class KbVideoTools:
                 errors=resolved.errors,
                 warnings=resolved.warnings,
             )
-        aspect = str(arguments.get("aspect_ratio") or "16:9")
-        width, height = (1080, 1920) if aspect == "9:16" else (1920, 1080)
-        fmt: dict[str, Any] = {
-            "aspect_ratio": aspect,
-            "width": width,
-            "height": height,
-            "fps": 30,
-        }
-        if arguments.get("target_duration_sec"):
-            fmt["target_duration_sec"] = arguments["target_duration_sec"]
+        target_duration = arguments.get("target_duration_sec")
+        fmt = _format_for(
+            str(arguments.get("aspect_ratio") or "16:9"),
+            target_duration,
+            quality=str(arguments.get("quality") or DEFAULT_VIDEO_QUALITY),
+        )
+
+        # **台本は必須。** 空のシーンでプロジェクトを作ると start_render_video が
+        # NO_RENDERABLE_SCENE で必ず失敗する（作れたのに描けない箱ができる）。
+        script = arguments.get("script")
+        if not isinstance(script, dict):
+            return _error(
+                "SCRIPT_REQUIRED",
+                "script を指定してください（台本はエージェントが書きます）",
+                errors=[
+                    {
+                        "path": "script",
+                        "code": "SCRIPT_REQUIRED",
+                        "message": "台本を機械生成する経路はありません",
+                        "fixHint": "validate_video_script で台本を通してから渡してください",
+                    }
+                ],
+            )
+        declared_images = {str(a.get("id")) for a in (arguments.get("image_assets") or [])}
+        warnings: list[str] = []
+        authored = author_script(
+            script,
+            resolved.inputs,
+            docs_dir=self._docs_dir,
+            target_duration_sec=target_duration,
+            story_requirements=arguments.get("story_requirements"),
+            strict=True,
+        )
+        errors = list(authored.errors)
+        if authored.ok:
+            errors.extend(
+                {**error, "fixHint": fix_hint_for(error["code"])}
+                for error in validate_image_asset_refs(
+                    authored.scenes, registered_ids=declared_images
+                )
+            )
+        if errors:
+            return tool_result(
+                {
+                    "ok": False,
+                    "code": errors[0].get("code") or "INVALID_SCRIPT_DRAFT",
+                    "message": "台本を検証できませんでした",
+                    "errors": errors,
+                    "warnings": authored.warnings,
+                }
+            )
+        scenes, sound_events = authored.scenes, authored.sound_events
+        warnings.extend(authored.warnings)
 
         created = create_project(
             {
@@ -415,6 +566,9 @@ class KbVideoTools:
                 "purpose": arguments.get("purpose"),
                 "inputs": inputs,
                 "format": fmt,
+                "scenes": scenes,
+                "sound_events": sound_events,
+                "story_requirements": arguments.get("story_requirements"),
             },
             resolved,
             reports_dir=self._reports_dir,
@@ -425,14 +579,197 @@ class KbVideoTools:
                 "プロジェクトを作成できませんでした",
                 errors=created.errors or [],
             )
-        catalog.record_project(self._conn, created.project.dir, root_dir=self._repo_root)
+        project = created.project
+
+        image_error = self._store_image_assets(project.dir, arguments.get("image_assets") or [])
+        if image_error is not None:
+            return image_error
+
+        # レンダリング前に全表示文を残す（人が観る前の自己点検材料）。
+        write_storyboard_review(project.dir, scenes, sound_events)
+        catalog.record_project(self._conn, project.dir, root_dir=self._repo_root)
         return ok_result(
             {
                 "ok": True,
-                "videoId": created.project.video_id,
-                "projectDir": str(created.project.dir),
-                "sourceCount": len(created.project.spec.get("sources") or []),
-                "warnings": [w["message"] for w in (created.warnings or [])],
+                "videoId": project.video_id,
+                "projectDir": str(project.dir),
+                "sceneCount": len(scenes),
+                "sourceCount": len(project.spec.get("sources") or []),
+                "storyboardReview": str(project.dir / "preview" / "storyboard-review.md"),
+                "warnings": [*warnings, *(w["message"] for w in (created.warnings or []))],
+            }
+        )
+
+    def _store_image_assets(
+        self, project_dir: Path, raw_assets: list[dict[str, Any]]
+    ) -> types.CallToolResult | None:
+        """持ち込み画像を取り込み、spec とシーンへ結び付ける（失敗なら結果を返す）。"""
+        if not raw_assets:
+            return None
+        ingested = ingest_image_assets(raw_assets, project_dir)
+        if not ingested.ok:
+            return tool_result(
+                {
+                    "ok": False,
+                    "code": "INVALID_IMAGE_ASSET",
+                    "message": "画像を取り込めませんでした",
+                    "errors": ingested.errors,
+                }
+            )
+        spec = load_project(project_dir) or {}
+        spec["image_assets"] = ingested.assets
+        attach_image_assets(spec.get("scenes") or [], ingested.assets)
+        save_project(project_dir, spec)
+        return None
+
+    def update_video_script(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        video_id = str(arguments["video_id"])
+        project_dir = self._project_dir(video_id)
+        if project_dir is None:
+            return _error("VIDEO_NOT_FOUND", f"動画 {video_id} が見つかりません")
+        spec = load_project(project_dir)
+        if spec is None:
+            return _error("VIDEO_NOT_FOUND", f"動画 {video_id} の spec を読めません")
+
+        # 題材は作成時に固定。差し替えたいなら別プロジェクトにする（出典の履歴が濁る）。
+        resolved = self._resolve(spec.get("inputs") or {})
+        if not resolved.ok:
+            return _error(
+                "NO_RESOLVABLE_INPUT",
+                "題材を解決できませんでした",
+                errors=resolved.errors,
+            )
+        requirements = (
+            arguments.get("story_requirements")
+            if "story_requirements" in arguments
+            else spec.get("story_requirements")
+        )
+        authored = author_script(
+            arguments.get("script") or {},
+            resolved.inputs,
+            docs_dir=self._docs_dir,
+            target_duration_sec=(spec.get("format") or {}).get("target_duration_sec"),
+            story_requirements=requirements,
+            strict=True,
+        )
+        declared_images = {
+            str(a.get("id"))
+            for a in (arguments.get("image_assets") or spec.get("image_assets") or [])
+        }
+        errors = list(authored.errors)
+        if authored.ok:
+            errors.extend(
+                {**error, "fixHint": fix_hint_for(error["code"])}
+                for error in validate_image_asset_refs(
+                    authored.scenes, registered_ids=declared_images
+                )
+            )
+        if errors:
+            return tool_result(
+                {
+                    "ok": False,
+                    "code": errors[0].get("code") or "INVALID_SCRIPT_DRAFT",
+                    "message": "台本を検証できませんでした",
+                    "errors": errors,
+                    "warnings": authored.warnings,
+                }
+            )
+
+        previous = {
+            str(scene.get("id")): scene_content_digest(scene) for scene in spec.get("scenes") or []
+        }
+        changed = [
+            scene["id"]
+            for scene in authored.scenes
+            if previous.get(scene["id"]) != scene_content_digest(scene)
+        ]
+        spec["scenes"] = authored.scenes
+        spec["sound_events"] = authored.sound_events
+        spec["story_requirements"] = requirements
+        save_project(project_dir, spec)
+
+        if arguments.get("image_assets"):
+            image_error = self._store_image_assets(project_dir, arguments["image_assets"])
+            if image_error is not None:
+                return image_error
+
+        write_storyboard_review(project_dir, authored.scenes, authored.sound_events)
+        # 台本が変われば成果物は古い。承認も QA もやり直しなので draft へ戻す。
+        write_state(project_dir, state=STATE_DRAFT)
+        return ok_result(
+            {
+                "ok": True,
+                "videoId": video_id,
+                "changedSceneIds": changed,
+                "unchangedSceneIds": [
+                    scene["id"] for scene in authored.scenes if scene["id"] not in changed
+                ],
+                "sceneCount": len(authored.scenes),
+                "estimatedDurationSec": authored.estimated_duration_sec,
+                "storyboardReview": str(project_dir / "preview" / "storyboard-review.md"),
+                "warnings": authored.warnings,
+            }
+        )
+
+    def get_video_preview(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        video_id = str(arguments["video_id"])
+        project_dir = self._project_dir(video_id)
+        if project_dir is None:
+            return _error("VIDEO_NOT_FOUND", f"動画 {video_id} が見つかりません")
+
+        storyboard: dict[str, Any] | None = None
+        review = project_dir / "preview" / "storyboard-review.json"
+        if review.is_file():
+            try:
+                raw = json.loads(review.read_text(encoding="utf-8"))
+            except json.JSONDecodeError:
+                raw = None
+            if isinstance(raw, dict):
+                # ディスク上は snake_case、MCP の応答は camelCase で揃える。
+                storyboard = {
+                    "sceneCount": raw.get("scene_count"),
+                    "soundEventCount": raw.get("sound_event_count"),
+                    "scenes": raw.get("scenes") or [],
+                    "path": str(project_dir / "preview" / "storyboard-review.md"),
+                }
+
+        spec = load_project(project_dir) or {}
+        scene_artifacts = []
+        for scene in spec.get("scenes") or []:
+            scene_id = str(scene.get("id"))
+            output = project_dir / "scenes" / scene_id / "output.mp4"
+            scene_artifacts.append(
+                {
+                    "id": scene_id,
+                    "kind": scene.get("kind"),
+                    "title": scene.get("title"),
+                    "video": str(output) if output.is_file() else None,
+                }
+            )
+
+        sheet = project_dir / CONTACT_SHEET_FILE
+        qa = load_qa_report(project_dir)
+        state = read_state(project_dir)
+        return ok_result(
+            {
+                "ok": True,
+                "videoId": video_id,
+                "state": (state or {}).get("state") or "draft",
+                "storyboard": storyboard,
+                "contactSheet": str(sheet) if sheet.is_file() else None,
+                "sceneArtifacts": scene_artifacts,
+                "qaSummary": (
+                    {
+                        "ok": qa.get("ok"),
+                        "failed": [
+                            c["id"] for c in (qa.get("checks") or []) if c.get("status") == "fail"
+                        ],
+                        "humanRequired": qa.get("human_required") or [],
+                    }
+                    if qa
+                    else None
+                ),
+                "imageAssets": spec.get("image_assets") or [],
             }
         )
 
@@ -447,7 +784,6 @@ class KbVideoTools:
             {
                 "video_id": video_id,
                 "project_dir": str(project_dir),
-                "tts": arguments.get("tts") or "none",
                 "sound_intensity": arguments.get("sound_intensity") or "subtle",
                 # 起動コマンドではなく**プロファイル名**だけをジョブへ渡す
                 "capture_profile": arguments.get("capture_profile"),
@@ -663,8 +999,10 @@ class KbVideoTools:
 
 def handlers_for(tools: KbVideoTools) -> dict[str, Any]:
     return {
-        "plan_video": tools.plan_video,
+        "validate_video_script": tools.validate_video_script,
         "create_video_project": tools.create_video_project,
+        "update_video_script": tools.update_video_script,
+        "get_video_preview": tools.get_video_preview,
         "start_render_video": tools.start_render_video,
         "video_status": tools.video_status,
         "get_video": tools.get_video,

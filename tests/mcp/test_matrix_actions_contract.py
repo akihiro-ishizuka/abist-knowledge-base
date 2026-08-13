@@ -59,7 +59,6 @@ MCP_TOOL_BY_ACTION: dict[str, str] = {
     "visualization_list": "list_visualizations",
     "visualization_detail": "get_visualization",
     # --- 動画（video Phase 10）---
-    "video_plan": "plan_video",
     "video_create": "create_video_project",
     "video_submit_render": "start_render_video",
     "video_list": "list_videos",
@@ -218,7 +217,6 @@ API_ROUTE_BY_ACTION: dict[str, tuple[str, str]] = {
     "visualization_deps": ("GET", "/api/v1/visualization/deps"),
     "visualization_list": ("GET", "/api/v1/visualizations"),
     "visualization_detail": ("GET", "/api/v1/visualizations/{visualization_id}"),
-    "video_plan": ("POST", "/api/v1/videos/plan"),
     "video_create": ("POST", "/api/v1/videos"),
     "video_submit_render": ("POST", "/api/v1/videos/{video_id}/render"),
     "video_list": ("GET", "/api/v1/videos"),

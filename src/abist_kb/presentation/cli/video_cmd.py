@@ -1,5 +1,4 @@
-"""`video` コマンド群: plan / create / render / status / show / list / qa /
-approve / distribution / gc / cost。
+"""`video` コマンド群: render / show / list / qa / approve / distribution / gc / cost。
 
 **このコマンド群は動画を外部へ送信しない。** YouTube への登録は人が手動で行う
 前提で、ここが作るのはそのための材料一式（`manual publish pack`）だけ。
@@ -27,11 +26,9 @@ from abist_kb.application.video.pipeline import run_pipeline
 from abist_kb.application.video.project_store import load_project, read_state
 from abist_kb.application.video.qa import load_report as load_qa_report
 from abist_kb.application.video.qa import run_qa, write_report
-from abist_kb.application.video.script_planner import plan_video
 from abist_kb.application.video.video_metadata import load_metadata
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
 from abist_kb.domain.video_project_spec import (
-    DEFAULT_MAX_DOCS_PER_DIRECTORY,
     DEFAULT_MAX_TOTAL_CANDIDATES,
 )
 from abist_kb.infrastructure.video.artifact_store import videos_dir
@@ -41,21 +38,9 @@ video_app = AppTyper(
     help="社内動画の生成・確認・承認（外部への自動投稿は行いません）。", no_args_is_help=True
 )
 
-_PathList = Annotated[list[str] | None, typer.Option(help="docs/ 配下の Markdown パス")]
-_DirList = Annotated[list[str] | None, typer.Option(help="docs/ 配下のディレクトリ（候補集合）")]
-
 
 def _emit(payload: dict[str, Any]) -> None:
     typer.echo(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
-
-
-def _inputs(kb_path: list[str] | None, kb_dir: list[str] | None, query: list[str] | None):
-    return {
-        "kb_paths": list(kb_path or []),
-        "kb_directories": list(kb_dir or []),
-        "kb_queries": list(query or []),
-        "esa_posts": [],
-    }
 
 
 def _project_dir(reports_dir: Path, video_id: str) -> Path:
@@ -72,87 +57,53 @@ def _project_dir(reports_dir: Path, video_id: str) -> Path:
     return candidate
 
 
-@video_app.command("plan")
-def plan(
-    ctx: typer.Context,
-    title: Annotated[str, typer.Option(help="動画のタイトル")],
-    kb_path: _PathList = None,
-    kb_dir: _DirList = None,
-    query: Annotated[list[str] | None, typer.Option(help="検索補完")] = None,
-    purpose: Annotated[str | None, typer.Option(help="動画のねらい")] = None,
-    min_sec: Annotated[float, typer.Option(help="目標尺の下限（秒）")] = 120.0,
-    max_sec: Annotated[float, typer.Option(help="目標尺の上限（秒）")] = 180.0,
-) -> None:
-    """台本案を作る（保存しない）。目標尺から章数・シーン数を逆算する。"""
-    app_ctx = get_context(ctx)
-    settings = app_ctx.settings
-    resolved = resolve_inputs(
-        _inputs(kb_path, kb_dir, query),
-        docs_dir=settings.docs_dir,
-        max_docs_per_directory=DEFAULT_MAX_DOCS_PER_DIRECTORY,
-        max_total_candidates=DEFAULT_MAX_TOTAL_CANDIDATES,
-    )
-    if not resolved.ok:
-        raise AppError(
-            code=ErrorCode.INVALID_INPUT,
-            message="題材を解決できませんでした。",
-            hint="kb_path / kb_dir が docs/ 配下にあるか確認してください。",
-            exit_code=ExitCode.INVALID_INPUT,
-        )
-    result, _draft = plan_video(
-        resolved.inputs,
-        docs_dir=settings.docs_dir,
-        title=title,
-        purpose=purpose,
-        target_duration_sec={"min": min_sec, "max": max_sec},
-    )
-    if not result.ok:
-        _emit(
-            {
-                "ok": False,
-                "code": (result.errors[0]["code"] if result.errors else "INVALID_SCRIPT_DRAFT"),
-                "message": (result.errors[0]["message"] if result.errors else ""),
-                "durationPlan": result.duration_plan,
-            }
-        )
-        raise typer.Exit(code=int(ExitCode.INVALID_INPUT))
-    _emit(
-        {
-            "ok": True,
-            "durationPlan": result.duration_plan,
-            "sceneCount": len(result.scenes),
-            "scenes": [
-                {"id": s["id"], "kind": s["kind"], "title": s.get("title")} for s in result.scenes
-            ],
-            "warnings": result.warnings,
-        }
-    )
-
-
 @video_app.command("render")
 def render(
     ctx: typer.Context,
-    title: Annotated[str, typer.Option(help="動画のタイトル")],
-    kb_path: _PathList = None,
-    kb_dir: _DirList = None,
-    query: Annotated[list[str] | None, typer.Option(help="検索補完")] = None,
-    purpose: Annotated[str | None, typer.Option(help="動画のねらい")] = None,
+    script: Annotated[
+        Path,
+        typer.Option(
+            help="台本ファイル（JSON）。{title, inputs, script, story_requirements?, image_assets?}"
+        ),
+    ],
+    aspect: Annotated[str, typer.Option(help="16:9 または 9:16")] = "16:9",
+    quality: Annotated[str, typer.Option(help="draft / standard / high")] = "standard",
+    sound: Annotated[str, typer.Option(help="off / subtle / normal")] = "subtle",
     min_sec: Annotated[float, typer.Option(help="目標尺の下限（秒）")] = 120.0,
     max_sec: Annotated[float, typer.Option(help="目標尺の上限（秒）")] = 180.0,
-    aspect: Annotated[str, typer.Option(help="16:9 または 9:16")] = "16:9",
-    tts: Annotated[str, typer.Option(help="none / silence / test_tone / manual")] = "none",
-    sound: Annotated[str, typer.Option(help="off / subtle / normal")] = "subtle",
     capture_profile: Annotated[
         str | None,
         typer.Option(help="登録済みの画面キャプチャプロファイル名（起動コマンドは渡せません）"),
     ] = None,
     max_docs: Annotated[int, typer.Option(help="1ディレクトリからの選抜上限")] = 8,
 ) -> None:
-    """Markdown から動画一式を生成する（同期実行）。"""
+    """**書かれた台本**から動画一式を生成する（同期実行）。
+
+    台本を機械生成する経路は無い。台本はエージェントが書くもので、通常は MCP
+    （`validate_video_script` → `create_video_project` → `start_render_video`）から
+    入る。このコマンドは、その台本ファイルを手元で描くための入口。
+    """
     app_ctx = get_context(ctx)
     settings = app_ctx.settings
+    try:
+        payload = json.loads(Path(script).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise AppError(
+            code=ErrorCode.INVALID_INPUT,
+            message=f"台本ファイルを読めません: {script}",
+            hint=str(exc),
+            exit_code=ExitCode.INVALID_INPUT,
+        ) from exc
+    if not isinstance(payload, dict) or not isinstance(payload.get("script"), dict):
+        raise AppError(
+            code=ErrorCode.INVALID_INPUT,
+            message="台本ファイルの形式が違います。",
+            hint='{"title": ..., "inputs": {...}, "script": {"scenes": [...]}} を書いてください。',
+            exit_code=ExitCode.INVALID_INPUT,
+        )
+
     resolved = resolve_inputs(
-        _inputs(kb_path, kb_dir, query),
+        payload.get("inputs") or {},
         docs_dir=settings.docs_dir,
         max_docs_per_directory=max_docs,
         max_total_candidates=max(max_docs, DEFAULT_MAX_TOTAL_CANDIDATES),
@@ -161,7 +112,7 @@ def render(
         raise AppError(
             code=ErrorCode.INVALID_INPUT,
             message="題材を解決できませんでした。",
-            hint="kb_path / kb_dir が docs/ 配下にあるか確認してください。",
+            hint="inputs の kb_paths / kb_directories が docs/ 配下にあるか確認してください。",
             exit_code=ExitCode.INVALID_INPUT,
         )
 
@@ -173,17 +124,20 @@ def render(
         docs_dir=settings.docs_dir,
         reports_dir=settings.reports_dir,
         repo_root=settings.root_dir,
-        title=title,
-        purpose=purpose,
-        tts=tts,
+        title=str(payload.get("title") or "無題"),
+        script=payload["script"],
+        purpose=payload.get("purpose"),
+        story_requirements=payload.get("story_requirements"),
+        image_assets=payload.get("image_assets"),
         sound_intensity=sound,
         sound_enabled=sound != "off",
         aspect_ratio=aspect,
+        quality=quality,
         target_duration_sec={"min": min_sec, "max": max_sec},
         capture_profile=capture_profile,
         on_progress=_on_progress,
     )
-    payload = {
+    summary = {
         "ok": result.ok,
         "code": result.code,
         "videoId": result.video_id,
@@ -200,7 +154,7 @@ def render(
         # 外部送信はしない。手動アップロード用の材料を作るだけ
         "uploadNote": "外部への自動投稿は行いません（手動アップロード用の成果物です）",
     }
-    _emit(payload)
+    _emit(summary)
     if not result.ok:
         raise typer.Exit(code=int(ExitCode.INVALID_INPUT))
 

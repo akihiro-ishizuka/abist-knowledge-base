@@ -52,6 +52,31 @@ def _payload(result) -> dict:
     return json.loads(result.content[0].text)
 
 
+def _minimal_script(path: str = "notes/n0.md") -> dict:
+    """検証を通る最小の台本（プロジェクトを作るための材料）。"""
+    return {
+        "title": "テスト動画",
+        "scenes": [
+            {"id": "s01", "role": "intro", "title": "はじめに"},
+            {
+                "id": "s02",
+                "role": "body",
+                "title": "要点",
+                "narration": {"text": "決まったことを確認します。", "source_refs": ["s1"]},
+                "claims": [
+                    {
+                        "text": "編集画面はビューオンリー方針を確認した",
+                        "kind": "fact",
+                        "source_refs": ["s1"],
+                    }
+                ],
+                "diagram": {"kind": "explain", "source": {"path": path, "start": 1, "end": 8}},
+            },
+        ],
+        "sound_events": [{"scene_id": "s02", "event": "key_point"}],
+    }
+
+
 class TestToolSurface:
     def test_every_tool_has_a_description(self) -> None:
         for tool in kb_video.list_tools():
@@ -86,38 +111,20 @@ class TestToolSurface:
                     assert schema.get("type") == "string"
 
 
-class TestPlanAndCreate:
-    def test_plan_returns_a_duration_plan(self, tools, docs) -> None:
-        payload = _payload(
-            tools.plan_video(
-                {
-                    "title": "テスト動画",
-                    "inputs": {"kb_directories": ["notes"]},
-                    "target_duration_sec": {"min": 120, "max": 180},
-                }
-            )
-        )
-        assert payload["ok"] is True
-        assert payload["durationPlan"]["ok"] is True
-        assert payload["sceneCount"] == payload["durationPlan"]["scene_count"]
-
-    def test_plan_reports_insufficient_content(self, tools, tmp_path, docs) -> None:
-        payload = _payload(
-            tools.plan_video(
-                {
-                    "title": "長すぎる",
-                    "inputs": {"kb_paths": ["notes/n0.md"]},
-                    "target_duration_sec": {"min": 900, "max": 1200},
-                }
-            )
-        )
-        assert payload["ok"] is False
-        assert payload["code"] == "INSUFFICIENT_CONTENT_FOR_DURATION"
+class TestCreate:
+    def test_no_tool_generates_a_script(self) -> None:
+        """台本を機械生成する口は無い（台本はエージェントが書く）。"""
+        names = {tool.name for tool in kb_video.list_tools()}
+        assert "plan_video" not in names
 
     def test_create_project_writes_to_disk(self, tools, tmp_path) -> None:
         payload = _payload(
             tools.create_video_project(
-                {"title": "テスト動画", "inputs": {"kb_directories": ["notes"]}}
+                {
+                    "title": "テスト動画",
+                    "inputs": {"kb_paths": ["notes/n0.md"]},
+                    "script": _minimal_script(),
+                }
             )
         )
         assert payload["ok"] is True
@@ -128,7 +135,11 @@ class TestPlanAndCreate:
     def test_create_rejects_paths_outside_docs(self, tools) -> None:
         payload = _payload(
             tools.create_video_project(
-                {"title": "外を見る", "inputs": {"kb_paths": ["../../secret.md"]}}
+                {
+                    "title": "外を見る",
+                    "inputs": {"kb_paths": ["../../secret.md"]},
+                    "script": _minimal_script(),
+                }
             )
         )
         assert payload["ok"] is False
@@ -151,9 +162,14 @@ class TestApprovalAndDistribution:
     def _project(self, tools) -> Path:
         payload = _payload(
             tools.create_video_project(
-                {"title": "テスト動画", "inputs": {"kb_directories": ["notes"]}}
+                {
+                    "title": "テスト動画",
+                    "inputs": {"kb_paths": ["notes/n0.md"]},
+                    "script": _minimal_script(),
+                }
             )
         )
+        assert payload["ok"], payload
         return Path(payload["projectDir"])
 
     def test_approve_requires_confirmation(self, tools) -> None:
