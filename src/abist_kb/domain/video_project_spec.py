@@ -386,6 +386,16 @@ def _validate_story_requirements(spec: dict[str, Any], errors: list[VideoSpecErr
         elif low > high:
             errors.append(VideoSpecError(at, "invalid", "min は max 以下です"))
 
+    # 構成の単調さ。宣言したぶんだけ QA が fail で執行する（既定は warn どまり）。
+    for key in ("min_distinct_scene_kinds", "max_same_kind_run"):
+        value = requirements.get(key)
+        if value is None:
+            continue
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            errors.append(
+                VideoSpecError(f"story_requirements.{key}", "invalid", f"{key} は 1 以上の整数です")
+            )
+
     pattern = requirements.get("source_path_pattern")
     if pattern is not None:
         at = "story_requirements.source_path_pattern"

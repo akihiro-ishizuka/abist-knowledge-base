@@ -206,3 +206,20 @@ def test_story_requirements_rejects_non_string_topics() -> None:
     result = validate_video_project_spec(_base_spec(story_requirements={"required_topics": [1, 2]}))
     assert not result.ok
     assert any(error.path == "story_requirements.required_topics" for error in result.errors)
+
+
+# -- 構成の単調さ（宣言できる分） -------------------------------------------------
+
+
+def test_variety_requirements_are_accepted() -> None:
+    result = validate_video_project_spec(
+        _base_spec(story_requirements={"min_distinct_scene_kinds": 5, "max_same_kind_run": 3})
+    )
+    assert result.ok, [error.to_dict() for error in result.errors]
+
+
+def test_variety_requirements_must_be_positive_integers() -> None:
+    for field in ("min_distinct_scene_kinds", "max_same_kind_run"):
+        result = validate_video_project_spec(_base_spec(story_requirements={field: 0}))
+        assert not result.ok, field
+        assert any(error.path == f"story_requirements.{field}" for error in result.errors)

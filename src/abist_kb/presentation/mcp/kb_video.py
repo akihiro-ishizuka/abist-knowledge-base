@@ -29,6 +29,7 @@ from abist_kb.application.video import catalog
 from abist_kb.application.video.approval import approve as run_approve
 from abist_kb.application.video.approval import verify_approval
 from abist_kb.application.video.capture_planner import list_profiles
+from abist_kb.application.video.composition import score_composition
 from abist_kb.application.video.contact_sheet import CONTACT_SHEET_FILE
 from abist_kb.application.video.content_quality import write_storyboard_review
 from abist_kb.application.video.distribution import (
@@ -470,6 +471,21 @@ class KbVideoTools:
                 {**error, "fixHint": fix_hint_for(error["code"])}
                 for error in validate_image_asset_refs(authored.scenes, registered_ids=declared)
             )
+        # 構成の単調さは**描く前**に返す（描いてから気付くのでは数分無駄になる）。
+        # 既定は警告どまりだが、書き手が story_requirements で約束したぶんは通さない。
+        composition = score_composition(
+            authored.scenes, requirements=arguments.get("story_requirements")
+        )
+        errors.extend(
+            {
+                "path": "scenes",
+                "code": finding["code"],
+                "message": finding["message"],
+                "fixHint": finding["hint"],
+            }
+            for finding in composition.findings
+            if finding["declared"]
+        )
         if errors:
             return tool_result(
                 {
@@ -479,6 +495,7 @@ class KbVideoTools:
                     "errors": errors,
                     "warnings": authored.warnings,
                     "sceneCount": len(authored.scenes),
+                    "composition": composition.to_dict(),
                 }
             )
         return ok_result(
@@ -488,6 +505,7 @@ class KbVideoTools:
                 "scenes": authored.scene_estimates,
                 "estimatedDurationSec": authored.estimated_duration_sec,
                 "durationPlan": authored.duration_plan,
+                "composition": composition.to_dict(),
                 "errors": [],
                 "warnings": [
                     *authored.warnings,

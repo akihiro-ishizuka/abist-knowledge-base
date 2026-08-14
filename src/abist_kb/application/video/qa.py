@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from abist_kb.application.video.composition import score_composition
 from abist_kb.application.video.contact_sheet import CONTACT_SHEET_FILE
 from abist_kb.application.video.content_quality import validate_story_content
 from abist_kb.application.video.project_store import check_input_usage
@@ -344,6 +345,37 @@ def _bgm_checks(project_dir: Path) -> list[Check]:
     ]
 
 
+def _composition_checks(spec: dict[str, Any]) -> list[Check]:
+    """構成が単調でないか（同じ見た目のカードが続いていないか）。
+
+    **既定は warn。** 短い動画やチェックリスト形式では単調さが正解のこともあり、
+    機械が断定できる種類の判断ではない。役目は断定ではなく、測った数字を出して
+    `preview_approval`（人間ゲート）で**どこを見るべきか**を示すこと。
+    書き手が `story_requirements` で明示的に約束したぶんだけ fail にする。
+    """
+    scenes = spec.get("scenes") or []
+    if not scenes:
+        return []
+    report = score_composition(scenes, requirements=spec.get("story_requirements"))
+    if not report.findings:
+        return [
+            Check(
+                "composition",
+                STATUS_PASS,
+                f"{report.scene_count} シーン / 種別 {report.distinct_kinds} 種 / "
+                f"同一種別の連続 {report.longest_same_run}",
+            )
+        ]
+    declared = [f for f in report.findings if f["declared"]]
+    return [
+        Check(
+            "composition",
+            STATUS_FAIL if declared else STATUS_WARN,
+            " / ".join(f["message"] for f in report.findings[:3]),
+        )
+    ]
+
+
 def _image_provenance_checks(project_dir: Path, spec: dict[str, Any]) -> list[Check]:
     """持ち込み画像が実在し、sha256 とライセンスが記録されているか。
 
@@ -525,6 +557,7 @@ def run_qa(
     )
     checks += _subtitle_checks(project_dir, duration)
     checks += _caption_checks(spec)
+    checks += _composition_checks(spec)
     checks += _image_provenance_checks(project_dir, spec)
     checks += _sound_checks(project_dir)
     checks += _bgm_checks(project_dir)

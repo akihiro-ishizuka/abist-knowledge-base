@@ -294,3 +294,39 @@ class TestImageAssets:
         )
         assert not payload["ok"]
         assert payload["code"] == "INVALID_IMAGE_ASSET"
+
+
+# -- 構成の単調さ -------------------------------------------------------------------
+
+
+class TestComposition:
+    def test_validation_reports_the_composition(self, tools, golden) -> None:
+        """**描く前に**単調さが分かること（描いてからでは数分無駄になる）。"""
+        payload = _payload(tools.validate_video_script(_validate_args(golden)))
+        assert payload["ok"], payload
+        composition = payload["composition"]
+        assert composition["sceneCount"] == len(golden["script"]["scenes"])
+        assert composition["longestSameRun"] >= 1
+        assert "cardRatio" in composition
+
+    def test_the_monotonous_golden_script_is_called_out(self, tools, golden) -> None:
+        """activity_story は key_points 10/14・連続6 なので指摘が出る。"""
+        payload = _payload(tools.validate_video_script(_validate_args(golden)))
+        codes = {f["code"] for f in payload["composition"]["findings"]}
+        assert "MONOTONOUS_RUN" in codes
+
+    def test_a_composition_finding_does_not_block_validation(self, tools, golden) -> None:
+        """既定は警告。短い動画では単調さが正解のこともあり、機械が断定しない。"""
+        payload = _payload(tools.validate_video_script(_validate_args(golden)))
+        assert payload["ok"] is True
+
+    def test_a_declared_variety_requirement_blocks_validation(self, tools, golden) -> None:
+        """書き手が約束したぶんは通さない。"""
+        payload = _payload(
+            tools.validate_video_script(
+                _validate_args(golden, story_requirements={"max_same_kind_run": 2})
+            )
+        )
+        assert payload["ok"] is False
+        assert any(e["code"] == "MONOTONOUS_RUN" for e in payload["errors"])
+        assert all(e.get("fixHint") for e in payload["errors"])
