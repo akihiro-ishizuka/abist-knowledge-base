@@ -1,8 +1,15 @@
-"""利用量の集計（TTS 文字数・レンダリング時間・ディスク）。
+"""利用量の集計（テロップ文字数・レンダリング時間・ディスク）。
 
-外部 TTS は従量課金なので、**先に「どれだけ喋らせたか」を数えられる**ように
-しておく。金額は provider ごとの単価が要るため、既定では文字数と時間だけを出し、
-単価が与えられたときだけ概算を添える（**推測の金額を既定で出さない**）。
+かつては外部 TTS の従量課金を見積もるための集計だった。**ナレーション音声を
+作らなくなったので、課金するものが無い**（文字数 x 単価という、請求の来ない
+請求計算が残っていた）。
+
+今も測る価値があるのは:
+
+- **レンダリング時間** —— 描画は RENDER リースで直列化されるので、伸びると
+  他のジョブまで待たされる
+- **ディスク** —— 成果物は消さない方針なので、放っておくと溜まる
+- **テロップ文字数** —— 課金ではなく**尺の目安**として（読速から尺が決まる）
 
 アカウント識別子やトークンは集計に含めない。
 """
@@ -26,7 +33,7 @@ REPORT_DIR = Path("reports") / "benchmarks" / "video"
 class VideoUsage:
     video_id: str
     state: str
-    narration_chars: int
+    caption_chars: int
     scene_count: int
     duration_sec: float | None
     disk_bytes: int
@@ -36,7 +43,7 @@ class VideoUsage:
         return {
             "video_id": self.video_id,
             "state": self.state,
-            "narration_chars": self.narration_chars,
+            "caption_chars": self.caption_chars,
             "scene_count": self.scene_count,
             "duration_sec": self.duration_sec,
             "disk_bytes": self.disk_bytes,
@@ -51,11 +58,10 @@ class CostReport:
     videos: list[VideoUsage] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     #: 単価が与えられたときだけ入る概算（通貨は呼び出し側の指定に従う）。
-    estimated_cost: dict[str, Any] | None = None
 
     @property
-    def total_narration_chars(self) -> int:
-        return sum(v.narration_chars for v in self.videos)
+    def total_caption_chars(self) -> int:
+        return sum(v.caption_chars for v in self.videos)
 
     @property
     def total_disk_bytes(self) -> int:
@@ -66,17 +72,16 @@ class CostReport:
             "schema_version": "1.0",
             "generated_at": self.generated_at,
             "video_count": len(self.videos),
-            "total_narration_chars": self.total_narration_chars,
+            "total_caption_chars": self.total_caption_chars,
             "total_disk_bytes": self.total_disk_bytes,
             "total_disk_mb": round(self.total_disk_bytes / 1_048_576, 1),
             "videos": [v.to_dict() for v in self.videos],
-            "estimated_cost": self.estimated_cost,
             "warnings": list(self.warnings),
         }
 
 
-def narration_chars(spec: dict[str, Any]) -> int:
-    """spec のナレーション文字数の合計（TTS の課金単位）。"""
+def caption_chars(spec: dict[str, Any]) -> int:
+    """spec のテロップ文字数の合計（尺の目安。課金単位ではない）。"""
     total = 0
     for scene in spec.get("scenes") or []:
         if not isinstance(scene, dict):
@@ -107,7 +112,7 @@ def collect_usage(reports_dir: Path) -> tuple[list[VideoUsage], list[str]]:
             VideoUsage(
                 video_id=str(spec.get("video_id") or entry.name),
                 state=str(state.get("state") or "unknown"),
-                narration_chars=narration_chars(spec),
+                caption_chars=caption_chars(spec),
                 scene_count=len(spec.get("scenes") or []),
                 duration_sec=state.get("duration_sec"),
                 disk_bytes=directory_size(entry),
@@ -120,34 +125,17 @@ def collect_usage(reports_dir: Path) -> tuple[list[VideoUsage], list[str]]:
 def build_report(
     reports_dir: Path,
     *,
-    tts_unit_price_per_1k_chars: float | None = None,
-    currency: str = "JPY",
     now: datetime | None = None,
 ) -> CostReport:
     """利用量レポートを組む。
 
-    **単価が無ければ金額を出さない。** 推測の単価で概算を出すと、それが
-    そのまま「予算」として一人歩きする。
+    **金額は出さない。** 有料のプロバイダを使わない設計なので、見積もる対象が
+    そもそも無い（かつては TTS の従量課金を見積もっていた）。
     """
     usages, warnings = collect_usage(reports_dir)
     stamp = (now or datetime.now(UTC)).isoformat()
 
-    estimated = None
-    if tts_unit_price_per_1k_chars is not None:
-        total_chars = sum(u.narration_chars for u in usages)
-        estimated = {
-            "basis": "narration_chars",
-            "unit_price_per_1k_chars": tts_unit_price_per_1k_chars,
-            "currency": currency,
-            "amount": round(total_chars / 1000 * tts_unit_price_per_1k_chars, 2),
-            "note": "実際の請求は provider の課金単位に従います（これは目安です）",
-        }
-    else:
-        warnings.append("TTS の単価が未設定のため金額は算出していません（文字数のみ）")
-
-    return CostReport(
-        generated_at=stamp, videos=usages, warnings=warnings, estimated_cost=estimated
-    )
+    return CostReport(generated_at=stamp, videos=usages, warnings=warnings)
 
 
 def write_report(report: CostReport, repo_root: Path, *, stem: str | None = None) -> Path:
@@ -166,6 +154,6 @@ __all__ = [
     "VideoUsage",
     "build_report",
     "collect_usage",
-    "narration_chars",
+    "caption_chars",
     "write_report",
 ]

@@ -36,6 +36,7 @@ from abist_kb.application.video.distribution import (
 from abist_kb.application.video.qa import (
     STATUS_FAIL,
     STATUS_PASS,
+    STATUS_WARN,
     run_qa,
     scan_secrets,
     write_report,
@@ -605,21 +606,25 @@ class TestGcAndCost:
         gc.run_gc(reports, keep_latest=0, ttl_days=90, confirmed=True)
         assert (data / "secrets.txt").is_file()
 
-    def test_cost_report_counts_narration_chars(self, tmp_path: Path) -> None:
+    def test_cost_report_counts_caption_chars(self, tmp_path: Path) -> None:
+        """テロップ量は尺の目安として数える（課金単位ではない）。"""
         reports = tmp_path / "reports"
         self._make(reports, "a", days_old=1)
         report = cost_report.build_report(reports)
         assert report.videos
-        assert report.total_narration_chars == len("要点を説明します。")
-        assert report.estimated_cost is None, "単価未設定なのに金額を出している"
-        assert any("単価" in w for w in report.warnings)
+        assert report.total_caption_chars == len("要点を説明します。")
 
-    def test_cost_report_estimates_only_with_a_unit_price(self, tmp_path: Path) -> None:
+    def test_cost_report_never_reports_money(self, tmp_path: Path) -> None:
+        """有料のプロバイダを使わない設計なので、見積もる対象が無い。
+
+        以前は「ナレーション文字数 x 単価」という、請求の来ない請求計算が
+        残っていた（TTS を削除した後始末）。
+        """
         reports = tmp_path / "reports"
         self._make(reports, "a", days_old=1)
-        report = cost_report.build_report(reports, tts_unit_price_per_1k_chars=2.0)
-        assert report.estimated_cost is not None
-        assert report.estimated_cost["currency"] == "JPY"
+        payload = cost_report.build_report(reports).to_dict()
+        assert "estimated_cost" not in payload
+        assert not any("単価" in w or "金額" in w for w in payload["warnings"])
 
     def test_cost_report_is_saved_under_benchmarks(self, tmp_path: Path) -> None:
         reports = tmp_path / "reports"
@@ -628,3 +633,33 @@ class TestGcAndCost:
         path = cost_report.write_report(report, tmp_path)
         assert path.is_file()
         assert path.parent == tmp_path / cost_report.REPORT_DIR
+
+
+class TestComposition:
+    """構成の単調さ。既定は warn（人間の目を誘導する）、宣言があれば fail。"""
+
+    def _monotonous(self) -> list[dict]:
+        return [
+            {"id": f"s{i:02d}", "kind": "key_points", "scene_spec": {"beats": []}} for i in range(8)
+        ]
+
+    def test_a_monotonous_video_warns_without_failing(self, project: Path) -> None:
+        report = run_qa(project, spec=_spec(scenes=self._monotonous()))
+        check = next(c for c in report.checks if c.id == "composition")
+        assert check.status == STATUS_WARN
+        assert "8" in check.detail, "測った数字が出ていない"
+
+    def test_a_varied_video_passes(self, project: Path) -> None:
+        scenes = [
+            {"id": f"s{i:02d}", "kind": kind, "scene_spec": {"beats": []}}
+            for i, kind in enumerate(["title", "flow", "timeline", "chart", "domain", "summary"])
+        ]
+        report = run_qa(project, spec=_spec(scenes=scenes))
+        check = next(c for c in report.checks if c.id == "composition")
+        assert check.status == STATUS_PASS
+
+    def test_a_declared_requirement_is_enforced(self, project: Path) -> None:
+        spec = _spec(scenes=self._monotonous(), story_requirements={"max_same_kind_run": 2})
+        report = run_qa(project, spec=spec)
+        check = next(c for c in report.checks if c.id == "composition")
+        assert check.status == STATUS_FAIL

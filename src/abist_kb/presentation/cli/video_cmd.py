@@ -297,14 +297,14 @@ def run_gc_command(
 @video_app.command("cost")
 def cost(
     ctx: typer.Context,
-    unit_price: Annotated[
-        float | None, typer.Option(help="TTS 1000 文字あたりの単価（未指定なら金額は出さない）")
-    ] = None,
     save: Annotated[bool, typer.Option("--save", help="reports/benchmarks/video へ保存")] = False,
 ) -> None:
-    """TTS 文字数・ディスク使用量を集計する。"""
+    """利用量（テロップ文字数・レンダリング時間・ディスク）を集計する。
+
+    **金額は出さない。** 有料のプロバイダを使わない設計なので見積もる対象が無い。
+    """
     settings = get_context(ctx).settings
-    report = cost_report.build_report(settings.reports_dir, tts_unit_price_per_1k_chars=unit_price)
+    report = cost_report.build_report(settings.reports_dir)
     payload = report.to_dict()
     if save:
         payload["savedTo"] = str(cost_report.write_report(report, settings.root_dir))
