@@ -259,3 +259,20 @@ class TestVideoCardKinds:
         result = validate_scene_spec(spec)
         assert not result.ok
         assert any(e.code == "unknown_beat_type" for e in result.errors)
+
+
+# -- 中身の無い見出しを出さない -----------------------------------------------------
+
+
+def test_source_heading_is_hidden_without_sources(layout_module) -> None:
+    """出典が無い面に「出典」の見出しだけを残さない。
+
+    実際に動画を作ったら、最後の面に罫線と「出典」が浮いていた（下に何も無い）。
+    出典を必ず見せる面だからこそ、空の見出しは「出典が消えた」ように読める。
+    """
+    assert layout_module.shows_source_heading([]) is False
+    assert layout_module.shows_source_heading(None) is False
+
+
+def test_source_heading_is_shown_with_sources(layout_module) -> None:
+    assert layout_module.shows_source_heading([{"id": "s1"}]) is True

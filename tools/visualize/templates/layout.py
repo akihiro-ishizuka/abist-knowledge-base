@@ -414,6 +414,15 @@ def _round_up(value: float, span: float) -> float:
     return float(f"{math.ceil(value / step) * step:.10g}")
 
 
+def shows_source_heading(sources) -> bool:
+    """エンドカードに「出典」の見出しを出すか。
+
+    出典が無い面に見出しだけを置くと、下に何も無い罫線と語が浮く。出典を必ず
+    見せる面だからこそ、空の見出しは「出典が消えた」ように読める。
+    """
+    return bool(sources)
+
+
 def fit_box(
     size: tuple[float, float], aspect_ratio: str, *, margin_x: float = SAFE_MARGIN_X
 ) -> tuple[float, float]:

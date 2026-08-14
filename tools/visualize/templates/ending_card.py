@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from manim import DOWN, LEFT, FadeIn, Line, Scene, Text, VGroup
 
+from templates.layout import shows_source_heading
 from templates.base import (
     COLOR_ACCENT,
     COLOR_BODY,
@@ -62,16 +63,17 @@ def build_final_layout(spec: dict) -> VGroup:
                 ]
             ).arrange(DOWN, buff=0.24)
         )
-    parts.append(
-        Line(
-            [-content_width() / 2, 0, 0],
-            [content_width() / 2, 0, 0],
-            color=COLOR_ACCENT,
-            stroke_width=2,
+    if shows_source_heading(spec.get("sources")):
+        parts.append(
+            Line(
+                [-content_width() / 2, 0, 0],
+                [content_width() / 2, 0, 0],
+                color=COLOR_ACCENT,
+                stroke_width=2,
+            )
         )
-    )
-    parts.append(Text("出典", font=font, font_size=22, color=COLOR_ACCENT))
-    parts.append(_source_lines(spec, font))
+        parts.append(Text("出典", font=font, font_size=22, color=COLOR_ACCENT))
+        parts.append(_source_lines(spec, font))
     return fit_to_frame(VGroup(*parts).arrange(DOWN, buff=0.35))
 
 
