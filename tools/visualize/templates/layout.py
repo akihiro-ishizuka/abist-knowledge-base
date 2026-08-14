@@ -453,6 +453,91 @@ def subtitle_max_chars(aspect_ratio: str) -> int:
 # 落とす**ことで最悪ケースを抑える。ここは判断だけ(manim 非依存)で、実際の
 # アニメーションは `templates/choreography.py` が持つ。
 
+class OpacityMemo:
+    """減光の前後で不透明度を覚えて戻す。
+
+    Manim の `set_opacity(1.0)` は**塗りと線の両方**を 1.0 にする。塗らない
+    前提の図形(折れ線、`progress` variant の目標枠)にこれを掛けると、シーンの
+    最後で塗り潰される。減光は「戻す」ものであって「1.0 にする」ものではない。
+
+    manim を import しない(判断だけを持つ)ので主 venv からテストできる。
+    実際のアニメーションは `templates/choreography.py` が使う。
+    """
+
+    def __init__(self) -> None:
+        self._saved: dict[int, tuple[float, float]] = {}
+
+    @staticmethod
+    def _leaves(mobject) -> list:
+        """実際に色を持つ要素まで降りる。
+
+        **入れ物(`VGroup` / `Text`)自身は塗りを持たない**(`fill_opacity` は 0.0)。
+        入れ物を基準に減光すると、戻すときに `set_fill(0.0)` が中身へ伝播して
+        **文字がまとめて消える**(比較表の中身が消えた)。葉だけを覚えて葉だけを戻す。
+        """
+        children = getattr(mobject, "submobjects", None)
+        if not children:
+            return [mobject]
+        return [leaf for child in children for leaf in OpacityMemo._leaves(child)]
+
+    @staticmethod
+    def _current(mobject) -> tuple[float, float]:
+        return (
+            float(getattr(mobject, "fill_opacity", 0.0) or 0.0),
+            float(getattr(mobject, "stroke_opacity", 1.0) or 0.0),
+        )
+
+    def remember(self, mobject) -> None:
+        """元の不透明度を控える(値は動かさない)。
+
+        アニメーションで沈める経路は、控えてから `animate` に渡す。
+        """
+        for leaf in self._leaves(mobject):
+            self._saved.setdefault(id(leaf), self._current(leaf))
+
+    def dim_targets(self, mobject, level: float) -> tuple[float, float]:
+        """減光後の (塗り, 線) を返す。**元の値に対する比**で沈める。
+
+        一律 `level` にすると、薄い塗りが**濃くなる**(0.0 の折れ線が塗られる)。
+        基準は必ず**控えた元の値**。現在値を基準にすると、beat ごとの `focus` で
+        0.25 → 0.0625 → … と掛け算が重なり、要素が画面から消える。
+
+        入れ物を渡された場合は、葉のうち最も濃いものを代表値にする(`animate` は
+        入れ物単位でしか掛けられないため)。
+        """
+        leaves = self._leaves(mobject)
+        originals = [self._saved.get(id(leaf)) or self._current(leaf) for leaf in leaves]
+        fill = max((o[0] for o in originals), default=0.0)
+        stroke = max((o[1] for o in originals), default=0.0)
+        return fill * level, stroke * level
+
+    def dim(self, mobject, level: float) -> tuple[float, float]:
+        self.remember(mobject)
+        fill, stroke = self.dim_targets(mobject, level)
+        for leaf in self._leaves(mobject):
+            saved_fill, saved_stroke = self._saved[id(leaf)]
+            leaf.set_fill(opacity=saved_fill * level)
+            leaf.set_stroke(opacity=saved_stroke * level)
+        return fill, stroke
+
+    def reset(self) -> None:
+        """控えを捨てる。シーンの頭で呼ぶ。
+
+        キーは `id()` なので、控えたまま解放された Mobject の id が再利用されると
+        別物を誤って「戻す」ことになる。シーン境界で空にしておけば起きない。
+        """
+        self._saved.clear()
+
+    def restore(self, mobject) -> None:
+        """減光したものだけを元へ戻す(触っていないものには手を出さない)。"""
+        for leaf in self._leaves(mobject):
+            saved = self._saved.pop(id(leaf), None)
+            if saved is None:
+                continue
+            leaf.set_fill(opacity=saved[0])
+            leaf.set_stroke(opacity=saved[1])
+
+
 #: モーション段。閉じた列挙(エージェントが勝手な値を入れられない)。
 MOTION_LEVELS: tuple[str, ...] = ("minimal", "standard", "rich")
 DEFAULT_MOTION = "standard"

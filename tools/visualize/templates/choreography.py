@@ -25,7 +25,7 @@ from manim import (
     config,
 )
 
-from templates.layout import choreo_budget, resolve_motion
+from templates.layout import OpacityMemo, choreo_budget, resolve_motion
 
 #: 焦点から外れた要素の不透明度。消さずに沈める（文脈は残す）。
 DIM_OPACITY = 0.35
@@ -62,8 +62,20 @@ class BeatClock:
         self.times.append(round(float(getattr(self._scene.renderer, "time", 0.0) or 0.0), 3))
 
 
-def _opacity_animation(mobject, opacity: float):
-    return mobject.animate.set_opacity(opacity)
+#: 減光した不透明度の控え。`focus` が覚え、`unfocus_all` が戻す。テンプレートは
+#: シーンごとに新しい Scene インスタンスで走るので、モジュール上の1つで足りる。
+_MEMO = OpacityMemo()
+
+
+def _opacity_animation(memo: OpacityMemo, mobject, level: float):
+    """減光のアニメーション。**元の不透明度に対する比**で沈める。
+
+    `set_opacity(level)` を直接使うと、塗らない前提の図形（折れ線、`progress`
+    variant の目標枠）が `level` の濃さで**塗られてしまう**。
+    """
+    memo.remember(mobject)
+    fill, stroke = memo.dim_targets(mobject, level)
+    return mobject.animate.set_fill(opacity=fill).set_stroke(opacity=stroke)
 
 
 def stagger_in(scene, items, *, shift=UP * 0.2, lag_ratio: float = 0.15, run_time: float = 0.9):
@@ -89,25 +101,33 @@ def focus(scene, all_items, current, *, budget: dict) -> None:
     """
     if not budget.get("focus"):
         return
+    # 前の beat で沈めた要素が今回の注目先かもしれない。**先に戻す**。
+    # 戻さないと2つ目以降は全部同じ濃さになり、focus が何も強調しなくなる。
+    if current is not None:
+        _MEMO.restore(current)
     others = [m for m in all_items if m is not current and m is not None]
     if not others:
         return
     run_time = float(budget.get("focus_run_time") or 0.0)
     if run_time <= 0:
         for mobject in others:
-            mobject.set_opacity(DIM_OPACITY)
+            _MEMO.dim(mobject, DIM_OPACITY)
         return
     scene.play(
-        AnimationGroup(*[_opacity_animation(m, DIM_OPACITY) for m in others]),
+        AnimationGroup(*[_opacity_animation(_MEMO, m, DIM_OPACITY) for m in others]),
         run_time=run_time,
     )
 
 
 def unfocus_all(scene, all_items) -> None:
-    """減光を戻す。**`hold_to` の前に必ず呼ぶ**（静止画と最終フレームを揃えるため）。"""
+    """減光を**元へ戻す**。**`hold_to` の前に必ず呼ぶ**（静止画と最終フレームを揃える）。
+
+    一律 1.0 にしてはいけない。Manim の `set_opacity` は塗りと線の両方を動かす
+    ので、塗らない前提の図形が最後に塗り潰される（折れ線が面グラフになる）。
+    """
     for mobject in all_items:
         if mobject is not None:
-            mobject.set_opacity(1.0)
+            _MEMO.restore(mobject)
 
 
 def pulse(scene, mobject, *, run_time: float = 0.4) -> None:
@@ -155,6 +175,7 @@ def enter_scene(scene, spec: dict) -> None:
     シーン間の繋ぎは **各シーン自身の頭と尻**でやる。ffmpeg の xfade で繋ぐと
     全シーンの開始時刻がずれ、効果音・字幕・チャプターのタイムラインが総崩れになる。
     """
+    _MEMO.reset()  # シーン境界。前のシーンの控えを持ち越さない
     seconds = _dip_seconds(spec)
     if seconds <= 0:
         return
