@@ -15,6 +15,7 @@ import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 
+import mcp.types as types
 import pytest
 from replay import check_result, load_fixture
 
@@ -77,11 +78,44 @@ def _fixture_files(subdir: str) -> list[Path]:
     return sorted((FIXTURES_DIR / subdir).glob("*.json"))
 
 
+#: 旧実装に無い機能を追加したことに伴う、fixture の**形**からの意図的な逸脱。
+#: fixture は SHA-256 で固定されていて手編集できないので、
+#: `_INTENTIONAL_DESCRIPTION_DIVERGENCE` と同じく「増えてよい理由」を書き下して許可する。
+_INTENTIONAL_SCENE_KIND_FIELDS: set[str] = {
+    # 種別ごとの見本 PNG（`assets/scene-gallery/<kind>.png`）。説明文だけでは
+    # 17種の見た目が伝わらず、書き手が想像で選ぶことになっていた（実測で
+    # 14シーン中10が key_points に偏っていた）。旧実装には無い純増のフィールド。
+    "preview",
+}
+
+
 @pytest.mark.parametrize("fixture_path", _fixture_files("list_scene_kinds"), ids=lambda p: p.stem)
 def test_list_scene_kinds_matches_fixture_shape(env: Env, fixture_path: Path) -> None:
+    """旧実装の形は保ち、宣言した分だけ増えていること。
+
+    fixture との比較は「増えたキーを取り除いてから」行う —— 取り除いた結果が
+    fixture と一致するなら、既存の契約は何も壊していない。
+    """
     fixture = load_fixture(fixture_path)
     result = env.tools.list_scene_kinds({})
-    outcome = check_result(fixture, result)
+
+    payload = json.loads(result.content[0].text)
+    added = {
+        key
+        for entry in payload["scene_kinds"]
+        for key in entry
+        if key in _INTENTIONAL_SCENE_KIND_FIELDS
+    }
+    assert added == _INTENTIONAL_SCENE_KIND_FIELDS, f"宣言と実際の増分が食い違っている: {added}"
+    for entry in payload["scene_kinds"]:
+        for key in _INTENTIONAL_SCENE_KIND_FIELDS:
+            entry.pop(key, None)
+    stripped = types.CallToolResult(
+        content=[types.TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))],
+        isError=bool(result.isError),
+    )
+
+    outcome = check_result(fixture, stripped)
     assert outcome.ok, outcome.reason
 
 

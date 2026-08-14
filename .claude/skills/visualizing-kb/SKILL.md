@@ -36,6 +36,9 @@ description: Use when turning knowledge-base content into a Manim 図解・ア�
 出力は `mp4`（アニメ）か `png`（静止画）。予約済み・未実装の kind は無い。
 **正確な一覧と制約は必ず `list_scene_kinds` で確認すること**（このドキュメントは要約）。
 
+`list_scene_kinds` は各 kind の `preview`（`assets/scene-gallery/<kind>.png`）も返す。
+**説明文だけで選ばず、実物を見てから決める。**
+
 図解の kind（5種）に加え、動画の構成要素として使うカード系の kind がある:
 `title` / `chapter` / `key_points` / `quote` / `summary` / `cta` / `ending` /
 `code` / `formula` / `image` / `chart` / `thumbnail`。

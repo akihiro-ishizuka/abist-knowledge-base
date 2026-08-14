@@ -182,6 +182,38 @@ def validate_arguments(tool_name: str, arguments: dict[str, Any]) -> types.CallT
     return None
 
 
+#: シーン種別の見本（`scripts/generate-scene-gallery.py` が生成する PNG）。
+#: リポジトリルートからの相対で返す —— 絶対パスを返すと、成果物を別マシンへ
+#: 持って行ったときに壊れる。
+SCENE_GALLERY_DIR = "assets/scene-gallery"
+
+
+def scene_kinds_payload() -> dict[str, Any]:
+    """`list_scene_kinds` の応答。
+
+    説明文だけでは17種の見た目が伝わらず、書き手は**想像して**選ぶことになる
+    （実際、手書きの台本でも key_points に偏っていた）。`preview` で実物を
+    見せることで、選ぶ前に見比べられるようにする。
+    """
+    from abist_kb.domain.scene_spec import SCENE_KINDS
+
+    return {
+        "ok": True,
+        "count": len(SCENE_KINDS),
+        "scene_kinds": [
+            {
+                "kind": info["kind"],
+                "description": info["description"],
+                "template": info["template"],
+                "required": info["required"],
+                "beat_types": info["beat_types"],
+                "preview": f"{SCENE_GALLERY_DIR}/{info['kind']}.png",
+            }
+            for info in SCENE_KINDS
+        ],
+    }
+
+
 class KbVisualizeTools:
     """kb-visualize の3ツールを実装するアダプタ。"""
 
@@ -207,23 +239,7 @@ class KbVisualizeTools:
     # -- list_scene_kinds -----------------------------------------------------
 
     def list_scene_kinds(self, _arguments: dict[str, Any]) -> types.CallToolResult:
-        from abist_kb.domain.scene_spec import SCENE_KINDS
-
-        payload = {
-            "ok": True,
-            "count": len(SCENE_KINDS),
-            "scene_kinds": [
-                {
-                    "kind": info["kind"],
-                    "description": info["description"],
-                    "template": info["template"],
-                    "required": info["required"],
-                    "beat_types": info["beat_types"],
-                }
-                for info in SCENE_KINDS
-            ],
-        }
-        return ok_result(payload)
+        return ok_result(scene_kinds_payload())
 
     # -- check_visualize_deps ---------------------------------------------------
 

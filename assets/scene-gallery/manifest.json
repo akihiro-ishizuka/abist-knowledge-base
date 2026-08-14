@@ -1,0 +1,90 @@
+{
+  "note": "scripts/generate-scene-gallery.py が生成する。手で編集しない。",
+  "previews": [
+    {
+      "kind": "explain",
+      "path": "explain.png",
+      "sha256": "1bbd0cf9e78cd87e9bbf896078540faf5eb0be900251987e3d7e88c8b325e384"
+    },
+    {
+      "kind": "flow",
+      "path": "flow.png",
+      "sha256": "db6ed09e86acd2752222e7dc0a60c0316bae9a3cce54bd89817d21fb5d8901a5"
+    },
+    {
+      "kind": "timeline",
+      "path": "timeline.png",
+      "sha256": "a44c5b718dfdd4469f7d4e47fb75ba07ba509b41bac78d7234cbb39e3b79a994"
+    },
+    {
+      "kind": "comparison",
+      "path": "comparison.png",
+      "sha256": "f142fd4be3adde282f24ff7fcc714d5e6b3a8d03afcf66dd10fb3ab9eccb9b9d"
+    },
+    {
+      "kind": "domain",
+      "path": "domain.png",
+      "sha256": "8293e240e0e8257f91f50613fbaf78885c17f251772a1d200331ae53f85f4ee3"
+    },
+    {
+      "kind": "title",
+      "path": "title.png",
+      "sha256": "0b670925a29e1b5bd52fbfadf309190da92e2d82502c4eeac8a22d21e18e1c80"
+    },
+    {
+      "kind": "chapter",
+      "path": "chapter.png",
+      "sha256": "bf5689c3e9becb1b38be68d04a1a87792a0457d1996313860dc658c5e18efe7e"
+    },
+    {
+      "kind": "key_points",
+      "path": "key_points.png",
+      "sha256": "7578fd10e58571fbd69923773727692c3dfe7d4f65f2fd4b1bfca00b01c6b3d8"
+    },
+    {
+      "kind": "quote",
+      "path": "quote.png",
+      "sha256": "8b76c90b2e6eed5447115a2e55cc89812a2c46d60916187b55b5f881adb22762"
+    },
+    {
+      "kind": "summary",
+      "path": "summary.png",
+      "sha256": "0254f939f1fc93aa2ab4aecfbd0c413cfcfad728eec1dd05e49bb199c135301a"
+    },
+    {
+      "kind": "cta",
+      "path": "cta.png",
+      "sha256": "e719c0be73c18981ca416826d8dff060b776ff0a540caf663a5c5eb58cedf5b6"
+    },
+    {
+      "kind": "ending",
+      "path": "ending.png",
+      "sha256": "b9088d600fd9f509670ec597ecf81e88c5d7e50ddb9890e884c82e412ce682b9"
+    },
+    {
+      "kind": "code",
+      "path": "code.png",
+      "sha256": "fb4b4b4586ac4c6221d48c6903a9366aa80a4c3024423903bae8c8ff4a2c8d46"
+    },
+    {
+      "kind": "formula",
+      "path": "formula.png",
+      "sha256": "186577c88488177f21c2c39e24170d943f761de8abf72b274e7568cce99b749b"
+    },
+    {
+      "kind": "image",
+      "path": "image.png",
+      "sha256": "7231e8837bc6c44de02e21fa01199abd5622f963bafb36be4e62ac179abce854"
+    },
+    {
+      "kind": "thumbnail",
+      "path": "thumbnail.png",
+      "sha256": "4a356f917ba57482063b830e705f8951b62be50a0a5a6ee6e145faae714521e0"
+    },
+    {
+      "kind": "chart",
+      "path": "chart.png",
+      "sha256": "2d7cae4b9746af5b593d55ab9cb89b17184aee63ed18d12b73b59c48d61bbd22"
+    }
+  ]
+}

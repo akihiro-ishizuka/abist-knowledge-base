@@ -104,6 +104,15 @@ description: Use when creating a full 社内動画 (複数シーン・テロッ�
 
 尺予算で機械的に決めない。**その内容がどう見えると分かりやすいか**で選ぶ。
 
+**見た目は `list_scene_kinds` の `preview` で確認できる**（`assets/scene-gallery/<kind>.png`）。
+17種は説明文だけでは違いが分からない。**選ぶ前に見る。**
+
+**同じ種別を4つ以上続けない。** 続くと「同じ絵がずっと出ている」動画になる。
+`validate_video_script` が `composition` として測った数字を返すので、
+`MONOTONOUS_RUN` / `SLIDESHOW_RISK` が出たら見せ方を変える。
+図・グラフを伴わない面（title / chapter / key_points / quote / summary / cta / ending）
+だけで 75% を超えると、動画である意味が薄くなる。
+
 ## 効果音は意味で書く
 
 音源ファイルは指定しない（できない）。意味イベントだけを書く:
@@ -156,6 +165,9 @@ description: Use when creating a full 社内動画 (複数シーン・テロッ�
 | code | 直し方 |
 | --- | --- |
 | `INSUFFICIENT_SEMANTIC_CONTENT` | 表示文に記法断片・禁止見出しが残っている。`errors` の該当箇所を書き直す |
+| `MONOTONOUS_RUN` | 同じ種別が続きすぎ。`preview` を見て別の見せ方に替える |
+| `SLIDESHOW_RISK` | 文字を並べる面ばかり。図で見せられる内容を探す |
+| `TOO_FEW_SCENE_KINDS` | 種別が偏っている。`preview` で選択肢を見る |
 | `PORTRAIT_TOO_DENSE` | 縦型の図に要素を詰めすぎ。シーンを分ける |
 | `MISSING_STORY_TOPIC` | 自分で宣言した必須テーマに触れていない。触れるか、要件から外す |
 | `UNKNOWN_IMAGE_ASSET` | `image_assets` に登録してから `asset_id` で参照する |
