@@ -203,6 +203,28 @@ def _card_beats(
     return beats
 
 
+#: `role` から推測するカード種別。**書き手は `role` で構成を書く。**
+#: 「表紙 → 章扉 → 本編 → まとめ → エンドカード」という並びを書いたのに、
+#: `diagram` を省いた面が全部 explain になると、章の切れ目の無い動画ができる。
+#: 対応するカードがある role だけを推測し、それ以外（body / diagram など）は
+#: 従来どおり explain へ落とす。
+_ROLE_CARDS: dict[str, str] = {
+    "intro": "title",
+    "chapter": "chapter",
+    "summary": "summary",
+    "ending": "ending",
+    "cta": "cta",
+}
+
+
+def _resolve_kind(scene: dict[str, Any], diagram: dict[str, Any]) -> str:
+    """描くべき scene_kind。**明示された `diagram.kind` が最優先。**"""
+    explicit = diagram.get("kind")
+    if isinstance(explicit, str) and explicit:
+        return explicit
+    return _ROLE_CARDS.get(str(scene.get("role") or ""), "explain")
+
+
 def _card_spec_from(
     scene: dict[str, Any],
     diagram: dict[str, Any],
@@ -260,7 +282,7 @@ def _scene_spec_from(
 
     if outline is None:
         # 出典に紐づかないシーン（表紙・エンドカード）は装飾のみで描く
-        card = _card_spec_from(scene, diagram, diagram.get("kind"), title, [])
+        card = _card_spec_from(scene, diagram, _resolve_kind(scene, diagram), title, [])
         if card is not None:
             return card
         texts = scene.get("on_screen_text") or [title]
@@ -279,7 +301,7 @@ def _scene_spec_from(
     )
     if not sources:
         sources = [source]
-    kind = diagram.get("kind", "explain")
+    kind = _resolve_kind(scene, diagram)
 
     card = _card_spec_from(scene, diagram, kind, title, sources)
     if card is not None:
@@ -310,6 +332,51 @@ def _scene_spec_from(
             "output_format": "mp4",
             "template": "timeline_v1",
             "title": title,
+            "sources": sources,
+            "beats": beats,
+        }
+
+    if kind == "chart":
+        # 数値は decorative で逃げられない（グラフは根拠が無くても「それらしく」
+        # 見えてしまう）。出典は系列ごとに `source_index` で選べる。
+        beats = []
+        for series in diagram.get("series") or []:
+            if not isinstance(series, dict):
+                continue
+            values = [
+                {
+                    "name": clean_display_text(str(v.get("name") or ""))[:20],
+                    "value": v.get("value"),
+                }
+                for v in (series.get("values") or [])
+                if isinstance(v, dict)
+            ]
+            if not values:
+                continue
+            ref = f"s{int(series.get('source_index', 0)) + 1}"
+            beat = {
+                "type": "chart_series",
+                "label": clean_display_text(str(series.get("label") or ""))[:24],
+                "values": values,
+                "source_refs": [ref],
+            }
+            unit = clean_display_text(str(series.get("unit") or ""))[:8]
+            if unit:
+                beat["unit"] = unit
+            beats.append(beat)
+        if not beats:
+            return None
+        chart: dict[str, Any] = {"variant": diagram.get("variant") or "bar"}
+        value_label = clean_display_text(str(diagram.get("value_label") or ""))[:20]
+        if value_label:
+            chart["value_label"] = value_label
+        return {
+            "schema_version": "1.0",
+            "scene_kind": "chart",
+            "output_format": "mp4",
+            "template": "chart_v1",
+            "title": title,
+            "chart": chart,
             "sources": sources,
             "beats": beats,
         }

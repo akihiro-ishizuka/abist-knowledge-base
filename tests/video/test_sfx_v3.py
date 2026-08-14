@@ -180,3 +180,37 @@ def test_tick_placement_is_deterministic(palette) -> None:
     assert [(c.t_sec, c.sound_id) for c in first.cues] == [
         (c.t_sec, c.sound_id) for c in second.cues
     ]
+
+
+# -- 台本から書けること ---------------------------------------------------------------
+
+
+def test_every_resolvable_event_can_be_written_in_a_script() -> None:
+    """**解決できる音は、台本に書けなければ意味がない。**
+
+    `EVENT_TO_CATEGORY`（解決側）と `SOUND_EVENTS`（台本の検証側）を別々に
+    持つと、片方だけ更新したときに「実装したのに書けない」状態になる。
+    実際 v3 で足した chart_draw / beat_reveal / scene_change がそうなっていた。
+    """
+    from abist_kb.domain.script_draft import SOUND_EVENTS
+
+    assert set(SOUND_EVENTS) == set(EVENT_TO_CATEGORY), (
+        "台本に書ける音と解決できる音が食い違っている"
+    )
+
+
+def test_a_script_can_use_the_new_events() -> None:
+    from abist_kb.domain.script_draft import validate_script_draft
+
+    draft = {
+        "title": "t",
+        "scenes": [{"id": "s01", "role": "body", "title": "本編"}],
+        "sound_events": [
+            {"scene_id": "s01", "event": "chart_draw", "anchor": "scene.start"},
+            {"scene_id": "s01", "event": "beat_reveal", "anchor": "beat-1.reveal"},
+            {"scene_id": "s01", "event": "scene_change", "anchor": "scene.end"},
+        ],
+    }
+    result = validate_script_draft(draft, source_ids={"s1"})
+    assert result.ok, [e.to_dict() for e in result.errors]
+    assert len(result.draft["sound_events"]) == 3

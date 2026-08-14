@@ -35,7 +35,9 @@ SCENE_ROLES: tuple[str, ...] = (
 #: 主張の種類。`fact` だけが出典必須。
 CLAIM_KINDS: tuple[str, ...] = ("fact", "example", "opinion")
 
-#: 意味イベント（音源名ではない）。Phase 6 の Resolver がカテゴリへ落とす。
+#: 意味イベント（音源名ではない）。`application.video.sound_events` の Resolver が
+#: カテゴリへ落とす。**ここが語彙の正本**で、あちらの対応表と一致していることを
+#: テストで縛る（片方だけ増やすと「解決できるのに台本へ書けない」音が生まれる）。
 SOUND_EVENTS: tuple[str, ...] = (
     "intro",
     "chapter_change",
@@ -46,6 +48,10 @@ SOUND_EVENTS: tuple[str, ...] = (
     "success",
     "error",
     "outro",
+    # v3。動きに同期する細かい音。
+    "beat_reveal",
+    "scene_change",
+    "chart_draw",
 )
 
 #: 効果音の音源を指定しようとしたときに現れるキー（拒否対象）。
