@@ -22,6 +22,7 @@ from abist_kb.application.video.caption_timing import (
     caption_chars,
     estimate_caption_duration,
 )
+from abist_kb.application.video import subtitles
 from abist_kb.application.video.subtitles import (
     MIN_CUE_SEC,
     SUBTITLE_MAX_CHARS,
@@ -198,3 +199,84 @@ def test_burn_in_has_an_outline_for_legibility(tmp_path: Path) -> None:
     srt = tmp_path / "narration.srt"
     srt.write_text("1\n", encoding="utf-8")
     assert "Outline=" in burn_in_filter(srt)
+
+
+# -- テロップの読みやすさ（分割の質） -------------------------------------------------
+#
+# 実際に動画を1本作って初めて見つかった不備。字幕は「切れてはいない」が、
+# 切り方が読みを壊していた。
+
+
+def test_a_number_is_not_split_across_lines() -> None:
+    """「2179点」が「2」と「179点」に割れないこと。
+
+    数字が行をまたぐと、読み手には別の数として見える（2 と 179点）。
+    テンプレート側の折返し（`layout.wrap_cjk`）は ASCII 語を守るのに、
+    字幕側の `wrap_line` は守っていなかった。
+    """
+    lines = subtitles.wrap_line("ファイルから1行ずつ読んで描く実装では、2179点で20分25秒。", 20)
+    assert any("2179" in line for line in lines), lines
+
+
+def test_an_english_word_is_not_split_across_lines() -> None:
+    lines = subtitles.wrap_line("値の取得をやめて、Range関数で範囲ごとまとめて取得します。", 12)
+    assert any("Range" in line for line in lines), lines
+
+
+def test_a_long_sentence_does_not_leave_an_orphan_cue() -> None:
+    """最後に「と。」だけのキューを残さないこと。
+
+    1文が3行になると `[行1,行2]` `[行3]` に切れ、2文字だけの字幕が
+    数秒間ぽつんと出る。行数をキューの容量で割り切れるように均す。
+    """
+    text = "CATIAで表示できること、色の分布が分かること、5000個を5分から10分で描き切ること。"
+    cues = subtitles.chunk_narration(text, max_chars=20, max_lines=2)
+
+    assert len(cues) > 1, "この文は1キューに収まらない前提のテスト"
+    assert all(len(cue) == 2 for cue in cues), [["".join(c)] for c in cues]
+
+
+def test_balancing_evens_out_the_line_lengths() -> None:
+    """行数を割り切れるようにするだけでは足りない。
+
+    最後の行が「と。」の2文字だけ、という絵は依然として悪い。均すのは
+    キューの数ではなく**1行の長さ**。
+    """
+    text = "CATIAで表示できること、色の分布が分かること、5000個を5分から10分で描き切ること。"
+    lines = [line for cue in subtitles.chunk_narration(text, max_chars=20, max_lines=2) for line in cue]
+
+    widths = [subtitles._display_width(line) for line in lines]
+    assert min(widths) >= max(widths) * 0.5, dict(zip(lines, widths))
+
+
+def test_balancing_never_loses_or_reorders_text() -> None:
+    text = "CATIAで表示できること、色の分布が分かること、5000個を5分から10分で描き切ること。"
+    cues = subtitles.chunk_narration(text, max_chars=20, max_lines=2)
+    assert "".join("".join(cue) for cue in cues) == text
+
+
+def test_a_short_sentence_still_makes_one_short_cue() -> None:
+    """均しの対象は「キューをまたぐ文」だけ。短い文を無理に増やさない。"""
+    cues = subtitles.chunk_narration("この3つが出発点の条件でした。", max_chars=20, max_lines=2)
+    assert len(cues) == 1
+
+
+def test_balanced_lines_stay_within_the_declared_width() -> None:
+    text = "パートファイル分割、間引き、まとめ読みを重ねると、同じ2179点が3分41秒でした。"
+    for cue in subtitles.chunk_narration(text, max_chars=20, max_lines=2):
+        for line in cue:
+            assert subtitles._display_width(line) <= 40, line
+
+
+def test_word_char_rule_mirrors_the_template_side() -> None:
+    """字幕側とテンプレート側で「割ってはいけない字」の判定を揃える。
+
+    別 venv なので import で共有できない。写しが食い違うと、同じ文が図では
+    割れず字幕では割れる（あるいは逆）ことになる。
+    """
+    from templates import layout
+
+    samples = "0123456789abcXYZ_-.あア漢、。（ ％/:"
+    assert [subtitles._is_word_char(c) for c in samples] == [
+        layout._is_ascii_word_char(c) for c in samples
+    ]
