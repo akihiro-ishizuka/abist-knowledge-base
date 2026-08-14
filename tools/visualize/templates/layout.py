@@ -331,6 +331,66 @@ def safe_area(aspect_ratio: str) -> tuple[float, float]:
     return width - SAFE_MARGIN_X * 2, height - SAFE_MARGIN_Y * 2
 
 
+#: 折れ線の上下に取る余白(値域に対する割合)。
+LINE_CHART_PADDING = 0.12
+#: 値域が 0 からこの割合の内側に収まっていれば、0 起点のまま描く。
+LINE_CHART_ZERO_ANCHOR = 0.35
+
+
+def line_chart_range(values: list[float]) -> tuple[float, float]:
+    """折れ線の目盛り範囲 (下端, 上端) を返す。
+
+    棒グラフは長さが量そのものなので必ず 0 起点。折れ線は**推移**を見せる図
+    なので、値が 0 から遠いところで動いているなら 0 起点にすると変化が上端に
+    潰れる(315〜408 秒の差 30% が、見た目には平らな線になる)。
+
+    ただし 0 起点をやめると差が誇張されるため、**目盛りの値を画面に出すこと**が
+    条件(`chart_v1` が下端・上端のラベルを描く)。値が 0 に近いところまで
+    下がっているなら、素直に 0 起点のままにする。
+    """
+    numbers = [float(v) for v in values]
+    if not numbers:
+        return 0.0, 1.0
+    low, high = min(numbers), max(numbers)
+    if high <= 0:
+        return low - 1.0, 0.0
+    if low <= high * LINE_CHART_ZERO_ANCHOR:
+        return 0.0, _round_up(high * (1.0 + LINE_CHART_PADDING), high)
+    span = high - low
+    if span <= 0:
+        # 全部同じ値。線を真ん中へ置く(高さ 0 の枠にすると描けない)。
+        return low - abs(low) * LINE_CHART_PADDING - 1.0, high + abs(high) * LINE_CHART_PADDING + 1.0
+    pad = span * LINE_CHART_PADDING
+    return _round_down(low - pad, span), _round_up(high + pad, span)
+
+
+def _nice_step(span: float) -> float:
+    """値域に見合う「きりのいい」刻み(1/2/5 x 10^n)。"""
+    import math
+
+    if span <= 0:
+        return 1.0
+    magnitude = 10 ** math.floor(math.log10(span))
+    for factor in (0.1, 0.2, 0.5, 1.0):
+        if span <= magnitude * factor * 10:
+            return magnitude * factor
+    return magnitude
+
+
+def _round_down(value: float, span: float) -> float:
+    import math
+
+    step = _nice_step(span)
+    return float(f"{math.floor(value / step) * step:.10g}")
+
+
+def _round_up(value: float, span: float) -> float:
+    import math
+
+    step = _nice_step(span)
+    return float(f"{math.ceil(value / step) * step:.10g}")
+
+
 def subtitle_max_chars(aspect_ratio: str) -> int:
     """字幕1行の最大文字数(全角換算)。
 

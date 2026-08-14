@@ -19,14 +19,15 @@ from manim import (
     FadeIn,
     GrowFromEdge,
     Line,
-    Polygram,
     Rectangle,
     Scene,
     Text,
     VGroup,
+    VMobject,
 )
 
 from templates import choreography
+from templates.layout import line_chart_range
 from templates.base import (
     body_width,
     card_title,
@@ -112,8 +113,17 @@ def _bar_rows(spec: dict, series: list[dict], font: str, theme) -> VGroup:
 
 
 def _line_chart(spec: dict, series: list[dict], font: str, theme) -> VGroup:
-    """折れ線。軸は自前の直線2本で描く（Axes は LaTeX を引くので使わない）。"""
-    peak = _max_value(series)
+    """折れ線。軸は自前の直線2本で描く（Axes は LaTeX を引くので使わない）。
+
+    目盛りは 0 起点とは限らない（`layout.line_chart_range`）。0 から遠いところで
+    動く値を 0 起点で描くと、変化が上端に潰れて**推移が見えない**。代わりに
+    **下端と上端の値を必ず画面に出す**（範囲を隠したまま拡大すると誇張になる）。
+    """
+    unit = next((b.get("unit") or "" for b in series if b.get("unit")), "")
+    low, high = line_chart_range(
+        [float(e["value"]) for b in series for e in b.get("values") or []]
+    )
+    span = high - low or 1.0
     width = bar_max_width()
     height = LINE_CHART_HEIGHT * (0.7 if is_portrait() else 1.0)
     baseline = Line(LEFT * width / 2, RIGHT * width / 2, color=theme.rule, stroke_width=2)
@@ -132,12 +142,18 @@ def _line_chart(spec: dict, series: list[dict], font: str, theme) -> VGroup:
         points = []
         for value_index, entry in enumerate(entries):
             x = -width / 2 + step * value_index
-            y = height * float(entry["value"]) / peak
+            y = height * (float(entry["value"]) - low) / span
             points.append([x, y, 0])
             if index == 0:
                 names.append(str(entry["name"]))
         if len(points) >= 2:
-            chart.add(Polygram([points], color=color, stroke_width=4, fill_opacity=0.0))
+            # **閉じない折れ線。** `Polygram` は多角形なので最後の点から最初へ線が
+            # 戻ってしまう（推移のグラフとしては嘘になる）。角を繋ぐだけの
+            # VMobject を組む。
+            polyline = VMobject(color=color, stroke_width=4)
+            polyline.set_points_as_corners(points)
+            polyline.set_fill(opacity=0.0)
+            chart.add(polyline)
         for point in points:
             chart.add(Dot(point, radius=0.055, color=color))
         chart.add(
@@ -152,6 +168,12 @@ def _line_chart(spec: dict, series: list[dict], font: str, theme) -> VGroup:
             tick = Text(name, font=font, font_size=15, color=theme.footer)
             tick.next_to([-width / 2 + step * value_index, 0, 0], DOWN, buff=0.15)
             chart.add(tick)
+
+    # 縦軸の下端・上端の値。**範囲を出さずに拡大すると誇張になる。**
+    for value, y in ((low, 0.0), (high, height)):
+        label = Text(_format_value(value, unit), font=font, font_size=15, color=theme.footer)
+        label.next_to([-width / 2, y, 0], LEFT, buff=0.18)
+        chart.add(label)
     # 軸と目盛りの位置決めのため、原点を左下に置いてから中央へ寄せる。
     chart.shift(UP * height / 2)
     return chart
@@ -204,8 +226,14 @@ def make_scene_classes(spec: dict):
                 self.play(Create(body[0]), Create(body[1]), run_time=0.6)
                 for part in body[2:]:
                     clock.mark()
-                    self.play(Create(part) if isinstance(part, Polygram) else FadeIn(part),
-                              run_time=0.4)
+                    # 折れ線は描き起こし、点とラベルはフェードで出す。
+                    is_polyline = isinstance(part, VMobject) and not isinstance(
+                        part, Dot | Text
+                    )
+                    self.play(
+                        Create(part) if is_polyline else FadeIn(part),
+                        run_time=0.4,
+                    )
             else:
                 for row in body:
                     clock.mark()
