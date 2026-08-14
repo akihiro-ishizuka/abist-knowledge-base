@@ -90,8 +90,34 @@ def split_sentences(text: str) -> list[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
+def _is_word_char(char: str) -> bool:
+    """行の途中で割ってはいけない字（半角英数字と語中の記号）。
+
+    `tools/visualize/templates/layout._is_ascii_word_char` の写し（別 venv のため
+    import できない）。両者が食い違わないことはテストで固定している。
+    """
+    return char.isascii() and (char.isalnum() or char in "_-.")
+
+
+def _break_before_word(current: str, next_char: str) -> tuple[str, str]:
+    """語の途中で折り返そうとしているとき、語の直前で切り直す。
+
+    戻り値は `(前行, 次行へ送る断片)`。切り直す必要が無ければ `("", "")`。
+    「2179点」が「2」と「179点」に割れると、読み手には別の数として見える。
+    """
+    if not current or not _is_word_char(next_char) or not _is_word_char(current[-1]):
+        return "", ""
+    index = len(current)
+    while index > 0 and _is_word_char(current[index - 1]):
+        index -= 1
+    if index == 0:
+        # 行全体が1つの長い語。切り直すと無限に後退するのでそのまま折る。
+        return "", ""
+    return current[:index], current[index:]
+
+
 def wrap_line(text: str, max_chars: int) -> list[str]:
-    """全角換算 `max_chars` で折り返す（行頭禁則は追い出し）。"""
+    """全角換算 `max_chars` で折り返す（行頭禁則は追い出し、語の途中では割らない）。"""
     budget = max_chars * 2  # 全角1文字=2カラム
     lines: list[str] = []
     current = ""
@@ -102,7 +128,11 @@ def wrap_line(text: str, max_chars: int) -> list[str]:
             current += char
             width += char_width
             continue
-        if char in _NO_LINE_START and len(current) > 1:
+        head, carry = _break_before_word(current, char)
+        if head:
+            lines.append(head)
+            current = carry + char
+        elif char in _NO_LINE_START and len(current) > 1:
             lines.append(current[:-1])
             current = current[-1] + char
         else:
@@ -114,13 +144,35 @@ def wrap_line(text: str, max_chars: int) -> list[str]:
     return lines or [""]
 
 
+def _balanced_lines(sentence: str, max_chars: int, max_lines: int) -> list[str]:
+    """キューをまたぐ文を、端数の出ない行数へ均す。
+
+    素直に折り返すと最後のキューに1行だけ残ることがあり、「と。」のような
+    2文字の字幕が数秒間ぽつんと出る。行数が `max_lines` で割り切れる中で
+    **最も広い幅**を選び直す（幅は宣言値を超えない＝読みやすさは落ちない）。
+    """
+    lines = wrap_line(sentence, max_chars)
+    if len(lines) <= max_lines:
+        return lines
+    limit = -(-len(lines) // max_lines) * max_lines  # 切り上げてキューを埋める行数
+
+    # 全体を行数で割った幅から始める。行数を割り切れるようにするだけでは足りず、
+    # 「と。」だけの行が残る。**1行の長さを均す**ところまでやる。
+    start = max(1, -(-_display_width(sentence) // (limit * 2)))
+    for width in range(start, max_chars + 1):
+        candidate = wrap_line(sentence, width)
+        if len(candidate) <= limit:
+            return candidate
+    return lines
+
+
 def chunk_narration(
     text: str, *, max_chars: int = DEFAULT_MAX_CHARS_PER_LINE, max_lines: int = DEFAULT_MAX_LINES
 ) -> list[list[str]]:
     """ナレーションを「1キュー分の行の並び」へ分ける。"""
     cues: list[list[str]] = []
     for sentence in split_sentences(text):
-        lines = wrap_line(sentence, max_chars)
+        lines = _balanced_lines(sentence, max_chars, max_lines)
         for start in range(0, len(lines), max_lines):
             cues.append(lines[start : start + max_lines])
     return cues
@@ -239,6 +291,22 @@ def write_subtitles(
     return {"srt": srt, "vtt": vtt}
 
 
+#: 焼き込みテロップが画面下端から占める割合。**実測値**（黒一色の動画へ2行の
+#: テロップを焼き、文字の上端を測った）:
+#:
+#:     16:9  1920x1080  下端から 258px = 0.2389
+#:     9:16  1080x1920  下端から 411px = 0.2141
+#:
+#: 少し広く宣言して余裕を持たせる。`tools/visualize/templates/layout
+#: .CAPTION_BAND_RATIO` が写しを持ち、食い違わないことをテストで固定している。
+CAPTION_BAND_RATIO: dict[str, float] = {"16:9": 0.25, "9:16": 0.23}
+
+
+def caption_band_ratio(aspect_ratio: str) -> float:
+    """テロップが占める画面下端からの割合。図はここへ入ってはいけない。"""
+    return CAPTION_BAND_RATIO.get(aspect_ratio, CAPTION_BAND_RATIO["16:9"])
+
+
 def estimated_caption_width_px(aspect_ratio: str) -> float:
     """1行を最大文字数まで詰めたときの、焼き込み後の実描画幅（画素）。
 
@@ -286,6 +354,8 @@ def burn_in_filter(
 
 __all__ = [
     "BURN_IN_FONT_SIZE",
+    "CAPTION_BAND_RATIO",
+    "caption_band_ratio",
     "BURN_IN_MARGIN_V",
     "BURN_IN_OUTLINE",
     "DEFAULT_MAX_CHARS_PER_LINE",

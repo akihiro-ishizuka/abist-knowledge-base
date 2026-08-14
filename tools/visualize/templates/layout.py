@@ -331,6 +331,29 @@ def safe_area(aspect_ratio: str) -> tuple[float, float]:
     return width - SAFE_MARGIN_X * 2, height - SAFE_MARGIN_Y * 2
 
 
+#: 焼き込みテロップが画面下端から占める割合。`abist_kb.application.video.subtitles
+#: .CAPTION_BAND_RATIO` の写し(別 venv のため import できない)。**実測値**であって
+#: 理論値ではない —— 黒一色の動画へ2行のテロップを焼き、文字の上端を測った
+#: (16:9 は 1080px 中 258px、9:16 は 1920px 中 411px)。少しだけ広く取って余裕を持つ。
+CAPTION_BAND_RATIO: dict[str, float] = {"16:9": 0.25, "9:16": 0.23}
+
+
+def caption_band_height(aspect_ratio: str) -> float:
+    """テロップが占める帯の高さ(フレーム単位)。**ここに図を置かない。**
+
+    出典フッターがこの帯に入ると、画面上は出典が消える。事実を出典に紐づける
+    のがこのシステムの根幹なので、隠れているのは無いのと同じ。
+    """
+    _, height = frame_size(aspect_ratio)
+    return height * CAPTION_BAND_RATIO.get(aspect_ratio, CAPTION_BAND_RATIO["16:9"])
+
+
+def content_bounds(aspect_ratio: str) -> tuple[float, float]:
+    """図を置いてよい範囲の (下端, 上端)。下はテロップ帯、上はセーフマージン。"""
+    _, height = frame_size(aspect_ratio)
+    return -height / 2 + caption_band_height(aspect_ratio), height / 2 - SAFE_MARGIN_Y
+
+
 #: 折れ線の上下に取る余白(値域に対する割合)。
 LINE_CHART_PADDING = 0.12
 #: 値域が 0 からこの割合の内側に収まっていれば、0 起点のまま描く。
@@ -389,6 +412,29 @@ def _round_up(value: float, span: float) -> float:
 
     step = _nice_step(span)
     return float(f"{math.ceil(value / step) * step:.10g}")
+
+
+def fit_box(
+    size: tuple[float, float], aspect_ratio: str, *, margin_x: float = SAFE_MARGIN_X
+) -> tuple[float, float]:
+    """図を安全域へ収めるための `(縮小率, 中心の y)` を返す。
+
+    縮小はするが**拡大はしない**(小さい図を引き伸ばすと粗が目立つ)。縦位置は
+    フレーム中央ではなく**テロップ帯を除いた領域の中央**。ここを間違えると、
+    図の下端(たいてい出典フッター)がテロップに潜る。
+    """
+    width, height = size
+    _, frame_h = frame_size(aspect_ratio)
+    max_width = frame_size(aspect_ratio)[0] - margin_x * 2
+    bottom, top = content_bounds(aspect_ratio)
+    max_height = top - bottom
+
+    scale = 1.0
+    if width > 0 and width > max_width:
+        scale = max_width / width
+    if height > 0 and height * scale > max_height:
+        scale = max_height / height
+    return scale, (bottom + top) / 2
 
 
 def subtitle_max_chars(aspect_ratio: str) -> int:

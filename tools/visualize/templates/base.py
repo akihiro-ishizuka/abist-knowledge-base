@@ -9,7 +9,7 @@ import functools
 import os
 from dataclasses import replace
 
-from manim import DOWN, LEFT, Text, VGroup, config
+from manim import DOWN, LEFT, UP, Text, VGroup, config
 
 from templates.layout import wrap_cjk
 from templates.theme import DEFAULT_THEME, Theme, accent_for, get_theme
@@ -159,13 +159,20 @@ def scale_font(base_size: float, count: int, *, soft: int, hard: int) -> float:
 
 
 def fit_to_frame(group: VGroup, margin: float = 0.6) -> VGroup:
-    """フレームからはみ出す場合だけ縮小する（拡大はしない）"""
-    max_width = config.frame_width - margin * 2
-    max_height = config.frame_height - margin * 2
-    if group.width > max_width:
-        group.scale_to_fit_width(max_width)
-    if group.height > max_height:
-        group.scale_to_fit_height(max_height)
+    """安全域へ収める（縮小はするが拡大はしない）。
+
+    **画面下端の一定割合は焼き込みテロップのもの**なので、図はそこへ入れない。
+    帯の高さと縦位置の計算は `layout.fit_box`（manim 非依存・テスト済み）が持つ。
+    フレーム中央に置くと、図の下端＝出典フッターがテロップの下へ潜って
+    画面から消える。出典が見えないのは、無いのと同じ。
+    """
+    from templates.layout import fit_box
+
+    aspect = "9:16" if is_portrait() else "16:9"
+    scale, center_y = fit_box((float(group.width), float(group.height)), aspect, margin_x=margin)
+    if scale < 1.0:
+        group.scale(scale)
+    group.shift(UP * (center_y - group.get_center()[1]))
     return group
 
 
