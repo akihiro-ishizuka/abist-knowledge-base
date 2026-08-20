@@ -86,12 +86,19 @@ def post_card(
     - `202`(および 2xx): `ACCEPTED`
     - 応答を受け取れた非 2xx: `FAILED`(再送してよい)
     - 応答が無い(タイムアウト・接続断): `UNKNOWN`(**再送しない**)
+    - URL 自体が不正(`httpx.InvalidURL`): `FAILED`。この例外は `httpx.HTTPError`
+      の系列に属さないため個別に捕捉する。URL 解析はリクエスト送出より前に行われる
+      ため、この時点ではまだ何も送信されていない。二重送信の危険が無い以上
+      `UNKNOWN` として塩漬けにする理由が無く、設定(webhook URL)を直せば再送で
+      届く `FAILED` として扱うのが正しい。
 
     例外は送出しない。呼び出し側が state 遷移だけで判断できるようにする。
     URL は戻り値にもログにも含めない。
     """
     try:
         response = client.post(webhook_url, json=payload, timeout=_TIMEOUT_SECONDS)
+    except httpx.InvalidURL:
+        return DeliveryOutcome.FAILED
     except httpx.HTTPError:
         return DeliveryOutcome.UNKNOWN
 

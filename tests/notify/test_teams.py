@@ -90,6 +90,26 @@ def test_transport_error_is_unknown() -> None:
     assert outcome is DeliveryOutcome.UNKNOWN
 
 
+def test_invalid_url_is_failed() -> None:
+    """URLが不正でリクエストが送出されない場合は二重送信の危険が無いため
+    `failed`(`unknown` ではない)。ポート番号が数値でない URL は
+    `httpx.InvalidURL`(`httpx.HTTPError` の系列外)を送出前に発生させる。"""
+
+    def _unreachable(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("URLが不正な時点でリクエストは送出されないはず")
+
+    transport = httpx.MockTransport(_unreachable)
+
+    with httpx.Client(transport=transport) as client:
+        outcome = post_card(
+            "https://example.com:notaport/workflows/invoke",
+            build_card("t", "b"),
+            client=client,
+        )
+
+    assert outcome is DeliveryOutcome.FAILED
+
+
 def test_webhook_url_never_appears_in_outcome() -> None:
     """秘密情報を戻り値やログへ漏らさない(Global Constraints)。"""
     transport = httpx.MockTransport(lambda request: httpx.Response(500))
