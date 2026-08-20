@@ -75,6 +75,29 @@ def mark_question(
         question.reminded_at = now
 
 
+def skip_message(state: WatchState, *, message_id: str, reason: str | None) -> MessageRecord:
+    """「質問・依頼ではない」と判定したメッセージを `skipped` へ進める。
+
+    `pending_for_decision` は選んだレコードを `processing` へ進めるだけで、
+    `processing` は次 tick でも再選択される(`_RETRYABLE` に含まれるため)。
+    質問でないと判定した場合はここを呼んで明示的に `_RETRYABLE` から外さないと、
+    同じレコードが古株として選ばれ続け、新着メッセージが後回しになる(設計 §5.2,
+    §6.1 の `skipped`)。呼び出し元不明の message_id は `NOT_FOUND` とする
+    (`questions track` と同じ扱い)。
+    """
+    record = state.messages.get(message_id)
+    if record is None:
+        raise AppError(
+            ErrorCode.NOT_FOUND,
+            f"未知の message_id です: {message_id}",
+            hint="先に `abist-kb teams inbox ingest` を実行してください。",
+        )
+    record.status = MessageStatus.SKIPPED
+    if reason is not None:
+        record.note = reason
+    return record
+
+
 def due_reminders(
     state: WatchState, *, now: datetime, threshold_hours: int
 ) -> list[QuestionRecord]:
@@ -157,6 +180,12 @@ def run_ingest(settings: Settings, source: MessageSource, *, now: datetime) -> I
     )
 
 
+#: `--force` 無しで再送を拒否する状態。`accepted` は既に届いている可能性が高く、
+#: `unknown` は届いたかどうか判らない(設計 §6.1.1)。どちらも再送は二重投稿の
+#: リスクを負う。
+_REFUSE_WITHOUT_FORCE = frozenset({MessageStatus.ACCEPTED, MessageStatus.UNKNOWN})
+
+
 def run_reply(
     settings: Settings,
     *,
@@ -166,6 +195,7 @@ def run_reply(
     sources: list[str] | None,
     client: httpx.Client,
     now: datetime,
+    force: bool = False,
 ) -> ReplyResult:
     """回答を投稿し、state を遷移させる(設計 §6.1.1)。
 
@@ -176,6 +206,11 @@ def run_reply(
     POST 成功直後のクラッシュで state には何も残らず、次 tick が同じメッセージを
     未処理のまま再選択して二重送信する — この事故を防ぐための順序であり、
     最適化で省いてはならない。
+
+    `record.status` が `accepted`(既に届いている)または `unknown`(届いたか
+    不明)のときは `force=True` を渡さない限り拒否する。ここを素通りさせると、
+    同じ message_id で `reply` を再実行しただけで同じカードが十人へ二重投稿
+    される(設計 §6.1.1 が防ごうとしている事故そのもの)。
     """
     if not settings.teams_webhook_url:
         raise AppError(
@@ -193,6 +228,18 @@ def run_reply(
             ErrorCode.NOT_FOUND,
             f"未知の message_id です: {message_id}",
             hint="先に `abist-kb teams inbox ingest` を実行してください。",
+        )
+
+    if record.status in _REFUSE_WITHOUT_FORCE and not force:
+        if record.status is MessageStatus.ACCEPTED:
+            reason = "既に配信済みです(accepted)。再送すると同じ回答が二重に投稿されます。"
+        else:
+            reason = "前回の配信結果が不明です(unknown)。再送すると二重投稿の恐れがあります。"
+        raise AppError(
+            ErrorCode.CONFLICT,
+            reason,
+            hint="それでも再送する場合は `--force` を付けてください。",
+            details={"message_id": message_id, "status": record.status.value},
         )
 
     payload = build_card(title, body, sources=sources)

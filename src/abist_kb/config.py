@@ -15,9 +15,7 @@ from abist_kb.domain.errors import ErrorCode, ExitCode, wrap
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-_SECRET_FIELDS = frozenset(
-    {"esa_access_token", "openai_api_key", "git_token", "teams_webhook_url"}
-)
+_SECRET_FIELDS = frozenset({"esa_access_token", "openai_api_key", "git_token", "teams_webhook_url"})
 
 
 class Settings(BaseSettings):
@@ -75,9 +73,7 @@ class Settings(BaseSettings):
     #: 連絡チャットへの投稿に使う Power Automate Workflows Webhook。
     #: 送信専用であり読み取りには使えない(設計 §2)。
     teams_webhook_url: str | None = None
-    teams_chat_id: str = (
-        "19:meeting_Yzc0Yjc4OWUtOGE3Ny00ODYxLWJiZjMtZDI2YzgyMDBlNzBh@thread.v2"
-    )
+    teams_chat_id: str = "19:meeting_Yzc0Yjc4OWUtOGE3Ny00ODYxLWJiZjMtZDI2YzgyMDBlNzBh@thread.v2"
     #: 検索の probe。チャットIDで絞れずクエリ必須のため、高頻度のかなを複数投げて
     #: 結果を統合する(設計 §5.1)。コードへ埋め込まず設定値として持つ。
     teams_search_probes: tuple[str, ...] = ("い", "の", "す")

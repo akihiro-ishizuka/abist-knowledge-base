@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
@@ -192,8 +192,13 @@ def pending_for_decision(state: WatchState, *, limit: int) -> list[MessageRecord
 
     上限は「1 tick で `accepted` へ遷移させる件数」であり、取得件数の上限では
     ない。溢れた分は `discovered` のまま次 tick へ持ち越す(設計 §5.2)。選ばれた
-    分は `processing` へ進め、`discovered` から外す。そうしないと次の呼び出しで
-    同じ古株が何度も選ばれるだけで、持ち越し分がいつまでも後回しになる。
+    分は `processing` へ進めるが、`processing` は `_RETRYABLE` に含まれるため
+    これは「再選択を止める」効果を持たない。呼び出し側が各レコードを必ず
+    `accepted`/`failed`/`skipped` のいずれかへ進めて初めて `_RETRYABLE` から
+    外れる。何もせず放置すると次 tick でも同じレコードが古株として選ばれ続け、
+    後続の新着メッセージがいつまでも順番待ちになる(設計 §5.2 の意図はこの
+    「持ち越し」であって「無限保留」ではない)。質問でないと判定した場合は
+    `abist-kb teams inbox skip` で明示的に `skipped` へ進めること。
 
     返すのは `MessageRecord`(ID と送信者)であって `InboundMessage` ではない。
     本文を必要とするのは Claude 側であり、state は本文を保持しない。
@@ -229,11 +234,6 @@ def prune(state: WatchState, *, now: datetime, retention_days: int) -> int:
             question.status = QuestionStatus.STALE
 
     return len(stale_ids)
-
-
-def utcnow() -> datetime:
-    """テストで差し替えやすいよう1箇所に閉じる。"""
-    return datetime.now(UTC)
 
 
 NORMAL_INTERVAL_MINUTES = 20

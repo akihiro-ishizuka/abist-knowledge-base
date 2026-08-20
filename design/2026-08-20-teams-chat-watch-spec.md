@@ -374,7 +374,7 @@ Track A では判断が Claude 側にあるため、tick を3つのコマンド�
 | `abist-kb teams questions track --message-id <id>` | メッセージを追跡対象の質問として登録する |
 | `abist-kb teams questions mark --message-id <id> --status <s>` | 質問の状態を更新する。`reminded` では `reminded_at` も刻む |
 | `abist-kb teams reminders due` | 営業時間4時間を超えた質問を返す |
-| `abist-kb teams state show` | 現在の state を表示（秘匿値は伏せる） |
+| `abist-kb teams state show` | 現在の state を表示 |
 
 Track B で Graph 直叩きになった際は、`MessageSource` を差し替えたうえで、これらを内部で順に呼ぶ `abist-kb teams watch --once` を追加する。3コマンドの責務は変えない。
 

@@ -24,9 +24,7 @@ class MergeResult(BaseModel):
     duplicates: int
 
 
-def merge_probe_results(
-    results: dict[str, list[InboundMessage]], *, chat_id: str
-) -> MergeResult:
+def merge_probe_results(results: dict[str, list[InboundMessage]], *, chat_id: str) -> MergeResult:
     """probe ごとの検索結果を統合する。
 
     対象チャットのものだけ残し、`message_id` で重複を除き、`created_at` 昇順で

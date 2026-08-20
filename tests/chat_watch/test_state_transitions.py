@@ -82,9 +82,7 @@ def test_pending_is_capped_and_remainder_is_carried_over() -> None:
     selected = pending_for_decision(state, limit=3)
 
     assert [m.message_id for m in selected] == ["0", "1", "2"]
-    assert sum(
-        1 for r in state.messages.values() if r.status is MessageStatus.DISCOVERED
-    ) == 5
+    assert sum(1 for r in state.messages.values() if r.status is MessageStatus.DISCOVERED) == 5
 
 
 def test_pending_skips_context_only_senders() -> None:

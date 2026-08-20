@@ -16,7 +16,7 @@ Track A では取得と判断が Claude 側にあるため、tick を3つに分�
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -36,6 +36,7 @@ from abist_kb.application.chat_watch.tick import (
     mark_question,
     run_ingest,
     run_reply,
+    skip_message,
     track_question,
 )
 from abist_kb.domain.chat_watch import QuestionStatus
@@ -58,9 +59,7 @@ teams_app.add_typer(backoff_app, name="backoff")
 @inbox_app.command("ingest")
 def inbox_ingest(
     ctx: typer.Context,
-    from_: Annotated[
-        Path, typer.Option("--from", help="MCP 検索の結果を書き出した JSON。")
-    ],
+    from_: Annotated[Path, typer.Option("--from", help="MCP 検索の結果を書き出した JSON。")],
 ) -> None:
     """検索結果を state へ取り込み、判断が必要な件を返す。
 
@@ -72,20 +71,51 @@ def inbox_ingest(
     cli_ctx.presenter.json_result(result.model_dump(mode="json"))
 
 
+@inbox_app.command("skip")
+def inbox_skip(
+    ctx: typer.Context,
+    message_id: Annotated[str, typer.Option("--message-id", help="対象の message_id。")],
+    reason: Annotated[
+        str | None,
+        typer.Option("--reason", help="スキップ理由(監査用。人事・金額等の記録に使う)。"),
+    ] = None,
+) -> None:
+    """「質問・依頼ではない」と判定したメッセージを `skipped` へ進める。
+
+    `pending` に出た件は返信するかここを呼ぶかのどちらかを必ず行うこと。どちらも
+    しないと `processing` のまま次 tick でも古株として選ばれ続け、新着の質問が
+    いつまでも後回しになる(設計 §5.2, §6.1)。人事・評価・金額・契約に関わる
+    ため見送った場合は `--reason` に理由を残し、石塚さんへの報告と突き合わせられ
+    るようにする。
+    """
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
+    state = load_state(settings.teams_state_path)
+    record = skip_message(state, message_id=message_id, reason=reason)
+    save_state(settings.teams_state_path, state)
+    cli_ctx.presenter.json_result(record.model_dump(mode="json"))
+
+
 @teams_app.command("reply")
 def reply(
     ctx: typer.Context,
     message_id: Annotated[str, typer.Option("--message-id", help="返信先の message_id。")],
     title: Annotated[str, typer.Option("--title", help="カードの見出し。")],
     body: Annotated[Path, typer.Option("--body", help="本文の Markdown ファイル。")],
-    source: Annotated[
-        list[str] | None, typer.Option("--source", help="出典 URL(複数可)。")
-    ] = None,
+    source: Annotated[list[str] | None, typer.Option("--source", help="出典 URL(複数可)。")] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force", help="既に `accepted`/`unknown` でも再送する(二重投稿の恐れあり)。"
+        ),
+    ] = False,
 ) -> None:
     """回答を投稿し、state を遷移させる。
 
     回答の文面を組み立てるのは Claude 側の仕事であり、ここは投稿と state 遷移
-    (`sending` → `accepted`/`unknown`)だけを担う。
+    (`sending` → `accepted`/`unknown`)だけを担う。`accepted`/`unknown` への
+    再送は `--force` を付けない限り拒否する(設計 §6.1.1)。
     """
     cli_ctx = get_context(ctx)
     with httpx.Client() as client:
@@ -97,6 +127,7 @@ def reply(
             sources=source,
             client=client,
             now=datetime.now(UTC),
+            force=force,
         )
     cli_ctx.presenter.json_result(result.model_dump(mode="json"))
 
@@ -193,12 +224,20 @@ def backoff_status(ctx: typer.Context) -> None:
     """いま検索してよいかを返す。
 
     ティックの最初に呼ぶ。`allowed` が false のあいだは検索も投稿もしない。
+
+    `search_since` は `run_ingest` が実際に使う `since` と同じ計算
+    (`search_watermark - teams_overlap_minutes`。`search_watermark` が無ければ
+    `now - teams_overlap_minutes`)で求める。運用手順が overlap の分数を手で
+    書き写すと `Settings.teams_overlap_minutes` を変えたときに乖離するため、
+    ここで計算済みの値を返す(設計・運用手順 手順2)。
     """
     cli_ctx = get_context(ctx)
     settings = cli_ctx.settings
     assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
     state = load_state(settings.teams_state_path)
     now = datetime.now(UTC)
+    overlap = timedelta(minutes=settings.teams_overlap_minutes)
+    search_since = (state.search_watermark or now) - overlap
     cli_ctx.presenter.json_result(
         {
             "allowed": is_allowed(state, now=now),
@@ -208,6 +247,7 @@ def backoff_status(ctx: typer.Context) -> None:
                 if state.backoff.next_allowed_at is not None
                 else None
             ),
+            "search_since": search_since.isoformat(),
         }
     )
 

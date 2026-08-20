@@ -86,3 +86,10 @@ def test_human_message_is_not_self_post() -> None:
 
 def test_ai_prefix_value() -> None:
     assert AI_PREFIX == "【AI設計エージェント】"
+
+
+def test_is_self_post_by_body_prefix_with_leading_whitespace() -> None:
+    """先頭に空白が入っていても `lstrip()` で判定できること。"""
+    assert (
+        is_self_post(_message("t_isaka@abist.co.jp", "  【AI設計エージェント】 回答です")) is True
+    )

@@ -3147,6 +3147,199 @@ git commit -m "docs(teams): 連絡チャット監視の運用手順を追加す�
 
 ---
 
+### Task 14: バックオフの配線（Task 9 の積み残し）
+
+**Files:**
+- Modify: `src/abist_kb/presentation/cli/teams_cmd.py`
+- Modify: `design/2026-08-20-teams-chat-watch-runbook.md`
+- Test: `tests/cli/test_teams_cmd.py`
+
+**Interfaces:**
+- Consumes: Task 9 の `apply_rate_limit` / `clear_rate_limit` / `is_allowed`、Task 6 の `load_state` / `save_state`
+- Produces: `abist-kb teams backoff status` / `hit` / `clear`
+
+**なぜ必要か:** Task 9 が `apply_rate_limit` / `clear_rate_limit` / `is_allowed` を作ったが、**呼び出し元がどこにも無い**。Task 10 の質問追跡と同じ欠陥で、このままだと設計 §3.2 のバックオフが丸ごと死ぬ。`backoff.next_allowed_at` は永久に `null` のままで、`429` を受けても次ティックは何事もなかったように検索を再開する。状態が残らない以上、呼び出し側の記憶に頼ることはできない（state が存在する理由がそれである）。
+
+- [ ] **Step 1: Write the failing test**
+
+`tests/cli/test_teams_cmd.py` へ追記する。
+
+```python
+def test_backoff_hit_then_status_blocks_then_clear_releases(tmp_root: Path) -> None:
+    """設計 §3.2: 429 を受けたら次ティックまで待つ。
+
+    ここが無いと next_allowed_at は永久に null で、429 を受けても次ティックが
+    何事もなかったように検索を再開する。
+    """
+    runner.invoke(
+        app,
+        ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, []))],
+    )
+
+    before = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "status"])
+    assert before.exit_code == 0, before.output
+    assert json.loads(before.output)["allowed"] is True
+
+    hit = runner.invoke(
+        app, ["--root", str(tmp_root), "teams", "backoff", "hit", "--retry-after", "600"]
+    )
+    assert hit.exit_code == 0, hit.output
+    hit_payload = json.loads(hit.output)
+    assert hit_payload["next_allowed_at"] is not None
+    # Retry-After に従ったときは間隔を据え置く(設計 §3.2)
+    assert hit_payload["interval_minutes"] == 20
+
+    blocked = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "status"])
+    assert json.loads(blocked.output)["allowed"] is False
+
+    released = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "clear"])
+    assert released.exit_code == 0, released.output
+    assert json.loads(released.output)["next_allowed_at"] is None
+
+    after = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "status"])
+    assert json.loads(after.output)["allowed"] is True
+
+
+def test_backoff_hit_without_retry_after_doubles_the_interval(tmp_root: Path) -> None:
+    runner.invoke(
+        app,
+        ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, []))],
+    )
+
+    first = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "hit"])
+    assert json.loads(first.output)["interval_minutes"] == 40
+
+    second = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "hit"])
+    assert json.loads(second.output)["interval_minutes"] == 80
+```
+
+- [ ] **Step 2: Run test to verify it fails**
+
+Run: `uv run pytest tests/cli/test_teams_cmd.py -k backoff -v`
+Expected: FAIL — `teams backoff` が存在せず exit code 2
+
+- [ ] **Step 3: Write minimal implementation**
+
+`teams_cmd.py` の import へ足す。
+
+```python
+from abist_kb.application.chat_watch.state import (
+    apply_rate_limit,
+    clear_rate_limit,
+    is_allowed,
+    load_state,
+    save_state,
+)
+```
+
+アプリ宣言へ足す。
+
+```python
+backoff_app = AppTyper(help="429 バックオフの管理。", no_args_is_help=True)
+teams_app.add_typer(backoff_app, name="backoff")
+```
+
+コマンド本体。
+
+```python
+@backoff_app.command("status")
+def backoff_status(ctx: typer.Context) -> None:
+    """いま検索してよいかを返す。
+
+    ティックの最初に呼ぶ。`allowed` が false のあいだは検索も投稿もしない。
+    """
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None
+    state = load_state(settings.teams_state_path)
+    now = datetime.now(UTC)
+    cli_ctx.presenter.json_result(
+        {
+            "allowed": is_allowed(state, now=now),
+            "interval_minutes": state.backoff.interval_minutes,
+            "next_allowed_at": (
+                state.backoff.next_allowed_at.isoformat()
+                if state.backoff.next_allowed_at is not None
+                else None
+            ),
+        }
+    )
+
+
+@backoff_app.command("hit")
+def backoff_hit(
+    ctx: typer.Context,
+    retry_after: Annotated[
+        int | None,
+        typer.Option("--retry-after", help="応答の Retry-After(秒)。無ければ省く。"),
+    ] = None,
+) -> None:
+    """429 を受けたことを記録する。
+
+    `Retry-After` があればそれに従い、間隔は据え置く。無ければ間隔を倍にして
+    240分で頭打ちにする(設計 §3.2)。20分という初期値は安全と証明された値では
+    ないため、記録せずに再開してはならない。
+    """
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None
+    state = load_state(settings.teams_state_path)
+    apply_rate_limit(state, now=datetime.now(UTC), retry_after_seconds=retry_after)
+    save_state(settings.teams_state_path, state)
+    cli_ctx.presenter.json_result(
+        {
+            "interval_minutes": state.backoff.interval_minutes,
+            "next_allowed_at": (
+                state.backoff.next_allowed_at.isoformat()
+                if state.backoff.next_allowed_at is not None
+                else None
+            ),
+        }
+    )
+
+
+@backoff_app.command("clear")
+def backoff_clear(ctx: typer.Context) -> None:
+    """検索が成功したので通常間隔へ戻す。"""
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None
+    state = load_state(settings.teams_state_path)
+    clear_rate_limit(state)
+    save_state(settings.teams_state_path, state)
+    cli_ctx.presenter.json_result(
+        {"interval_minutes": state.backoff.interval_minutes, "next_allowed_at": None}
+    )
+```
+
+- [ ] **Step 4: Run test to verify it passes**
+
+Run: `uv run pytest tests/cli/test_teams_cmd.py -v`
+Expected: PASS（8件）
+
+- [ ] **Step 5: 手順書を直す**
+
+`design/2026-08-20-teams-chat-watch-runbook.md` の手順1・2を書き換える。手順1は
+`teams state show` を目視する代わりに `teams backoff status` を使い、`allowed` が
+false なら何もせず終了する。手順2では、検索が `429` を返したら
+`teams backoff hit --retry-after <秒>`（`Retry-After` が無ければ省略）を実行して
+終了し、成功したら `teams backoff clear` を実行する、と明記する。
+
+Task 13 の実装者が「バックオフは配線されていない」と正直に書いた箇所があるはずなので、
+その但し書きは削除する。
+
+- [ ] **Step 6: 回帰と commit**
+
+Run: `uv run pytest tests/cli/ tests/chat_watch/ -q && uv run ruff check src tests`
+Expected: PASS / `All checks passed!`
+
+```bash
+git add src/abist_kb/presentation/cli/teams_cmd.py tests/cli/test_teams_cmd.py design/2026-08-20-teams-chat-watch-runbook.md
+git commit -m "feat(teams): 429バックオフをCLIへ配線する"
+```
+
+---
+
 ## Self-Review
 
 **1. Spec coverage**

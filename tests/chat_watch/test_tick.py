@@ -10,12 +10,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
+import pytest
 
 from abist_kb.application.chat_watch.source import JsonFileMessageSource
 from abist_kb.application.chat_watch.state import load_state
 from abist_kb.application.chat_watch.tick import run_ingest, run_reply
 from abist_kb.config import Settings, load_settings
 from abist_kb.domain.chat_watch import MessageStatus
+from abist_kb.domain.errors import AppError
 from abist_kb.infrastructure.notify.teams import DeliveryOutcome
 
 NOW = datetime(2026, 8, 20, 9, 0, tzinfo=UTC)
@@ -161,6 +163,88 @@ def test_reply_unknown_is_not_retried(tmp_root: Path) -> None:
     assert result.outcome is DeliveryOutcome.UNKNOWN
     again = run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [_raw("a")])), now=NOW)
     assert again.pending == []
+
+
+def test_reply_refuses_to_resend_when_already_accepted(tmp_root: Path) -> None:
+    """finding 3 の回帰ガード: `accepted` への再送は既定で拒否される。"""
+    settings = _settings(tmp_root)
+    settings.teams_webhook_url = "https://example.com/hook"
+    run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [])), now=NOW)
+    run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [_raw("a")])), now=NOW)
+
+    transport = httpx.MockTransport(lambda request: httpx.Response(202))
+    with httpx.Client(transport=transport) as client:
+        run_reply(
+            settings, message_id="a", title="t", body="b", sources=None, client=client, now=NOW
+        )
+
+        with pytest.raises(AppError):
+            run_reply(
+                settings,
+                message_id="a",
+                title="t",
+                body="b",
+                sources=None,
+                client=client,
+                now=NOW,
+            )
+
+    state = load_state(settings.teams_state_path)
+    assert state.messages["a"].status is MessageStatus.ACCEPTED
+
+
+def test_reply_refuses_to_resend_when_unknown(tmp_root: Path) -> None:
+    """finding 3 の回帰ガード: `unknown` への再送も既定で拒否される。"""
+    settings = _settings(tmp_root)
+    settings.teams_webhook_url = "https://example.com/hook"
+    run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [])), now=NOW)
+    run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [_raw("a")])), now=NOW)
+
+    def _raise(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectTimeout("timed out", request=request)
+
+    with httpx.Client(transport=httpx.MockTransport(_raise)) as client:
+        run_reply(
+            settings, message_id="a", title="t", body="b", sources=None, client=client, now=NOW
+        )
+
+        with pytest.raises(AppError):
+            run_reply(
+                settings,
+                message_id="a",
+                title="t",
+                body="b",
+                sources=None,
+                client=client,
+                now=NOW,
+            )
+
+
+def test_reply_force_overrides_the_refusal(tmp_root: Path) -> None:
+    """`--force` に対応する `force=True` は拒否を上書きして再送を許す。"""
+    settings = _settings(tmp_root)
+    settings.teams_webhook_url = "https://example.com/hook"
+    run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [])), now=NOW)
+    run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [_raw("a")])), now=NOW)
+
+    transport = httpx.MockTransport(lambda request: httpx.Response(202))
+    with httpx.Client(transport=transport) as client:
+        run_reply(
+            settings, message_id="a", title="t", body="b", sources=None, client=client, now=NOW
+        )
+
+        result = run_reply(
+            settings,
+            message_id="a",
+            title="t",
+            body="b",
+            sources=None,
+            client=client,
+            now=NOW,
+            force=True,
+        )
+
+    assert result.outcome is DeliveryOutcome.ACCEPTED
 
 
 def test_reply_failed_is_retried(tmp_root: Path) -> None:

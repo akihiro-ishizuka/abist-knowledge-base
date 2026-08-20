@@ -70,6 +70,89 @@ def test_ingest_returns_pending_on_second_run(tmp_root: Path) -> None:
     assert [p["message_id"] for p in payload["pending"]] == ["b"]
 
 
+def test_inbox_skip_prevents_reselection_and_frees_the_slot(tmp_root: Path) -> None:
+    """設計 §5.2, §6.1: `pending` から `inbox skip` しない限り再選択され続ける。
+
+    finding 1 の回帰ガード。`skip` を呼ばないと、質問でないと判定した1件が
+    `processing` のまま居座り続け、新着メッセージが繰り上がらなくなる。
+    """
+    runner.invoke(
+        app,
+        ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, []))],
+    )
+    runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_root),
+            "teams",
+            "inbox",
+            "ingest",
+            "--from",
+            str(_inbox(tmp_root, ["a"])),
+        ],
+    )
+
+    pending = runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_root),
+            "teams",
+            "inbox",
+            "ingest",
+            "--from",
+            str(_inbox(tmp_root, ["a"])),
+        ],
+    )
+    assert [p["message_id"] for p in json.loads(pending.output)["pending"]] == ["a"]
+
+    skip = runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_root),
+            "teams",
+            "inbox",
+            "skip",
+            "--message-id",
+            "a",
+            "--reason",
+            "相槌・了解のため未回答",
+        ],
+    )
+    assert skip.exit_code == 0, skip.output
+    assert json.loads(skip.output)["status"] == "skipped"
+
+    next_pending = runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_root),
+            "teams",
+            "inbox",
+            "ingest",
+            "--from",
+            str(_inbox(tmp_root, ["a", "b"])),
+        ],
+    )
+    assert [p["message_id"] for p in json.loads(next_pending.output)["pending"]] == ["b"]
+
+
+def test_inbox_skip_rejects_unknown_message(tmp_root: Path) -> None:
+    runner.invoke(
+        app,
+        ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, []))],
+    )
+
+    result = runner.invoke(
+        app, ["--root", str(tmp_root), "teams", "inbox", "skip", "--message-id", "nope"]
+    )
+
+    assert result.exit_code != 0
+    assert "nope" in result.output
+
+
 def test_state_show_redacts_nothing_secret(tmp_root: Path) -> None:
     runner.invoke(
         app,
@@ -92,15 +175,25 @@ def test_questions_track_then_mark_reminded_stamps_reminded_at(tmp_root: Path) -
     runner.invoke(
         app,
         [
-            "--root", str(tmp_root), "teams", "inbox", "ingest",
-            "--from", str(_inbox(tmp_root, ["a"])),
+            "--root",
+            str(tmp_root),
+            "teams",
+            "inbox",
+            "ingest",
+            "--from",
+            str(_inbox(tmp_root, ["a"])),
         ],
     )
     runner.invoke(
         app,
         [
-            "--root", str(tmp_root), "teams", "inbox", "ingest",
-            "--from", str(_inbox(tmp_root, ["a", "b"])),
+            "--root",
+            str(tmp_root),
+            "teams",
+            "inbox",
+            "ingest",
+            "--from",
+            str(_inbox(tmp_root, ["a", "b"])),
         ],
     )
 
@@ -113,8 +206,15 @@ def test_questions_track_then_mark_reminded_stamps_reminded_at(tmp_root: Path) -
     marked = runner.invoke(
         app,
         [
-            "--root", str(tmp_root), "teams", "questions", "mark",
-            "--message-id", "b", "--status", "reminded",
+            "--root",
+            str(tmp_root),
+            "teams",
+            "questions",
+            "mark",
+            "--message-id",
+            "b",
+            "--status",
+            "reminded",
         ],
     )
     assert marked.exit_code == 0, marked.output

@@ -40,9 +40,7 @@ class JsonFileMessageSource:
     def __init__(self, path: Path) -> None:
         self._path = path
 
-    def fetch(
-        self, *, since: datetime, probes: tuple[str, ...]
-    ) -> dict[str, list[InboundMessage]]:
+    def fetch(self, *, since: datetime, probes: tuple[str, ...]) -> dict[str, list[InboundMessage]]:
         if not self._path.is_file():
             raise AppError(
                 ErrorCode.NOT_FOUND,

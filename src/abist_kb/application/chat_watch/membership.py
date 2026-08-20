@@ -42,12 +42,20 @@ CONTEXT_ONLY_MEMBERS: dict[str, str] = {
 
 
 def classify(message: InboundMessage) -> MemberRole:
-    """送信者の役割を返す。未知の送信者は `context_only`(安全側)。"""
+    """送信者の役割を返す。
+
+    `CONTEXT_ONLY_MEMBERS` に載っている送信者は明示的に `context_only`。
+    未知の送信者も同じ `context_only` へ落ちるが、これは名簿を持たない送信者を
+    誤って `active` にしないための安全側のフォールバックであり、
+    `CONTEXT_ONLY_MEMBERS` による判定と意味は異なる(設計 §4)。
+    """
     email = message.sender_email
     if email == WORKFLOWS_SENDER:
         return MemberRole.SYSTEM
     if email in ACTIVE_MEMBERS:
         return MemberRole.ACTIVE
+    if email in CONTEXT_ONLY_MEMBERS:
+        return MemberRole.CONTEXT_ONLY
     return MemberRole.CONTEXT_ONLY
 
 
