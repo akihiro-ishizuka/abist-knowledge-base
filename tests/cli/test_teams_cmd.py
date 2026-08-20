@@ -163,3 +163,51 @@ def test_reply_without_webhook_url_fails_clearly(tmp_root: Path) -> None:
 
     assert result.exit_code != 0
     assert "ABIST_KB_TEAMS_WEBHOOK_URL" in result.output
+
+
+def test_backoff_hit_then_status_blocks_then_clear_releases(tmp_root: Path) -> None:
+    """設計 §3.2: 429 を受けたら次ティックまで待つ。
+
+    ここが無いと next_allowed_at は永久に null で、429 を受けても次ティックが
+    何事もなかったように検索を再開する。
+    """
+    runner.invoke(
+        app,
+        ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, []))],
+    )
+
+    before = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "status"])
+    assert before.exit_code == 0, before.output
+    assert json.loads(before.output)["allowed"] is True
+
+    hit = runner.invoke(
+        app, ["--root", str(tmp_root), "teams", "backoff", "hit", "--retry-after", "600"]
+    )
+    assert hit.exit_code == 0, hit.output
+    hit_payload = json.loads(hit.output)
+    assert hit_payload["next_allowed_at"] is not None
+    # Retry-After に従ったときは間隔を据え置く(設計 §3.2)
+    assert hit_payload["interval_minutes"] == 20
+
+    blocked = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "status"])
+    assert json.loads(blocked.output)["allowed"] is False
+
+    released = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "clear"])
+    assert released.exit_code == 0, released.output
+    assert json.loads(released.output)["next_allowed_at"] is None
+
+    after = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "status"])
+    assert json.loads(after.output)["allowed"] is True
+
+
+def test_backoff_hit_without_retry_after_doubles_the_interval(tmp_root: Path) -> None:
+    runner.invoke(
+        app,
+        ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, []))],
+    )
+
+    first = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "hit"])
+    assert json.loads(first.output)["interval_minutes"] == 40
+
+    second = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "hit"])
+    assert json.loads(second.output)["interval_minutes"] == 80

@@ -8,17 +8,10 @@
 ### 1. 前回のバックオフを確認する
 
 ```
-abist-kb teams state show
+abist-kb teams backoff status
 ```
 
-`backoff.next_allowed_at` が未来なら、この tick は何もせず終了する。
-
-**既知の制約:** `state` へ 429 バックオフを書き込む CLI コマンドは無い
-（`apply_rate_limit` / `clear_rate_limit` は `application/chat_watch/state.py`
-にあるが、どの `teams` サブコマンドからも呼ばれていない）。放っておけば
-`backoff.next_allowed_at` は常に `null` である。429 を受けたときの間隔調整は、
-今のところこの作業セッションの中で Claude が憶えておくしかない（`/loop` の
-セッションが切れれば失われる。設計の既知の弱点§9-4「セッション依存」と同根）。
+`allowed` が false なら、この tick は何もせず終了する。
 
 ### 2. 検索する
 
@@ -26,9 +19,26 @@ abist-kb teams state show
 `chat_message_search` を probe ごとに実行する。probe は `teams_search_probes`
 の既定で「い」「の」「す」。
 
-`429` が返ったら投稿せずに終了する。`Retry-After`（秒）を憶えておき、その時間が
-経過するまで次 tick の検索を控える。前ステップのとおり `state` には残らないので、
-連続して 429 が出るなら石塚さんへ知らせ、`/loop` の間隔を手動で調整する。
+`429` が返ったら投稿せずに終了する。`Retry-After`（秒）が返っていれば
+
+```
+abist-kb teams backoff hit --retry-after <秒>
+```
+
+を実行する。`Retry-After` が無ければ `--retry-after` を省いて
+
+```
+abist-kb teams backoff hit
+```
+
+を実行する（間隔が自動的に倍になり、240分で頭打ちになる）。いずれも実行したら
+この tick は終了する。検索が成功したら
+
+```
+abist-kb teams backoff clear
+```
+
+を実行し、通常間隔へ戻してから次のステップへ進む。
 
 ### 3. 結果を JSON へ書く
 

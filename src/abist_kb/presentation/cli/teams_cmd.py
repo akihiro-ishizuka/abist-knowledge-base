@@ -24,7 +24,13 @@ import httpx
 import typer
 
 from abist_kb.application.chat_watch.source import JsonFileMessageSource
-from abist_kb.application.chat_watch.state import load_state, save_state
+from abist_kb.application.chat_watch.state import (
+    apply_rate_limit,
+    clear_rate_limit,
+    is_allowed,
+    load_state,
+    save_state,
+)
 from abist_kb.application.chat_watch.tick import (
     due_reminders,
     mark_question,
@@ -41,10 +47,12 @@ inbox_app = AppTyper(help="受信の取り込み。", no_args_is_help=True)
 questions_app = AppTyper(help="質問の追跡。", no_args_is_help=True)
 reminders_app = AppTyper(help="放置された質問の抽出。", no_args_is_help=True)
 state_app = AppTyper(help="監視 state の確認。", no_args_is_help=True)
+backoff_app = AppTyper(help="429 バックオフの管理。", no_args_is_help=True)
 teams_app.add_typer(inbox_app, name="inbox")
 teams_app.add_typer(questions_app, name="questions")
 teams_app.add_typer(reminders_app, name="reminders")
 teams_app.add_typer(state_app, name="state")
+teams_app.add_typer(backoff_app, name="backoff")
 
 
 @inbox_app.command("ingest")
@@ -178,6 +186,76 @@ def state_show(ctx: typer.Context) -> None:
     settings = cli_ctx.settings
     assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
     cli_ctx.presenter.json_result(load_state(settings.teams_state_path).model_dump(mode="json"))
+
+
+@backoff_app.command("status")
+def backoff_status(ctx: typer.Context) -> None:
+    """いま検索してよいかを返す。
+
+    ティックの最初に呼ぶ。`allowed` が false のあいだは検索も投稿もしない。
+    """
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
+    state = load_state(settings.teams_state_path)
+    now = datetime.now(UTC)
+    cli_ctx.presenter.json_result(
+        {
+            "allowed": is_allowed(state, now=now),
+            "interval_minutes": state.backoff.interval_minutes,
+            "next_allowed_at": (
+                state.backoff.next_allowed_at.isoformat()
+                if state.backoff.next_allowed_at is not None
+                else None
+            ),
+        }
+    )
+
+
+@backoff_app.command("hit")
+def backoff_hit(
+    ctx: typer.Context,
+    retry_after: Annotated[
+        int | None,
+        typer.Option("--retry-after", help="応答の Retry-After(秒)。無ければ省く。"),
+    ] = None,
+) -> None:
+    """429 を受けたことを記録する。
+
+    `Retry-After` があればそれに従い、間隔は据え置く。無ければ間隔を倍にして
+    240分で頭打ちにする(設計 §3.2)。20分という初期値は安全と証明された値では
+    ないため、記録せずに再開してはならない。
+    """
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
+    state = load_state(settings.teams_state_path)
+    apply_rate_limit(state, now=datetime.now(UTC), retry_after_seconds=retry_after)
+    save_state(settings.teams_state_path, state)
+    cli_ctx.presenter.json_result(
+        {
+            "interval_minutes": state.backoff.interval_minutes,
+            "next_allowed_at": (
+                state.backoff.next_allowed_at.isoformat()
+                if state.backoff.next_allowed_at is not None
+                else None
+            ),
+        }
+    )
+
+
+@backoff_app.command("clear")
+def backoff_clear(ctx: typer.Context) -> None:
+    """検索が成功したので通常間隔へ戻す。"""
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
+    state = load_state(settings.teams_state_path)
+    clear_rate_limit(state)
+    save_state(settings.teams_state_path, state)
+    cli_ctx.presenter.json_result(
+        {"interval_minutes": state.backoff.interval_minutes, "next_allowed_at": None}
+    )
 
 
 __all__ = ["teams_app"]
