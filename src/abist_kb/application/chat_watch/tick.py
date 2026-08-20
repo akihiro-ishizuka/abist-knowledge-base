@@ -75,6 +75,11 @@ def mark_question(
         question.reminded_at = now
 
 
+#: skip してよい状態。判断待ちのものだけ。`unknown` を含めないのが要点で、
+#: 「届いたか判らない」は上書きしてよい記録ではない(設計 §6.1.1)。
+_SKIPPABLE = frozenset({MessageStatus.DISCOVERED, MessageStatus.PROCESSING, MessageStatus.FAILED})
+
+
 def skip_message(state: WatchState, *, message_id: str, reason: str | None) -> MessageRecord:
     """「質問・依頼ではない」と判定したメッセージを `skipped` へ進める。
 
@@ -92,10 +97,103 @@ def skip_message(state: WatchState, *, message_id: str, reason: str | None) -> M
             f"未知の message_id です: {message_id}",
             hint="先に `abist-kb teams inbox ingest` を実行してください。",
         )
+    if record.status not in _SKIPPABLE:
+        raise AppError(
+            ErrorCode.CONFLICT,
+            f"この状態のメッセージは skip できません: {record.status.value}",
+            hint=(
+                "`accepted` は回答済み、`sending` は送信中、`unknown` は"
+                "「届いたか判らない」という監査上の記録、`closed_cold_start` は"
+                "初回ティックの既存分です。"
+            ),
+            details={"message_id": message_id, "status": record.status.value},
+        )
     record.status = MessageStatus.SKIPPED
     if reason is not None:
         record.note = reason
     return record
+
+
+def assign_question(state: WatchState, *, message_id: str, owner: str | None) -> QuestionRecord:
+    """質問の担当者を記録する。`None` を渡すとチーム TODO へ戻す。
+
+    「誰が答えるべきか」は本文の名指しなどから Claude が読み取る判断であり、
+    Python は結果を保持するだけ。毎朝判定し直すと担当が日によってブレるため、
+    一度決めたらここに残す(`skip` / `defer` と同じ「判断を記録する」形)。
+    """
+    question = state.questions.get(message_id)
+    if question is None:
+        raise AppError(
+            ErrorCode.NOT_FOUND,
+            f"追跡していない質問です: {message_id}",
+            hint="先に `abist-kb teams questions track` を実行してください。",
+        )
+    question.owner = owner.strip().lower() if owner else None
+    return question
+
+
+class OpenTodos(BaseModel):
+    """朝の提示のうち、state だけで決まる部分。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    by_owner: dict[str, list[QuestionRecord]]
+    team: list[QuestionRecord]
+
+
+#: 未解決として朝に出す状態。`reminded` を含めるのが要点で、催促済みでも
+#: 解決していない以上 TODO からは消さない(消すと放置が見えなくなる)。
+_OPEN_FOR_TODO = frozenset(
+    {QuestionStatus.OPEN, QuestionStatus.ACKNOWLEDGED, QuestionStatus.REMINDED}
+)
+
+
+def open_todos(state: WatchState) -> OpenTodos:
+    """未解決の追跡中の質問を、担当者ごととチーム分に分けて返す。
+
+    担当が明確なものは担当者へ、明確でないものはチーム TODO として出す。
+    esa・チャット上の約束・GitHub Issue といった他の情報源は Claude 側が集める
+    (この関数は state だけで決まる部分に限る)。
+    """
+    by_owner: dict[str, list[QuestionRecord]] = {}
+    team: list[QuestionRecord] = []
+    ordered = sorted(state.questions.values(), key=lambda q: (q.asked_at, q.message_id))
+    for question in ordered:
+        if question.status not in _OPEN_FOR_TODO:
+            continue
+        if question.owner is None:
+            team.append(question)
+        else:
+            by_owner.setdefault(question.owner, []).append(question)
+    return OpenTodos(by_owner=by_owner, team=team)
+
+
+def _reminder_clock_start(question: QuestionRecord) -> datetime:
+    """リマインド判定の起点。defer されていればその時刻から測り直す。"""
+    if question.deferred_at is None:
+        return question.asked_at
+    return max(question.asked_at, question.deferred_at)
+
+
+def defer_reminder(state: WatchState, *, message_id: str, now: datetime) -> QuestionRecord:
+    """「今回は催促しないと決めた」を記録する(設計 §7.2)。
+
+    確証が持てないまま催促するより見送るほうが害が小さい、というのが設計の方針
+    だが、見送った事実を残さないと同じ質問が毎ティック再提示され、運用者が同じ
+    判断を延々とやり直すことになる。ここに刻むと営業時間の時計が振り出しに戻る。
+
+    状態(`open` / `acknowledged`)は変えない。見送りは「解決した」でも
+    「催促した」でもなく、判断を先送りしただけだからである。
+    """
+    question = state.questions.get(message_id)
+    if question is None:
+        raise AppError(
+            ErrorCode.NOT_FOUND,
+            f"追跡していない質問です: {message_id}",
+            hint="先に `abist-kb teams questions track` を実行してください。",
+        )
+    question.deferred_at = now
+    return question
 
 
 def due_reminders(
@@ -105,12 +203,16 @@ def due_reminders(
 
     `resolved` / `reminded` / `stale` は対象外。1つの質問につきリマインドは1回
     なので、呼び出し側は送信後に `REMINDED` へ遷移させること。
+
+    起点は `asked_at` ではなく `max(asked_at, deferred_at)`。`defer_reminder` で
+    「今回は催促しない」と記録された質問は、そこから改めて閾値ぶんの営業時間が
+    経つまで再提示しない。でなければ確証が持てない質問が毎ティック出続ける。
     """
     due = [
         question
         for question in state.questions.values()
         if question.status in _REMINDABLE
-        and elapsed_business_hours(question.asked_at, now) >= threshold_hours
+        and elapsed_business_hours(_reminder_clock_start(question), now) >= threshold_hours
     ]
     due.sort(key=lambda q: (q.asked_at, q.message_id))
     return due

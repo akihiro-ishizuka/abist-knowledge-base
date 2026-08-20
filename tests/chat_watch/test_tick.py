@@ -13,11 +13,11 @@ import httpx
 import pytest
 
 from abist_kb.application.chat_watch.source import JsonFileMessageSource
-from abist_kb.application.chat_watch.state import load_state
-from abist_kb.application.chat_watch.tick import run_ingest, run_reply
+from abist_kb.application.chat_watch.state import MessageRecord, WatchState, load_state
+from abist_kb.application.chat_watch.tick import run_ingest, run_reply, skip_message
 from abist_kb.config import Settings, load_settings
 from abist_kb.domain.chat_watch import MessageStatus
-from abist_kb.domain.errors import AppError
+from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.infrastructure.notify.teams import DeliveryOutcome
 
 NOW = datetime(2026, 8, 20, 9, 0, tzinfo=UTC)
@@ -260,3 +260,60 @@ def test_reply_failed_is_retried(tmp_root: Path) -> None:
 
     again = run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [_raw("a")])), now=NOW)
     assert [r.message_id for r in again.pending] == ["a"]
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        MessageStatus.ACCEPTED,
+        MessageStatus.SENDING,
+        MessageStatus.UNKNOWN,
+        MessageStatus.CLOSED_COLD_START,
+    ],
+)
+def test_skip_refuses_terminal_and_in_flight_states(status: MessageStatus) -> None:
+    """終端・送信中のレコードを `skipped` へ落とせない(残課題2)。
+
+    `unknown` は「届いたか判らない」という監査上の事実で、`skipped` に上書きすると
+    その記録が消える。`accepted` は既に回答済み、`sending` は送信中である。
+    """
+    state = WatchState(
+        messages={
+            "a": MessageRecord(
+                message_id="a",
+                status=status,
+                sender_email="t_isaka@abist.co.jp",
+                created_at=NOW,
+                note="元の注記",
+            )
+        }
+    )
+
+    with pytest.raises(AppError) as exc_info:
+        skip_message(state, message_id="a", reason="相槌なので")
+
+    assert exc_info.value.code is ErrorCode.CONFLICT
+    assert state.messages["a"].status is status
+    assert state.messages["a"].note == "元の注記"
+
+
+@pytest.mark.parametrize(
+    "status",
+    [MessageStatus.DISCOVERED, MessageStatus.PROCESSING, MessageStatus.FAILED],
+)
+def test_skip_allows_states_awaiting_a_decision(status: MessageStatus) -> None:
+    state = WatchState(
+        messages={
+            "a": MessageRecord(
+                message_id="a",
+                status=status,
+                sender_email="t_isaka@abist.co.jp",
+                created_at=NOW,
+            )
+        }
+    )
+
+    record = skip_message(state, message_id="a", reason="相槌なので")
+
+    assert record.status is MessageStatus.SKIPPED
+    assert record.note == "相槌なので"

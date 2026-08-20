@@ -287,19 +287,40 @@ teams-watch-state.json
 **営業時間内の経過時間だけを積算**し、4時間で発火する。単純な経過4時間ではない。
 
 ```
-営業時間: 月〜金 09:00-18:00 JST
+運用時間: 月〜金 08:30-17:30 JST
 祝日: 考慮しない（PoC）
 ```
+
+この窓は**リマインドの積算と、AI が応答してよい時間帯そのものの両方**に使う（§3.3）。同じ「営業時間」を2箇所で別々に定義すると必ず食い違うため、定義は `business_hours.py` 1箇所に置く。
 
 金曜17:00 の質問の場合:
 
 ```
-金 17:00 → 18:00   1時間
-月 09:00 → 12:00   3時間
+金 17:00 → 17:30   0.5時間
+月 08:30 → 12:00   3.5時間
 合計 4時間 → 月 12:00 に発火
 ```
 
 対象は `open` および `acknowledged`。`resolved` は対象外。1つの質問につきリマインドは1回（`reminded` へ遷移後は再発火しない）。
+
+### 7.3 運用時間の外
+
+`teams gate status` の `allowed` が false のあいだ、ティックは検索も投稿もしない。`/loop` は24時間回るため、このゲートが無いと深夜や土日にメンバーへ投稿してしまう。
+
+### 7.4 朝の TODO 提示
+
+営業日の 8:30 台の最初のティックで、その日の TODO を1回だけ投稿する。`last_briefing_date`（JST の日付）で冪等性を担保する — `/loop` は20分間隔なので、記録が無いと 8:30 台に何度も投稿する。
+
+情報源は4つ。`teams briefing status` が返すのは state 由来の分（未解決の追跡中の質問）だけで、残りは Claude 側が集めて合流させる。
+
+| 情報源 | 担当 |
+|---|---|
+| 未解決の追跡中の質問 | Python（`open_todos`） |
+| esa の未完了項目（`docs/esa/設計効率化`・`docs/esa/議事録`） | Claude（kb-search） |
+| チャット上の約束 | Claude（判断） |
+| GitHub Issue の担当分 | Claude（`gh`） |
+
+**担当が明確なものは個人ごと、明確でないものはチーム TODO として出す。** 質問の担当は `QuestionRecord.owner` に記録する（`None` がチーム扱い）。毎朝判定し直すと担当が日によってブレるため、一度読み取ったら `teams questions assign` で残す。
 
 ### 7.2 解決検出の弱点
 
@@ -365,18 +386,28 @@ Teams の発言・esa 記事・kb-search の結果は、すべて**入力デー�
 
 ### 10.0 CLI
 
-Track A では判断が Claude 側にあるため、tick を3つのコマンドに分解する（§3.1.1）。すべて JSON を標準出力へ返す。
+Track A では判断が Claude 側にあるため、tick を複数のコマンドに分解する（§3.1.1）。すべて `Presenter.json_result()` 経由で単一の JSON ドキュメントを標準出力へ返す。
 
 | コマンド | 役割 |
 |---|---|
+| `abist-kb teams gate status` | いまティックを回してよいか（`allowed`）と、使うべき `search_since` を返す。運用時間とバックオフの両方を見る |
+| `abist-kb teams briefing status` | 朝の TODO 提示を今日もう出したかと、state 由来の TODO（担当者ごと／チーム）を返す |
+| `abist-kb teams briefing done` | 朝の TODO 提示を出したことを記録する |
+| `abist-kb teams questions assign --message-id <id> [--owner <email>]` | 回答すべき人を記録する。`--owner` を省くとチーム TODO へ戻す |
+| `abist-kb teams backoff hit [--retry-after <秒>]` | `429` を受けたことを記録する。`Retry-After` があれば従い間隔は据え置く |
+| `abist-kb teams backoff clear` | 検索が成功したので通常間隔へ戻す |
 | `abist-kb teams inbox ingest --from <json>` | 検索結果を state へマージし、**判断が必要な件**（最大3件）を返す |
-| `abist-kb teams reply --message-id <id> --body <file>` | 投稿し、`sending` → `accepted`/`failed` を記録 |
+| `abist-kb teams inbox skip --message-id <id> [--reason <text>]` | 「質問・依頼ではない」と判定した件を `skipped` へ進める。**`pending` に出た件は返信するかこれを呼ぶかを必ず行う** |
+| `abist-kb teams reply --message-id <id> --title <t> --body <file> [--source <url>] [--force]` | 投稿し、`sending` → `accepted`/`failed`/`unknown` を記録。`accepted`/`unknown` への再送は `--force` なしでは拒否 |
 | `abist-kb teams questions track --message-id <id>` | メッセージを追跡対象の質問として登録する |
 | `abist-kb teams questions mark --message-id <id> --status <s>` | 質問の状態を更新する。`reminded` では `reminded_at` も刻む |
+| `abist-kb teams questions defer --message-id <id>` | 「今回は催促しないと決めた」を記録し、営業時間の時計を振り出しに戻す（§7.2） |
 | `abist-kb teams reminders due` | 営業時間4時間を超えた質問を返す |
 | `abist-kb teams state show` | 現在の state を表示 |
 
-Track B で Graph 直叩きになった際は、`MessageSource` を差し替えたうえで、これらを内部で順に呼ぶ `abist-kb teams watch --once` を追加する。3コマンドの責務は変えない。
+`inbox skip` と `questions defer` は、どちらも**「何もしない」という判断を記録する**ためにある。記録できないと、同じ件が毎ティック再提示され、`inbox` 側では応答枠を占有して他の質問を締め出す。
+
+Track B で Graph 直叩きになった際は、`MessageSource` を差し替えたうえで、これらを内部で順に呼ぶ `abist-kb teams watch --once` を追加する。個々のコマンドの責務は変えない。
 
 ### 10.1 設定
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
@@ -45,6 +45,16 @@ class QuestionRecord(BaseModel):
     asked_by: str
     asked_at: datetime
     reminded_at: datetime | None = None
+    #: 回答すべき人。`asked_by`(質問した人)とは別物である。本文で名指しされて
+    #: いれば明確だが、そうでないことも多い。`None` は「担当が明確でない」を
+    #: 意味し、朝の提示ではチーム TODO として扱う。毎朝判定し直すと担当が日に
+    #: よってブレるため、一度決めたらここに記録する。
+    owner: str | None = None
+    #: 「今回は催促しないと決めた」時刻。設計 §7.2 は、返信を見落としていないか
+    #: 確証が持てなければ催促するなと定めるが、その判断を記録する場所が無いと
+    #: 期限超過の質問が毎ティック再提示され続ける。ここに刻むと営業時間の時計が
+    #: 振り出しに戻り、次の閾値までは対象から外れる。
+    deferred_at: datetime | None = None
 
 
 class BackoffState(BaseModel):
@@ -58,6 +68,9 @@ class WatchState(BaseModel):
     """`data/teams-watch-state.json` の全体。"""
 
     schema_version: int = SCHEMA_VERSION
+    #: 朝の TODO 提示を最後に出した JST の日付。`/loop` は20分間隔なので、これが
+    #: 無いと 8:30 台に何度も投稿してしまう。
+    last_briefing_date: date | None = None
     #: 初回 tick を通過したか。`messages` の空判定で代用してはならない。初回に
     #: 1件も取れなかった場合、永遠に cold start のままになる(設計 §5.3)。
     initialised: bool = False
