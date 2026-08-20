@@ -37,7 +37,8 @@ abist-kb teams briefing done
 
 - esa の未完了項目（`docs/esa/設計効率化` と `docs/esa/議事録` を kb-search）
 - チャット上の約束（「明日調べます」「午後に送ります」など本人の宣言）
-- GitHub Issue の担当分（`gh` で assignee 付きの open issue）
+
+**GitHub Issue は朝の提示に載せない。** 聞かれたときだけ `gh` で調べて答える。
 
 **担当が明確なものは各メンバーの見出しの下に、明確でないものは「チーム」の
 見出しの下に置く。** 担当が読み取れた質問は
