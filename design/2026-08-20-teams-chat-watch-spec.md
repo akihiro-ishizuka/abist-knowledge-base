@@ -371,6 +371,8 @@ Track A では判断が Claude 側にあるため、tick を3つのコマンド�
 |---|---|
 | `abist-kb teams inbox ingest --from <json>` | 検索結果を state へマージし、**判断が必要な件**（最大3件）を返す |
 | `abist-kb teams reply --message-id <id> --body <file>` | 投稿し、`sending` → `accepted`/`failed` を記録 |
+| `abist-kb teams questions track --message-id <id>` | メッセージを追跡対象の質問として登録する |
+| `abist-kb teams questions mark --message-id <id> --status <s>` | 質問の状態を更新する。`reminded` では `reminded_at` も刻む |
 | `abist-kb teams reminders due` | 営業時間4時間を超えた質問を返す |
 | `abist-kb teams state show` | 現在の state を表示（秘匿値は伏せる） |
 

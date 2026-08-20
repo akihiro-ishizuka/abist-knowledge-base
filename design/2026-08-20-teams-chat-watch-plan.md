@@ -2597,7 +2597,43 @@ git commit -m "feat(teams): ingest/replyのユースケースを追加する"
 **Files:**
 - Create: `src/abist_kb/presentation/cli/teams_cmd.py`
 - Modify: `src/abist_kb/presentation/cli/app.py`
+- Modify: `src/abist_kb/application/chat_watch/tick.py`（`mark_question` に `now` を追加）
 - Test: `tests/cli/test_teams_cmd.py`
+- Test: `tests/chat_watch/test_reminders.py`（`reminded_at` の検査を追加）
+
+### 12.A 質問追跡の配線（Task 10 の積み残し）
+
+Task 10 は `track_question` / `mark_question` / `due_reminders` を作ったが、**呼び出し元が
+どこにも無い**。このまま出荷すると設計 §7 のリマインドは丸ごと死ぬ（質問が1件も登録
+されないので `reminders due` は常に空を返し、仮に登録されても `reminded` へ遷移させる
+手段が無いので同じ人を毎 tick 催促し続ける）。Task 12 でここを繋ぐ。
+
+`mark_question` に `now: datetime | None = None` を足し、`REMINDED` へ遷移するときだけ
+`reminded_at` を刻む。`reminded_at` はいつ催促したかの記録であり、二重催促を後から
+検証する唯一の手掛かりになる。
+
+```python
+def mark_question(
+    state: WatchState,
+    *,
+    message_id: str,
+    status: QuestionStatus,
+    now: datetime | None = None,
+) -> None:
+    """質問の状態を更新する。
+
+    `REMINDED` へ遷移させるときは `reminded_at` を刻む。いつ催促したかが残らないと、
+    二重催促が起きても後から検証できない。
+    """
+    question = state.questions.get(message_id)
+    if question is None:
+        return
+    question.status = status
+    if status is QuestionStatus.REMINDED and now is not None:
+        question.reminded_at = now
+```
+
+既存の呼び出し（`now` を渡さない Task 10 のテスト）はそのまま通る。
 
 **Interfaces:**
 - Consumes: Task 11 の `run_ingest` / `run_reply`、Task 10 の `due_reminders`
@@ -2694,6 +2730,56 @@ def test_state_show_redacts_nothing_secret(tmp_root: Path) -> None:
     assert "sig=" not in result.output
 
 
+def test_questions_track_then_mark_reminded_stamps_reminded_at(tmp_root: Path) -> None:
+    """設計 §7: 質問追跡が CLI から配線されていること。
+
+    ここが無いと `reminders due` は永遠に空を返し、リマインド機能全体が死ぬ。
+    """
+    runner.invoke(
+        app,
+        ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, ["a"]))],
+    )
+    runner.invoke(
+        app,
+        [
+            "--root", str(tmp_root), "teams", "inbox", "ingest",
+            "--from", str(_inbox(tmp_root, ["a", "b"])),
+        ],
+    )
+
+    tracked = runner.invoke(
+        app, ["--root", str(tmp_root), "teams", "questions", "track", "--message-id", "b"]
+    )
+    assert tracked.exit_code == 0, tracked.output
+    assert json.loads(tracked.output)["status"] == "open"
+
+    marked = runner.invoke(
+        app,
+        [
+            "--root", str(tmp_root), "teams", "questions", "mark",
+            "--message-id", "b", "--status", "reminded",
+        ],
+    )
+    assert marked.exit_code == 0, marked.output
+    payload = json.loads(marked.output)
+    assert payload["status"] == "reminded"
+    assert payload["reminded_at"] is not None
+
+
+def test_questions_track_rejects_unknown_message(tmp_root: Path) -> None:
+    runner.invoke(
+        app,
+        ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, []))],
+    )
+
+    result = runner.invoke(
+        app, ["--root", str(tmp_root), "teams", "questions", "track", "--message-id", "nope"]
+    )
+
+    assert result.exit_code != 0
+    assert "nope" in result.output
+
+
 def test_reply_without_webhook_url_fails_clearly(tmp_root: Path) -> None:
     runner.invoke(
         app,
@@ -2752,15 +2838,25 @@ import httpx
 import typer
 
 from abist_kb.application.chat_watch.source import JsonFileMessageSource
-from abist_kb.application.chat_watch.state import load_state
-from abist_kb.application.chat_watch.tick import due_reminders, run_ingest, run_reply
+from abist_kb.application.chat_watch.state import load_state, save_state
+from abist_kb.application.chat_watch.tick import (
+    due_reminders,
+    mark_question,
+    run_ingest,
+    run_reply,
+    track_question,
+)
+from abist_kb.domain.chat_watch import QuestionStatus
+from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.presentation.cli.context import AppTyper, get_context
 
 teams_app = AppTyper(help="連絡チャットの監視と応答。", no_args_is_help=True)
 inbox_app = AppTyper(help="受信の取り込み。", no_args_is_help=True)
+questions_app = AppTyper(help="質問の追跡。", no_args_is_help=True)
 reminders_app = AppTyper(help="放置された質問の抽出。", no_args_is_help=True)
 state_app = AppTyper(help="監視 state の確認。", no_args_is_help=True)
 teams_app.add_typer(inbox_app, name="inbox")
+teams_app.add_typer(questions_app, name="questions")
 teams_app.add_typer(reminders_app, name="reminders")
 teams_app.add_typer(state_app, name="state")
 
@@ -2809,6 +2905,63 @@ def reply(
     _emit(result.model_dump(mode="json"))
 
 
+@questions_app.command("track")
+def questions_track(
+    ctx: typer.Context,
+    message_id: Annotated[str, typer.Option("--message-id", help="質問と判定した message_id。")],
+) -> None:
+    """メッセージを追跡対象の質問として登録する。
+
+    「これは質問か」の判定は Claude 側にあるため、登録は明示的な呼び出しで行う。
+    `asked_by` / `asked_at` は ingest 済みの `MessageRecord` から引く(呼び出し側に
+    同じ値を二度渡させない)。
+    """
+    settings = get_context(ctx).settings
+    assert settings.teams_state_path is not None
+    state = load_state(settings.teams_state_path)
+    record = state.messages.get(message_id)
+    if record is None:
+        raise AppError(
+            ErrorCode.NOT_FOUND,
+            f"未知の message_id です: {message_id}",
+            hint="先に `abist-kb teams inbox ingest` を実行してください。",
+        )
+    track_question(
+        state,
+        message_id=message_id,
+        asked_by=record.sender_email,
+        asked_at=record.created_at,
+    )
+    save_state(settings.teams_state_path, state)
+    _emit(state.questions[message_id].model_dump(mode="json"))
+
+
+@questions_app.command("mark")
+def questions_mark(
+    ctx: typer.Context,
+    message_id: Annotated[str, typer.Option("--message-id", help="対象の message_id。")],
+    status: Annotated[QuestionStatus, typer.Option("--status", help="遷移先の状態。")],
+) -> None:
+    """質問の状態を更新する。
+
+    `resolved` と `acknowledged` の区別は Claude 側の判断であり、ここは記録するだけ。
+    `reminded` へ遷移させたときは `reminded_at` も刻む(いつ催促したかが残らないと、
+    二重催促を後から検証できない)。
+    """
+    settings = get_context(ctx).settings
+    assert settings.teams_state_path is not None
+    state = load_state(settings.teams_state_path)
+    if message_id not in state.questions:
+        raise AppError(
+            ErrorCode.NOT_FOUND,
+            f"追跡していない質問です: {message_id}",
+            hint="先に `abist-kb teams questions track` を実行してください。",
+        )
+    mark_question(state, message_id=message_id, status=status, now=datetime.now(UTC))
+    save_state(settings.teams_state_path, state)
+    _emit(state.questions[message_id].model_dump(mode="json"))
+
+
 @reminders_app.command("due")
 def reminders_due(ctx: typer.Context) -> None:
     """営業時間4時間を超えた質問を返す。"""
@@ -2846,7 +2999,7 @@ app.add_typer(teams_app, name="teams")
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/cli/test_teams_cmd.py -v`
-Expected: PASS（4件）
+Expected: PASS（6件）
 
 - [ ] **Step 5: 全体回帰**
 
