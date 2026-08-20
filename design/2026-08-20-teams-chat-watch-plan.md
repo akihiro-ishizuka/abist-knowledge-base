@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Python は `==3.12.*`。`from __future__ import annotations` を全モジュール冒頭に置く（既存規約）。
-- ruff: `line-length = 100`、`select = ["E", "F", "I", "UP", "B", "SIM", "PTH", "T20"]`。**`T20` により `print()` は使用禁止**（CLI は `typer.echo`）。**`PTH` によりパス操作は `pathlib` を使う**（`os.path` 禁止）。ただし `os.replace` は atomic write に必要なので `PTH` の対象外として使ってよい。
+- ruff: `line-length = 100`、`select = ["E", "F", "I", "UP", "B", "SIM", "PTH", "T20"]`。**`T20` により `print()` は使用禁止**（CLI は `typer.echo`）。**`PTH` によりパス操作は `pathlib` を使う**（`os.path` 禁止）。atomic write の置換には **`Path.replace()` を使う**。`os.replace` は `PTH105` に触れるため使わない（同じ syscall なので atomicity は変わらない）。`os.fsync` は `PTH` の対象外なので `import os` 自体は残る。
 - パスは必ず `Settings` が解決したものを使う。固定文字列の `data/` 等を書かない。
 - 秘密情報（Webhook URL、トークン）を DB・ログ・state・エラー詳細へ書かない。
 - 例外は `AppError(code, message, *, hint=None, details=None, retryable=False, exit_code=None)` で正規化する。`ErrorCode` は既存の値のみ使う（`CONFIG_ERROR` / `EXTERNAL_SERVICE` / `INVALID_INPUT` / `NOT_FOUND` / `CONFLICT`）。
@@ -168,7 +168,8 @@ git commit -m "feat(teams): 連絡チャット監視の設定を追加する"
 
 **Files:**
 - Create: `src/abist_kb/domain/chat_watch.py`
-- Test: `tests/kernel/test_chat_watch_domain.py`
+- Create: `tests/chat_watch/__init__.py`（空。`tests/video/__init__.py` と同じ規約）
+- Test: `tests/chat_watch/test_domain.py`
 
 **Interfaces:**
 - Consumes: なし
@@ -176,7 +177,7 @@ git commit -m "feat(teams): 連絡チャット監視の設定を追加する"
 
 - [ ] **Step 1: Write the failing test**
 
-`tests/kernel/test_chat_watch_domain.py` を作る。
+`tests/chat_watch/test_domain.py` を作る。
 
 ```python
 """`domain.chat_watch` の値オブジェクト。
@@ -256,7 +257,7 @@ def test_inbound_message_normalises_to_utc() -> None:
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `uv run pytest tests/kernel/test_chat_watch_domain.py -v`
+Run: `uv run pytest tests/chat_watch/test_domain.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'abist_kb.domain.chat_watch'`
 
 - [ ] **Step 3: Write minimal implementation**
@@ -344,13 +345,13 @@ class InboundMessage(BaseModel):
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `uv run pytest tests/kernel/test_chat_watch_domain.py -v`
+Run: `uv run pytest tests/chat_watch/test_domain.py -v`
 Expected: PASS（5件）
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/abist_kb/domain/chat_watch.py tests/kernel/test_chat_watch_domain.py
+git add src/abist_kb/domain/chat_watch.py tests/chat_watch/test_domain.py
 git commit -m "feat(teams): 連絡チャット監視のドメイン型を追加する"
 ```
 
@@ -361,7 +362,7 @@ git commit -m "feat(teams): 連絡チャット監視のドメイン型を追加�
 **Files:**
 - Create: `src/abist_kb/application/chat_watch/__init__.py`
 - Create: `src/abist_kb/application/chat_watch/business_hours.py`
-- Create: `tests/chat_watch/__init__.py`（空）
+- Note: `tests/chat_watch/__init__.py` は Task 2 で作成済み
 - Test: `tests/chat_watch/test_business_hours.py`
 
 **Interfaces:**
@@ -372,7 +373,7 @@ git commit -m "feat(teams): 連絡チャット監視のドメイン型を追加�
 
 - [ ] **Step 1: Write the failing test**
 
-`tests/chat_watch/__init__.py` を空ファイルで作る（`tests/video/__init__.py` と同じ規約）。続けて `tests/chat_watch/test_business_hours.py` を作る。
+`tests/chat_watch/test_business_hours.py` を作る（`tests/chat_watch/__init__.py` は Task 2 で作成済み）。
 
 テストの置き場は `application/video/` → `tests/video/` の対応に合わせている。`application/chat_watch/` なので `tests/chat_watch/`。
 
@@ -932,6 +933,7 @@ def test_load_missing_file_returns_empty_state(tmp_path: Path) -> None:
     state = load_state(tmp_path / "absent.json")
 
     assert state.schema_version == SCHEMA_VERSION
+    assert state.initialised is False
     assert state.search_watermark is None
     assert state.messages == {}
     assert state.questions == {}
@@ -1075,6 +1077,9 @@ class WatchState(BaseModel):
     """`data/teams-watch-state.json` の全体。"""
 
     schema_version: int = SCHEMA_VERSION
+    #: 初回 tick を通過したか。`messages` の空判定で代用してはならない。初回に
+    #: 1件も取れなかった場合、永遠に cold start のままになる(設計 §5.3)。
+    initialised: bool = False
     search_watermark: datetime | None = None
     messages: dict[str, MessageRecord] = Field(default_factory=dict)
     questions: dict[str, QuestionRecord] = Field(default_factory=dict)
@@ -1122,8 +1127,9 @@ def load_state(path: Path) -> WatchState:
 def save_state(path: Path, state: WatchState) -> None:
     """atomic write で置換する。
 
-    tmp へ書く → flush → fsync → `os.replace()`。`os.replace` は Windows でも
-    既存ファイルを置換できる。途中で落ちても既存 state は壊れない。
+    tmp へ書く → flush → fsync → `Path.replace()`。`Path.replace` は Windows でも
+    既存ファイルを置換できる(`os.replace` と同じ syscall だが `PTH105` に触れ
+    ない)。途中で落ちても既存 state は壊れない。
     """
     payload = state.model_dump_json(indent=2)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -1133,7 +1139,7 @@ def save_state(path: Path, state: WatchState) -> None:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(tmp_path, path)
+        tmp_path.replace(path)
     finally:
         tmp_path.unlink(missing_ok=True)
 
@@ -2301,6 +2307,22 @@ def test_first_run_is_cold_start_and_returns_nothing(tmp_root: Path) -> None:
     assert state.messages["a"].status is MessageStatus.CLOSED_COLD_START
 
 
+def test_empty_first_run_still_consumes_cold_start(tmp_root: Path) -> None:
+    """初回に1件も取れなくても cold start は消化される。
+
+    `not state.messages` で判定すると、ここで永遠に cold start のままになり、
+    以後どのメッセージにも応答しなくなる。
+    """
+    settings = _settings(tmp_root)
+    first = run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [])), now=NOW)
+    assert first.cold_start is True
+
+    second = run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [_raw("a")])), now=NOW)
+
+    assert second.cold_start is False
+    assert [r.message_id for r in second.pending] == ["a"]
+
+
 def test_second_run_returns_pending(tmp_root: Path) -> None:
     settings = _settings(tmp_root)
     run_ingest(settings, JsonFileMessageSource(_inbox(tmp_root, [_raw("a")])), now=NOW)
@@ -2471,7 +2493,9 @@ def run_ingest(settings: Settings, source: MessageSource, *, now: datetime) -> I
     state_path = settings.teams_state_path
     assert state_path is not None  # `_derive_paths` で必ず埋まる
     state = load_state(state_path)
-    cold_start = not state.messages
+    # `not state.messages` で代用してはならない。初回に1件も取れなかった場合、
+    # 永遠に cold start のままになり、以後どのメッセージにも応答しなくなる。
+    cold_start = not state.initialised
 
     recovered = recover_interrupted(state)
 
@@ -2488,6 +2512,7 @@ def run_ingest(settings: Settings, source: MessageSource, *, now: datetime) -> I
     pending = [] if cold_start else pending_for_decision(
         state, limit=settings.teams_max_posts_per_tick
     )
+    state.initialised = True
     save_state(state_path, state)
 
     return IngestResult(
@@ -2556,7 +2581,7 @@ def run_reply(
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `uv run pytest tests/chat_watch/test_tick.py -v`
-Expected: PASS（7件）
+Expected: PASS（8件）
 
 - [ ] **Step 5: Commit**
 

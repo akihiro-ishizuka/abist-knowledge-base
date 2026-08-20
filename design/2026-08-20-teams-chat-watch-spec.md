@@ -186,6 +186,7 @@ state が存在しない初回 tick では、発見したメッセージをす�
 | キー | 役割 |
 |---|---|
 | `schema_version` | state 形式のバージョン。初版は `1` |
+| `initialised` | 初回 tick を通過したか。`messages` の空判定で代用しない（初回に1件も取れないと永久に cold start のままになる） |
 | `search_watermark` | 検索の下限時刻を決める目印。既知メッセージの最大 `created_at`。応答判定には使わない |
 | `messages` | `message_id` → 状態エントリ。応答済みかどうかの唯一の判断材料 |
 | `questions` | 追跡中の質問（§6.3） |
