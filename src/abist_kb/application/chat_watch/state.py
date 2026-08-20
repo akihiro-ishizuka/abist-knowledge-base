@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
 
-from abist_kb.domain.chat_watch import MessageStatus, QuestionStatus
+from abist_kb.application.chat_watch.membership import classify, is_self_post
+from abist_kb.domain.chat_watch import InboundMessage, MemberRole, MessageStatus, QuestionStatus
 from abist_kb.domain.errors import AppError, ErrorCode
 
 #: state 形式のバージョン。`domain.chat_watch` の列挙値を変えたら上げること。
@@ -124,6 +125,110 @@ def save_state(path: Path, state: WatchState) -> None:
         tmp_path.replace(path)
     finally:
         tmp_path.unlink(missing_ok=True)
+
+
+#: 次 tick で処理し直してよい状態。`unknown` を含めないのが要点(設計 §6.1.1)。
+_RETRYABLE = frozenset({MessageStatus.DISCOVERED, MessageStatus.PROCESSING, MessageStatus.FAILED})
+
+
+def recover_interrupted(state: WatchState) -> list[str]:
+    """`sending` のまま残ったエントリを `unknown` へ移す。
+
+    前 tick が応答を受け取る前に中断したことを意味する。投稿が届いたか確認する
+    手段は無い(Adaptive Card 本文は検索に掛からないことがある)。したがって
+    自動再送しない。再送は人間が判断する(設計 §6.1.1)。
+    """
+    recovered: list[str] = []
+    for record in state.messages.values():
+        if record.status is MessageStatus.SENDING:
+            record.status = MessageStatus.UNKNOWN
+            record.note = "送信結果が不明。自動再送しない(設計 §6.1.1)"
+            recovered.append(record.message_id)
+    return sorted(recovered)
+
+
+def ingest_messages(
+    state: WatchState, messages: list[InboundMessage], *, cold_start: bool
+) -> list[InboundMessage]:
+    """取得したメッセージを state へ取り込み、未処理のものを返す。
+
+    判定基準は `created_at > search_watermark` ではなく
+    `message_id not in state.messages`。時刻は重複取得を許容する(設計 §5.1)。
+
+    `cold_start` のとき(state が空の初回)はすべて `closed_cold_start` として
+    記録し、何も返さない。過去ログへの一斉投稿を防ぐ(設計 §5.3)。
+    """
+    fresh: list[InboundMessage] = []
+    for message in messages:
+        if message.message_id in state.messages:
+            continue
+        if cold_start:
+            status = MessageStatus.CLOSED_COLD_START
+        elif is_self_post(message) or classify(message) is not MemberRole.ACTIVE:
+            # context_only と system はここで落とす。本文は state に残らないので
+            # 分類は取り込み時にしかできない。
+            status = MessageStatus.SKIPPED
+        else:
+            status = MessageStatus.DISCOVERED
+        state.messages[message.message_id] = MessageRecord(
+            message_id=message.message_id,
+            status=status,
+            sender_email=message.sender_email,
+            created_at=message.created_at,
+        )
+        if status is MessageStatus.DISCOVERED:
+            fresh.append(message)
+
+    if messages:
+        newest = max(m.created_at for m in messages)
+        if state.search_watermark is None or newest > state.search_watermark:
+            state.search_watermark = newest
+
+    return fresh
+
+
+def pending_for_decision(state: WatchState, *, limit: int) -> list[MessageRecord]:
+    """判断が必要なメッセージを古い順に最大 `limit` 件返す。
+
+    上限は「1 tick で `accepted` へ遷移させる件数」であり、取得件数の上限では
+    ない。溢れた分は `discovered` のまま次 tick へ持ち越す(設計 §5.2)。選ばれた
+    分は `processing` へ進め、`discovered` から外す。そうしないと次の呼び出しで
+    同じ古株が何度も選ばれるだけで、持ち越し分がいつまでも後回しになる。
+
+    返すのは `MessageRecord`(ID と送信者)であって `InboundMessage` ではない。
+    本文を必要とするのは Claude 側であり、state は本文を保持しない。
+    """
+    candidates = [record for record in state.messages.values() if record.status in _RETRYABLE]
+    candidates.sort(key=lambda r: (r.created_at, r.message_id))
+    selected = candidates[:limit]
+    for record in selected:
+        record.status = MessageStatus.PROCESSING
+    return selected
+
+
+def prune(state: WatchState, *, now: datetime, retention_days: int) -> int:
+    """保持期間を過ぎたメッセージを削除する。
+
+    通常の forward-only 運用では overlap(30分)より遥かに古いため、削除済み ID が
+    再取得されて二重投稿になることはない。過去へ遡る手段(`--since` 等)を将来
+    足す場合は、既定 dry-run のガードを併せて実装すること(設計 §6.2)。
+
+    追跡中の質問は削除しない。`stale` にしてリマインドだけ止める。
+    """
+    cutoff = now - timedelta(days=retention_days)
+    stale_ids = [mid for mid, record in state.messages.items() if record.created_at < cutoff]
+    for message_id in stale_ids:
+        del state.messages[message_id]
+
+    for question in state.questions.values():
+        if question.asked_at < cutoff and question.status in {
+            QuestionStatus.OPEN,
+            QuestionStatus.ACKNOWLEDGED,
+            QuestionStatus.REMINDED,
+        }:
+            question.status = QuestionStatus.STALE
+
+    return len(stale_ids)
 
 
 def utcnow() -> datetime:
