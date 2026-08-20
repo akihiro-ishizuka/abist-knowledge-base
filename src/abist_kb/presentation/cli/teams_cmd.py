@@ -32,6 +32,7 @@ from abist_kb.application.chat_watch.state import (
     save_state,
 )
 from abist_kb.application.chat_watch.tick import (
+    defer_reminder,
     due_reminders,
     mark_question,
     run_ingest,
@@ -189,6 +190,29 @@ def questions_mark(
     mark_question(state, message_id=message_id, status=status, now=datetime.now(UTC))
     save_state(settings.teams_state_path, state)
     cli_ctx.presenter.json_result(state.questions[message_id].model_dump(mode="json"))
+
+
+@questions_app.command("defer")
+def questions_defer(
+    ctx: typer.Context,
+    message_id: Annotated[str, typer.Option("--message-id", help="対象の message_id。")],
+) -> None:
+    """「今回は催促しないと決めた」を記録する。
+
+    `reminders due` に出た質問について、返信を見落としていないか確証が持てなければ
+    催促しない、というのが設計 §7.2 の方針である。ただし見送った事実を残さないと
+    同じ質問が毎ティック出続け、運用者が同じ判断をやり直し続けることになる。
+
+    ここを呼ぶと営業時間の時計が振り出しに戻り、次の閾値までは対象から外れる。
+    状態は変えない（見送りは「解決した」でも「催促した」でもない）。
+    """
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
+    state = load_state(settings.teams_state_path)
+    question = defer_reminder(state, message_id=message_id, now=datetime.now(UTC))
+    save_state(settings.teams_state_path, state)
+    cli_ctx.presenter.json_result(question.model_dump(mode="json"))
 
 
 @reminders_app.command("due")

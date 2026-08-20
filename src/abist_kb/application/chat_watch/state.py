@@ -45,6 +45,11 @@ class QuestionRecord(BaseModel):
     asked_by: str
     asked_at: datetime
     reminded_at: datetime | None = None
+    #: 「今回は催促しないと決めた」時刻。設計 §7.2 は、返信を見落としていないか
+    #: 確証が持てなければ催促するなと定めるが、その判断を記録する場所が無いと
+    #: 期限超過の質問が毎ティック再提示され続ける。ここに刻むと営業時間の時計が
+    #: 振り出しに戻り、次の閾値までは対象から外れる。
+    deferred_at: datetime | None = None
 
 
 class BackoffState(BaseModel):

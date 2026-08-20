@@ -311,3 +311,61 @@ def test_backoff_hit_without_retry_after_doubles_the_interval(tmp_root: Path) ->
 
     second = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "hit"])
     assert json.loads(second.output)["interval_minutes"] == 80
+
+
+def test_questions_defer_stops_the_reminder_recurring(tmp_root: Path) -> None:
+    """「催促しないと決めた」を記録できる(残課題1)。
+
+    これが無いと、確証が持てない質問が `reminders due` に毎ティック出続ける。
+    """
+    runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_root),
+            "teams",
+            "inbox",
+            "ingest",
+            "--from",
+            str(_inbox(tmp_root, ["a"])),
+        ],
+    )
+    runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_root),
+            "teams",
+            "inbox",
+            "ingest",
+            "--from",
+            str(_inbox(tmp_root, ["a", "b"])),
+        ],
+    )
+    runner.invoke(
+        app, ["--root", str(tmp_root), "teams", "questions", "track", "--message-id", "b"]
+    )
+
+    result = runner.invoke(
+        app, ["--root", str(tmp_root), "teams", "questions", "defer", "--message-id", "b"]
+    )
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert payload["deferred_at"] is not None
+    # 見送りは「解決した」でも「催促した」でもない
+    assert payload["status"] == "open"
+
+
+def test_questions_defer_rejects_untracked_question(tmp_root: Path) -> None:
+    runner.invoke(
+        app,
+        ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, []))],
+    )
+
+    result = runner.invoke(
+        app, ["--root", str(tmp_root), "teams", "questions", "defer", "--message-id", "nope"]
+    )
+
+    assert result.exit_code != 0
+    assert "nope" in result.output

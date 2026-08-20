@@ -365,18 +365,25 @@ Teams の発言・esa 記事・kb-search の結果は、すべて**入力デー�
 
 ### 10.0 CLI
 
-Track A では判断が Claude 側にあるため、tick を3つのコマンドに分解する（§3.1.1）。すべて JSON を標準出力へ返す。
+Track A では判断が Claude 側にあるため、tick を複数のコマンドに分解する（§3.1.1）。すべて `Presenter.json_result()` 経由で単一の JSON ドキュメントを標準出力へ返す。
 
 | コマンド | 役割 |
 |---|---|
+| `abist-kb teams backoff status` | いま検索してよいか（`allowed`）と、使うべき `search_since` を返す |
+| `abist-kb teams backoff hit [--retry-after <秒>]` | `429` を受けたことを記録する。`Retry-After` があれば従い間隔は据え置く |
+| `abist-kb teams backoff clear` | 検索が成功したので通常間隔へ戻す |
 | `abist-kb teams inbox ingest --from <json>` | 検索結果を state へマージし、**判断が必要な件**（最大3件）を返す |
-| `abist-kb teams reply --message-id <id> --body <file>` | 投稿し、`sending` → `accepted`/`failed` を記録 |
+| `abist-kb teams inbox skip --message-id <id> [--reason <text>]` | 「質問・依頼ではない」と判定した件を `skipped` へ進める。**`pending` に出た件は返信するかこれを呼ぶかを必ず行う** |
+| `abist-kb teams reply --message-id <id> --title <t> --body <file> [--source <url>] [--force]` | 投稿し、`sending` → `accepted`/`failed`/`unknown` を記録。`accepted`/`unknown` への再送は `--force` なしでは拒否 |
 | `abist-kb teams questions track --message-id <id>` | メッセージを追跡対象の質問として登録する |
 | `abist-kb teams questions mark --message-id <id> --status <s>` | 質問の状態を更新する。`reminded` では `reminded_at` も刻む |
+| `abist-kb teams questions defer --message-id <id>` | 「今回は催促しないと決めた」を記録し、営業時間の時計を振り出しに戻す（§7.2） |
 | `abist-kb teams reminders due` | 営業時間4時間を超えた質問を返す |
 | `abist-kb teams state show` | 現在の state を表示 |
 
-Track B で Graph 直叩きになった際は、`MessageSource` を差し替えたうえで、これらを内部で順に呼ぶ `abist-kb teams watch --once` を追加する。3コマンドの責務は変えない。
+`inbox skip` と `questions defer` は、どちらも**「何もしない」という判断を記録する**ためにある。記録できないと、同じ件が毎ティック再提示され、`inbox` 側では応答枠を占有して他の質問を締め出す。
+
+Track B で Graph 直叩きになった際は、`MessageSource` を差し替えたうえで、これらを内部で順に呼ぶ `abist-kb teams watch --once` を追加する。個々のコマンドの責務は変えない。
 
 ### 10.1 設定
 
