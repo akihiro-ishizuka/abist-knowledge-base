@@ -5,16 +5,20 @@ Track A では取得と判断が Claude 側にあるため、tick を3つに分�
 `questions track` / `questions mark` も同じ理由で分けている――「これは質問か」
 「解決したか」は Claude の判断であり、Python 側はその結果を記録するだけ。
 
+呼び出し元は人間ではなく Claude なので、全コマンドが `Presenter.json_result()`
+経由で JSON を1回だけ返す(`--output` の指定に関わらず)。`json_result()` は
+「stdout は単一の JSON ドキュメントのみ」という契約を1プロセス1回の呼び出しで
+強制する唯一の経路であり、`typer.echo`/`json.dumps` を直接使ってはならない。
+
 **このコマンド群は投稿の重複を完全には防げない。** Webhook に idempotency 機構が
 無いため、送信結果が不明な場合は再送しない(at-most-once)。
 """
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 import httpx
 import typer
@@ -43,11 +47,6 @@ teams_app.add_typer(reminders_app, name="reminders")
 teams_app.add_typer(state_app, name="state")
 
 
-def _emit(payload: dict[str, Any]) -> None:
-    """JSON を標準出力へ返す。呼び出し元は人間ではなく Claude なので常に JSON。"""
-    typer.echo(json.dumps(payload, ensure_ascii=False, indent=2, default=str))
-
-
 @inbox_app.command("ingest")
 def inbox_ingest(
     ctx: typer.Context,
@@ -60,9 +59,9 @@ def inbox_ingest(
     「質問かどうか」「回答をどう書くか」の判断は Claude 側が担うため、ここは
     取り込みと状態遷移だけを行い、判断の必要な `pending` を返して終わる。
     """
-    settings = get_context(ctx).settings
-    result = run_ingest(settings, JsonFileMessageSource(from_), now=datetime.now(UTC))
-    _emit(result.model_dump(mode="json"))
+    cli_ctx = get_context(ctx)
+    result = run_ingest(cli_ctx.settings, JsonFileMessageSource(from_), now=datetime.now(UTC))
+    cli_ctx.presenter.json_result(result.model_dump(mode="json"))
 
 
 @teams_app.command("reply")
@@ -80,10 +79,10 @@ def reply(
     回答の文面を組み立てるのは Claude 側の仕事であり、ここは投稿と state 遷移
     (`sending` → `accepted`/`unknown`)だけを担う。
     """
-    settings = get_context(ctx).settings
+    cli_ctx = get_context(ctx)
     with httpx.Client() as client:
         result = run_reply(
-            settings,
+            cli_ctx.settings,
             message_id=message_id,
             title=title,
             body=body.read_text(encoding="utf-8"),
@@ -91,7 +90,7 @@ def reply(
             client=client,
             now=datetime.now(UTC),
         )
-    _emit(result.model_dump(mode="json"))
+    cli_ctx.presenter.json_result(result.model_dump(mode="json"))
 
 
 @questions_app.command("track")
@@ -105,7 +104,8 @@ def questions_track(
     `asked_by` / `asked_at` は ingest 済みの `MessageRecord` から引く(呼び出し側に
     同じ値を二度渡させない)。
     """
-    settings = get_context(ctx).settings
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
     assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
     state = load_state(settings.teams_state_path)
     record = state.messages.get(message_id)
@@ -122,7 +122,7 @@ def questions_track(
         asked_at=record.created_at,
     )
     save_state(settings.teams_state_path, state)
-    _emit(state.questions[message_id].model_dump(mode="json"))
+    cli_ctx.presenter.json_result(state.questions[message_id].model_dump(mode="json"))
 
 
 @questions_app.command("mark")
@@ -137,7 +137,8 @@ def questions_mark(
     `reminded` へ遷移させたときは `reminded_at` も刻む(いつ催促したかが残らないと、
     二重催促を後から検証できない)。
     """
-    settings = get_context(ctx).settings
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
     assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
     state = load_state(settings.teams_state_path)
     if message_id not in state.questions:
@@ -148,7 +149,7 @@ def questions_mark(
         )
     mark_question(state, message_id=message_id, status=status, now=datetime.now(UTC))
     save_state(settings.teams_state_path, state)
-    _emit(state.questions[message_id].model_dump(mode="json"))
+    cli_ctx.presenter.json_result(state.questions[message_id].model_dump(mode="json"))
 
 
 @reminders_app.command("due")
@@ -158,7 +159,8 @@ def reminders_due(ctx: typer.Context) -> None:
     送信するかどうかの最終判断(確証が持てるか)は Claude 側にある(設計 §7.2)。
     ここは閾値超過の抽出だけを行う。
     """
-    settings = get_context(ctx).settings
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
     assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
     state = load_state(settings.teams_state_path)
     due = due_reminders(
@@ -166,15 +168,16 @@ def reminders_due(ctx: typer.Context) -> None:
         now=datetime.now(UTC),
         threshold_hours=settings.teams_reminder_business_hours,
     )
-    _emit({"due": [q.model_dump(mode="json") for q in due]})
+    cli_ctx.presenter.json_result({"due": [q.model_dump(mode="json") for q in due]})
 
 
 @state_app.command("show")
 def state_show(ctx: typer.Context) -> None:
     """現在の state を表示する。"""
-    settings = get_context(ctx).settings
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
     assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
-    _emit(load_state(settings.teams_state_path).model_dump(mode="json"))
+    cli_ctx.presenter.json_result(load_state(settings.teams_state_path).model_dump(mode="json"))
 
 
 __all__ = ["teams_app"]
