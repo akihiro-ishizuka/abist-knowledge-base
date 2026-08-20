@@ -2637,7 +2637,7 @@ def mark_question(
 
 **Interfaces:**
 - Consumes: Task 11 の `run_ingest` / `run_reply`、Task 10 の `due_reminders`
-- Produces: `teams_app`（`inbox ingest` / `reply` / `reminders due` / `state show`）
+- Produces: `teams_app`（`inbox ingest` / `reply` / `questions track` / `questions mark` / `reminders due` / `state show`）
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3093,14 +3093,42 @@ abist-kb teams reply --message-id <id> --title "<見出し>" \
 
 `outcome` が `unknown` なら、届いたか判らない。**再送しない。**
 
-### 7. リマインドを確認する
+### 7. 質問として登録する
+
+質問・依頼と判定したものは、回答したかどうかに関わらず追跡対象に入れる。
+**ここを飛ばすと放置検知が一切働かない**（`reminders due` は登録された質問しか見ない）。
+
+```
+abist-kb teams questions track --message-id <id>
+```
+
+以後のティックで、その質問に対する反応を読んだら状態を進める。
+
+```
+abist-kb teams questions mark --message-id <id> --status acknowledged
+abist-kb teams questions mark --message-id <id> --status resolved
+```
+
+`acknowledged`（「確認します」「明日調べます」）は**未解決**である。具体的な回答・
+数値・結論が返って初めて `resolved` にする。ここを甘く判定すると、放置された質問が
+黙って消える。
+
+### 8. リマインドを確認する
 
 ```
 abist-kb teams reminders due
 ```
 
 返った質問について、返信を見落としていないか **狙って再検索して確かめる**。
-確証が持てなければ送らない。送ったら `reminded` へ遷移させる。
+確証が持てなければ送らない。誤った催促は、見送りより害が大きい。
+
+送ったら必ず状態を進める。
+
+```
+abist-kb teams questions mark --message-id <id> --status reminded
+```
+
+**これを忘れると同じ人を毎ティック催促し続ける。**
 
 ## 対象メンバー
 
