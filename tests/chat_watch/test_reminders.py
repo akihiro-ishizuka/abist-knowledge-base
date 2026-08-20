@@ -76,3 +76,31 @@ def test_reminds_only_once() -> None:
         mark_question(state, message_id=question.message_id, status=QuestionStatus.REMINDED)
 
     assert due_reminders(state, now=_jst(8, 21, 14), threshold_hours=4) == []
+
+
+def test_mark_reminded_stamps_reminded_at() -> None:
+    """`reminded_at` はいつ催促したかの唯一の手掛かり(設計 §7 / 12.A)。"""
+    state = _state_with_question(_jst(8, 20, 10))
+    reminded_at = _jst(8, 20, 14)
+
+    mark_question(state, message_id="q1", status=QuestionStatus.REMINDED, now=reminded_at)
+
+    assert state.questions["q1"].reminded_at == reminded_at
+
+
+def test_mark_reminded_without_now_leaves_reminded_at_unset() -> None:
+    """`now` を渡さない既存呼び出し(Task 10)はそのまま通ること。"""
+    state = _state_with_question(_jst(8, 20, 10))
+
+    mark_question(state, message_id="q1", status=QuestionStatus.REMINDED)
+
+    assert state.questions["q1"].reminded_at is None
+
+
+def test_mark_non_reminded_status_does_not_stamp_reminded_at() -> None:
+    """`REMINDED` 以外への遷移では `now` を渡しても `reminded_at` を刻まない。"""
+    state = _state_with_question(_jst(8, 20, 10))
+
+    mark_question(state, message_id="q1", status=QuestionStatus.RESOLVED, now=_jst(8, 20, 14))
+
+    assert state.questions["q1"].reminded_at is None

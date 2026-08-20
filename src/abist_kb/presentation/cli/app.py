@@ -43,6 +43,7 @@ from abist_kb.presentation.cli.migrate_cmd import migrate_app
 from abist_kb.presentation.cli.search_cmd import search
 from abist_kb.presentation.cli.source_cmd import source_app
 from abist_kb.presentation.cli.sync_cmd import sync_app
+from abist_kb.presentation.cli.teams_cmd import teams_app
 from abist_kb.presentation.cli.worker_cmd import worker_app
 from abist_kb.presentation.console.output import (
     ColorMode,
@@ -77,6 +78,7 @@ app.add_typer(curate_app, name="curate")
 app.add_typer(mcp_app, name="mcp")
 app.add_typer(migrate_app, name="migrate")
 app.add_typer(api_app, name="api")
+app.add_typer(teams_app, name="teams")
 app.command("init")(init)
 app.command("search")(search)
 app.command("doctor")(doctor)

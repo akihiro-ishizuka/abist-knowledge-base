@@ -55,12 +55,24 @@ def track_question(
     )
 
 
-def mark_question(state: WatchState, *, message_id: str, status: QuestionStatus) -> None:
-    """質問の状態を更新する。"""
+def mark_question(
+    state: WatchState,
+    *,
+    message_id: str,
+    status: QuestionStatus,
+    now: datetime | None = None,
+) -> None:
+    """質問の状態を更新する。
+
+    `REMINDED` へ遷移させるときは `reminded_at` を刻む。いつ催促したかが残らないと、
+    二重催促が起きても後から検証できない。
+    """
     question = state.questions.get(message_id)
     if question is None:
         return
     question.status = status
+    if status is QuestionStatus.REMINDED and now is not None:
+        question.reminded_at = now
 
 
 def due_reminders(
