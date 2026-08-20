@@ -234,3 +234,38 @@ def prune(state: WatchState, *, now: datetime, retention_days: int) -> int:
 def utcnow() -> datetime:
     """テストで差し替えやすいよう1箇所に閉じる。"""
     return datetime.now(UTC)
+
+
+NORMAL_INTERVAL_MINUTES = 20
+MAX_INTERVAL_MINUTES = 240
+
+
+def apply_rate_limit(
+    state: WatchState, *, now: datetime, retry_after_seconds: int | None
+) -> datetime:
+    """429 を受けたときの次回実行可能時刻を決める(設計 §3.2)。
+
+    `Retry-After` があればそれに従う(このとき間隔は据え置く)。無ければ間隔を
+    倍にして上限 240分でとめる。
+    """
+    if retry_after_seconds is not None:
+        next_at = now + timedelta(seconds=retry_after_seconds)
+    else:
+        doubled = min(state.backoff.interval_minutes * 2, MAX_INTERVAL_MINUTES)
+        state.backoff.interval_minutes = doubled
+        next_at = now + timedelta(minutes=doubled)
+
+    state.backoff.next_allowed_at = next_at
+    return next_at
+
+
+def clear_rate_limit(state: WatchState) -> None:
+    """成功したら通常間隔へ戻す。"""
+    state.backoff.interval_minutes = NORMAL_INTERVAL_MINUTES
+    state.backoff.next_allowed_at = None
+
+
+def is_allowed(state: WatchState, *, now: datetime) -> bool:
+    """バックオフ中でなければ True。"""
+    next_at = state.backoff.next_allowed_at
+    return next_at is None or now >= next_at
