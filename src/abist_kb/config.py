@@ -15,7 +15,9 @@ from abist_kb.domain.errors import ErrorCode, ExitCode, wrap
 
 LogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 
-_SECRET_FIELDS = frozenset({"esa_access_token", "openai_api_key", "git_token"})
+_SECRET_FIELDS = frozenset(
+    {"esa_access_token", "openai_api_key", "git_token", "teams_webhook_url"}
+)
 
 
 class Settings(BaseSettings):
@@ -56,6 +58,7 @@ class Settings(BaseSettings):
     work_index_path: Path | None = None
     reference_index_path: Path | None = None
     cache_dir: Path | None = None
+    teams_state_path: Path | None = None
 
     log_level: LogLevel = "INFO"
     embedding_model: str = "intfloat/multilingual-e5-small"
@@ -69,6 +72,19 @@ class Settings(BaseSettings):
     git_token: str | None = None
     openai_api_key: str | None = None
     chat_model: str = "gpt-4o-mini"
+    #: 連絡チャットへの投稿に使う Power Automate Workflows Webhook。
+    #: 送信専用であり読み取りには使えない(設計 §2)。
+    teams_webhook_url: str | None = None
+    teams_chat_id: str = (
+        "19:meeting_Yzc0Yjc4OWUtOGE3Ny00ODYxLWJiZjMtZDI2YzgyMDBlNzBh@thread.v2"
+    )
+    #: 検索の probe。チャットIDで絞れずクエリ必須のため、高頻度のかなを複数投げて
+    #: 結果を統合する(設計 §5.1)。コードへ埋め込まず設定値として持つ。
+    teams_search_probes: tuple[str, ...] = ("い", "の", "す")
+    teams_overlap_minutes: int = Field(default=30, ge=1)
+    teams_reminder_business_hours: int = Field(default=4, ge=1)
+    teams_max_posts_per_tick: int = Field(default=3, ge=1)
+    teams_retention_days: int = Field(default=30, ge=1)
 
     @model_validator(mode="after")
     def _derive_paths(self) -> Settings:
@@ -91,6 +107,7 @@ class Settings(BaseSettings):
             "work_index_path": data / "work-index.sqlite",
             "reference_index_path": data / "reference-index.sqlite",
             "cache_dir": data / "cache",
+            "teams_state_path": data / "teams-watch-state.json",
         }
         for name, value in derived_from_data.items():
             if getattr(self, name) is None:
