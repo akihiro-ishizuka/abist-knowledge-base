@@ -247,3 +247,27 @@ def test_env_file_is_read_from_root_dir_env_var_when_root_param_is_none(
 
     s = load_settings(root=None)
     assert s.esa_team_name == "from-root-env-var"
+
+
+def test_teams_settings_have_defaults(tmp_root: Path) -> None:
+    settings = load_settings(root=tmp_root)
+
+    assert settings.teams_webhook_url is None
+    assert settings.teams_chat_id == (
+        "19:meeting_Yzc0Yjc4OWUtOGE3Ny00ODYxLWJiZjMtZDI2YzgyMDBlNzBh@thread.v2"
+    )
+    assert settings.teams_search_probes == ("い", "の", "す")
+    assert settings.teams_overlap_minutes == 30
+    assert settings.teams_reminder_business_hours == 4
+    assert settings.teams_max_posts_per_tick == 3
+    assert settings.teams_retention_days == 30
+    assert settings.teams_state_path == tmp_root / "data" / "teams-watch-state.json"
+
+
+def test_teams_webhook_url_is_redacted(tmp_root: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ABIST_KB_TEAMS_WEBHOOK_URL", "https://example.com/secret?sig=abc")
+
+    settings = load_settings(root=tmp_root)
+
+    assert settings.teams_webhook_url == "https://example.com/secret?sig=abc"
+    assert settings.redacted_dict()["teams_webhook_url"] == "***"
