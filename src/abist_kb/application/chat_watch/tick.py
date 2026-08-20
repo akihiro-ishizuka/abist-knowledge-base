@@ -114,6 +114,60 @@ def skip_message(state: WatchState, *, message_id: str, reason: str | None) -> M
     return record
 
 
+def assign_question(state: WatchState, *, message_id: str, owner: str | None) -> QuestionRecord:
+    """質問の担当者を記録する。`None` を渡すとチーム TODO へ戻す。
+
+    「誰が答えるべきか」は本文の名指しなどから Claude が読み取る判断であり、
+    Python は結果を保持するだけ。毎朝判定し直すと担当が日によってブレるため、
+    一度決めたらここに残す(`skip` / `defer` と同じ「判断を記録する」形)。
+    """
+    question = state.questions.get(message_id)
+    if question is None:
+        raise AppError(
+            ErrorCode.NOT_FOUND,
+            f"追跡していない質問です: {message_id}",
+            hint="先に `abist-kb teams questions track` を実行してください。",
+        )
+    question.owner = owner.strip().lower() if owner else None
+    return question
+
+
+class OpenTodos(BaseModel):
+    """朝の提示のうち、state だけで決まる部分。"""
+
+    model_config = ConfigDict(frozen=True)
+
+    by_owner: dict[str, list[QuestionRecord]]
+    team: list[QuestionRecord]
+
+
+#: 未解決として朝に出す状態。`reminded` を含めるのが要点で、催促済みでも
+#: 解決していない以上 TODO からは消さない(消すと放置が見えなくなる)。
+_OPEN_FOR_TODO = frozenset(
+    {QuestionStatus.OPEN, QuestionStatus.ACKNOWLEDGED, QuestionStatus.REMINDED}
+)
+
+
+def open_todos(state: WatchState) -> OpenTodos:
+    """未解決の追跡中の質問を、担当者ごととチーム分に分けて返す。
+
+    担当が明確なものは担当者へ、明確でないものはチーム TODO として出す。
+    esa・チャット上の約束・GitHub Issue といった他の情報源は Claude 側が集める
+    (この関数は state だけで決まる部分に限る)。
+    """
+    by_owner: dict[str, list[QuestionRecord]] = {}
+    team: list[QuestionRecord] = []
+    ordered = sorted(state.questions.values(), key=lambda q: (q.asked_at, q.message_id))
+    for question in ordered:
+        if question.status not in _OPEN_FOR_TODO:
+            continue
+        if question.owner is None:
+            team.append(question)
+        else:
+            by_owner.setdefault(question.owner, []).append(question)
+    return OpenTodos(by_owner=by_owner, team=team)
+
+
 def _reminder_clock_start(question: QuestionRecord) -> datetime:
     """リマインド判定の起点。defer されていればその時刻から測り直す。"""
     if question.deferred_at is None:

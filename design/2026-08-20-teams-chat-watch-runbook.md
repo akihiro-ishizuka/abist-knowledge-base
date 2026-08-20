@@ -5,17 +5,52 @@
 
 ## 1 tick の手順
 
-### 1. 前回のバックオフを確認する
+### 1. いま動いてよいかを確認する
 
 ```
-abist-kb teams backoff status
+abist-kb teams gate status
 ```
 
-`allowed` が false なら、この tick は何もせず終了する。
+`allowed` が false なら、この tick は**何もせず終了する**。理由は `reasons` に入る。
+
+- `within_operating_hours` が false — **営業日の 8:30〜17:30 の外**。AI が応答する
+  のはこの時間帯だけである。`/loop` は24時間回るので、ここで止めないと深夜や
+  土日に投稿してしまう
+- `backoff_allows` が false — 直前の `429` によるバックオフ中
+
+### 1.5. 朝の TODO を出す（8:30 台の最初の tick だけ）
+
+```
+abist-kb teams briefing status
+```
+
+`posted_today` が true なら飛ばす。false なら本日分を組み立てて投稿し、直後に
+
+```
+abist-kb teams briefing done
+```
+
+を実行する。**これを忘れると 20 分ごとに同じ TODO を投稿し続ける。**
+
+`todos` は state 由来の分（未解決の追跡中の質問）だけで、`by_owner` が担当の
+明確なもの、`team` が担当の明確でないもの。ここに以下を合流させる。
+
+- esa の未完了項目（`docs/esa/設計効率化` と `docs/esa/議事録` を kb-search）
+- チャット上の約束（「明日調べます」「午後に送ります」など本人の宣言）
+- GitHub Issue の担当分（`gh` で assignee 付きの open issue）
+
+**担当が明確なものは各メンバーの見出しの下に、明確でないものは「チーム」の
+見出しの下に置く。** 担当が読み取れた質問は
+
+```
+abist-kb teams questions assign --message-id <id> --owner <email>
+```
+
+で記録する。毎朝判定し直すと担当が日によってブレるため、一度決めたら残す。
 
 ### 2. 検索する
 
-`abist-kb teams backoff status` が返す `search_since` を `afterDateTime` にして、
+`abist-kb teams gate status` が返す `search_since` を `afterDateTime` にして、
 `chat_message_search` を probe ごとに実行する。probe は `teams_search_probes`
 の既定で「い」「の」「す」。
 

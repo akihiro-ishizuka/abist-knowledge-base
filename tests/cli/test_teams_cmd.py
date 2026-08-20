@@ -276,9 +276,9 @@ def test_backoff_hit_then_status_blocks_then_clear_releases(tmp_root: Path) -> N
         ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, []))],
     )
 
-    before = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "status"])
+    before = runner.invoke(app, ["--root", str(tmp_root), "teams", "gate", "status"])
     assert before.exit_code == 0, before.output
-    assert json.loads(before.output)["allowed"] is True
+    assert json.loads(before.output)["backoff_allows"] is True
 
     hit = runner.invoke(
         app, ["--root", str(tmp_root), "teams", "backoff", "hit", "--retry-after", "600"]
@@ -289,15 +289,15 @@ def test_backoff_hit_then_status_blocks_then_clear_releases(tmp_root: Path) -> N
     # Retry-After に従ったときは間隔を据え置く(設計 §3.2)
     assert hit_payload["interval_minutes"] == 20
 
-    blocked = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "status"])
-    assert json.loads(blocked.output)["allowed"] is False
+    blocked = runner.invoke(app, ["--root", str(tmp_root), "teams", "gate", "status"])
+    assert json.loads(blocked.output)["backoff_allows"] is False
 
     released = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "clear"])
     assert released.exit_code == 0, released.output
     assert json.loads(released.output)["next_allowed_at"] is None
 
-    after = runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "status"])
-    assert json.loads(after.output)["allowed"] is True
+    after = runner.invoke(app, ["--root", str(tmp_root), "teams", "gate", "status"])
+    assert json.loads(after.output)["backoff_allows"] is True
 
 
 def test_backoff_hit_without_retry_after_doubles_the_interval(tmp_root: Path) -> None:
@@ -369,3 +369,115 @@ def test_questions_defer_rejects_untracked_question(tmp_root: Path) -> None:
 
     assert result.exit_code != 0
     assert "nope" in result.output
+
+
+def _ingested(tmp_root: Path) -> None:
+    runner.invoke(
+        app,
+        ["--root", str(tmp_root), "teams", "inbox", "ingest", "--from", str(_inbox(tmp_root, []))],
+    )
+
+
+def test_gate_status_reports_operating_hours_and_backoff(tmp_root: Path) -> None:
+    """ティックの最初に「今動いてよいか」を1コマンドで答える。
+
+    営業時間(8:30-17:30)の外では応答も催促もしない。`/loop` は24時間回るので、
+    ここで止めないと深夜に投稿してしまう。
+    """
+    _ingested(tmp_root)
+
+    result = runner.invoke(app, ["--root", str(tmp_root), "teams", "gate", "status"])
+
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)
+    assert set(payload) >= {
+        "allowed",
+        "within_operating_hours",
+        "backoff_allows",
+        "search_since",
+        "reasons",
+    }
+    assert payload["backoff_allows"] is True
+
+
+def test_gate_status_blocks_while_backed_off(tmp_root: Path) -> None:
+    _ingested(tmp_root)
+    runner.invoke(app, ["--root", str(tmp_root), "teams", "backoff", "hit", "--retry-after", "600"])
+
+    payload = json.loads(
+        runner.invoke(app, ["--root", str(tmp_root), "teams", "gate", "status"]).output
+    )
+
+    assert payload["backoff_allows"] is False
+    assert payload["allowed"] is False
+    assert any("バックオフ" in r for r in payload["reasons"])
+
+
+def test_briefing_is_posted_at_most_once_per_day(tmp_root: Path) -> None:
+    """`/loop` は20分間隔なので、記録が無いと朝の提示を何度も投稿する。"""
+    _ingested(tmp_root)
+
+    before = json.loads(
+        runner.invoke(app, ["--root", str(tmp_root), "teams", "briefing", "status"]).output
+    )
+    assert before["posted_today"] is False
+    assert "todos" in before
+
+    done = runner.invoke(app, ["--root", str(tmp_root), "teams", "briefing", "done"])
+    assert done.exit_code == 0, done.output
+
+    after = json.loads(
+        runner.invoke(app, ["--root", str(tmp_root), "teams", "briefing", "status"]).output
+    )
+    assert after["posted_today"] is True
+
+
+def test_briefing_status_splits_owned_and_team_todos(tmp_root: Path) -> None:
+    runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_root),
+            "teams",
+            "inbox",
+            "ingest",
+            "--from",
+            str(_inbox(tmp_root, ["a"])),
+        ],
+    )
+    runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_root),
+            "teams",
+            "inbox",
+            "ingest",
+            "--from",
+            str(_inbox(tmp_root, ["a", "b"])),
+        ],
+    )
+    runner.invoke(
+        app, ["--root", str(tmp_root), "teams", "questions", "track", "--message-id", "b"]
+    )
+    runner.invoke(
+        app,
+        [
+            "--root",
+            str(tmp_root),
+            "teams",
+            "questions",
+            "assign",
+            "--message-id",
+            "b",
+            "--owner",
+            "t_isaka@abist.co.jp",
+        ],
+    )
+
+    payload = json.loads(
+        runner.invoke(app, ["--root", str(tmp_root), "teams", "briefing", "status"]).output
+    )
+
+    assert list(payload["todos"]["by_owner"]) == ["t_isaka@abist.co.jp"]
+    assert payload["todos"]["team"] == []

@@ -23,6 +23,7 @@ from typing import Annotated
 import httpx
 import typer
 
+from abist_kb.application.chat_watch.business_hours import JST, is_within_business_hours
 from abist_kb.application.chat_watch.source import JsonFileMessageSource
 from abist_kb.application.chat_watch.state import (
     apply_rate_limit,
@@ -32,9 +33,11 @@ from abist_kb.application.chat_watch.state import (
     save_state,
 )
 from abist_kb.application.chat_watch.tick import (
+    assign_question,
     defer_reminder,
     due_reminders,
     mark_question,
+    open_todos,
     run_ingest,
     run_reply,
     skip_message,
@@ -50,11 +53,15 @@ questions_app = AppTyper(help="質問の追跡。", no_args_is_help=True)
 reminders_app = AppTyper(help="放置された質問の抽出。", no_args_is_help=True)
 state_app = AppTyper(help="監視 state の確認。", no_args_is_help=True)
 backoff_app = AppTyper(help="429 バックオフの管理。", no_args_is_help=True)
+gate_app = AppTyper(help="ティックを回してよいかの判定。", no_args_is_help=True)
+briefing_app = AppTyper(help="朝の TODO 提示。", no_args_is_help=True)
 teams_app.add_typer(inbox_app, name="inbox")
 teams_app.add_typer(questions_app, name="questions")
 teams_app.add_typer(reminders_app, name="reminders")
 teams_app.add_typer(state_app, name="state")
 teams_app.add_typer(backoff_app, name="backoff")
+teams_app.add_typer(gate_app, name="gate")
+teams_app.add_typer(briefing_app, name="briefing")
 
 
 @inbox_app.command("ingest")
@@ -215,6 +222,115 @@ def questions_defer(
     cli_ctx.presenter.json_result(question.model_dump(mode="json"))
 
 
+@questions_app.command("assign")
+def questions_assign(
+    ctx: typer.Context,
+    message_id: Annotated[str, typer.Option("--message-id", help="対象の message_id。")],
+    owner: Annotated[
+        str | None,
+        typer.Option("--owner", help="回答すべき人のメール。省略するとチーム TODO へ戻す。"),
+    ] = None,
+) -> None:
+    """質問の担当者を記録する。
+
+    「誰が答えるべきか」は本文の名指しなどから読み取る判断であり、Python は結果を
+    保持するだけ。担当が明確でないものは `--owner` を省いてチーム TODO にする。
+    毎朝判定し直すと担当が日によってブレるため、一度決めたらここに残す。
+    """
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
+    state = load_state(settings.teams_state_path)
+    question = assign_question(state, message_id=message_id, owner=owner)
+    save_state(settings.teams_state_path, state)
+    cli_ctx.presenter.json_result(question.model_dump(mode="json"))
+
+
+@gate_app.command("status")
+def gate_status(ctx: typer.Context) -> None:
+    """いまティックを回してよいかを返す。
+
+    ティックの最初に呼ぶ。`allowed` が false なら検索も投稿もせず終了する。
+    `/loop` は24時間回るので、ここで止めないと深夜や休日に投稿してしまう。
+
+    `search_since` は次の検索の下限時刻(watermark から overlap を引いた値)。
+    運用者が分数を手で覚えないよう、設定から計算した値をここで返す。
+    """
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
+    state = load_state(settings.teams_state_path)
+    now = datetime.now(UTC)
+
+    within_hours = is_within_business_hours(now)
+    backoff_allows = is_allowed(state, now=now)
+    reasons: list[str] = []
+    if not within_hours:
+        reasons.append("運用時間外（営業日 8:30〜17:30）")
+    if not backoff_allows:
+        reasons.append("429 バックオフ中")
+
+    base = state.search_watermark or now
+    cli_ctx.presenter.json_result(
+        {
+            "allowed": within_hours and backoff_allows,
+            "within_operating_hours": within_hours,
+            "backoff_allows": backoff_allows,
+            "interval_minutes": state.backoff.interval_minutes,
+            "next_allowed_at": (
+                state.backoff.next_allowed_at.isoformat()
+                if state.backoff.next_allowed_at is not None
+                else None
+            ),
+            "search_since": (base - timedelta(minutes=settings.teams_overlap_minutes)).isoformat(),
+            "reasons": reasons,
+        }
+    )
+
+
+@briefing_app.command("status")
+def briefing_status(ctx: typer.Context) -> None:
+    """朝の TODO 提示を今日もう出したかと、state 由来の TODO を返す。
+
+    `posted_today` が true なら投稿しない。`/loop` は20分間隔なので、これが無いと
+    8:30 台に何度も投稿することになる。
+
+    `todos` は state だけで決まる部分（未解決の追跡中の質問）に限る。esa の未完了
+    項目・チャット上の約束・GitHub Issue は Claude 側が集めて合流させる。
+    """
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
+    state = load_state(settings.teams_state_path)
+    today = datetime.now(UTC).astimezone(JST).date()
+    todos = open_todos(state)
+    cli_ctx.presenter.json_result(
+        {
+            "posted_today": state.last_briefing_date == today,
+            "today": today.isoformat(),
+            "last_briefing_date": (
+                state.last_briefing_date.isoformat()
+                if state.last_briefing_date is not None
+                else None
+            ),
+            "todos": todos.model_dump(mode="json"),
+        }
+    )
+
+
+@briefing_app.command("done")
+def briefing_done(ctx: typer.Context) -> None:
+    """朝の TODO 提示を出したことを記録する（投稿の直後に呼ぶ）。"""
+    cli_ctx = get_context(ctx)
+    settings = cli_ctx.settings
+    assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
+    state = load_state(settings.teams_state_path)
+    today = datetime.now(UTC).astimezone(JST).date()
+    state.last_briefing_date = today
+    save_state(settings.teams_state_path, state)
+    cli_ctx.presenter.json_result({"last_briefing_date": today.isoformat()})
+
+
 @reminders_app.command("due")
 def reminders_due(ctx: typer.Context) -> None:
     """営業時間4時間を超えた質問を返す。
@@ -241,39 +357,6 @@ def state_show(ctx: typer.Context) -> None:
     settings = cli_ctx.settings
     assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
     cli_ctx.presenter.json_result(load_state(settings.teams_state_path).model_dump(mode="json"))
-
-
-@backoff_app.command("status")
-def backoff_status(ctx: typer.Context) -> None:
-    """いま検索してよいかを返す。
-
-    ティックの最初に呼ぶ。`allowed` が false のあいだは検索も投稿もしない。
-
-    `search_since` は `run_ingest` が実際に使う `since` と同じ計算
-    (`search_watermark - teams_overlap_minutes`。`search_watermark` が無ければ
-    `now - teams_overlap_minutes`)で求める。運用手順が overlap の分数を手で
-    書き写すと `Settings.teams_overlap_minutes` を変えたときに乖離するため、
-    ここで計算済みの値を返す(設計・運用手順 手順2)。
-    """
-    cli_ctx = get_context(ctx)
-    settings = cli_ctx.settings
-    assert settings.teams_state_path is not None  # `_derive_paths` で必ず埋まる
-    state = load_state(settings.teams_state_path)
-    now = datetime.now(UTC)
-    overlap = timedelta(minutes=settings.teams_overlap_minutes)
-    search_since = (state.search_watermark or now) - overlap
-    cli_ctx.presenter.json_result(
-        {
-            "allowed": is_allowed(state, now=now),
-            "interval_minutes": state.backoff.interval_minutes,
-            "next_allowed_at": (
-                state.backoff.next_allowed_at.isoformat()
-                if state.backoff.next_allowed_at is not None
-                else None
-            ),
-            "search_since": search_since.isoformat(),
-        }
-    )
 
 
 @backoff_app.command("hit")
