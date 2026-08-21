@@ -56,16 +56,38 @@ abist-kb teams questions assign --message-id <id> --owner <email>
 ### 2. 検索する
 
 **`afterDateTime` を付けてはならない。** 対象6名それぞれについて、送信者で絞った
-検索を1本ずつ、計6本実行する。
+検索を計6本実行する。
 
 ```
-chat_message_search(query="from:t_isaka@abist.co.jp",   limit=25)
-chat_message_search(query="from:d_suzuki@abist.co.jp",  limit=25)
-chat_message_search(query="from:a_ishizuka@abist.co.jp", limit=25)
-chat_message_search(query="from:ma_ishii@abist.co.jp",  limit=25)
-chat_message_search(query="from:y_osawa@abist.co.jp",   limit=25)
-chat_message_search(query="from:t_niizeki@abist.co.jp", limit=25)
+chat_message_search(query="from:t_isaka@abist.co.jp",    limit=10)
+chat_message_search(query="from:d_suzuki@abist.co.jp",   limit=10)
+chat_message_search(query="from:a_ishizuka@abist.co.jp", limit=10)
+chat_message_search(query="from:ma_ishii@abist.co.jp",   limit=10)
+chat_message_search(query="from:y_osawa@abist.co.jp",    limit=10)
+chat_message_search(query="from:t_niizeki@abist.co.jp",  limit=10)
 ```
+
+#### 6本は必ず1本ずつ順番に投げる
+
+**並行に投げてはならない。** 1本の応答を受け取ってから次を投げる。
+
+2026-08-21 の実測。同じ経路・同じ `from:` クエリで結果が正反対になった。
+
+| 投げ方 | 結果 |
+|---|---|
+| 1本ずつ逐次（11:26） | **6本すべて成功、`429` ゼロ** |
+| 3本を同時（11:46） | **3本すべて `429`** |
+
+`Retry-After` は一貫して 62秒。Graph の制限は「短い窓での同時リクエスト数」に
+効いているとみられる。1分間に数本なら通るが、同時に投げると弾かれる。
+
+これは経路の問題ではない。日時フィルタを外す判断は正しく、11:26 の6本成功が
+それを示している。**呼び出し方だけの問題**である。
+
+#### `limit` は 10 で足りる
+
+結果は新しい順に返るので、前回ティックからの新着を拾うのに 25 件は要らない。
+6名 × 25件 = 150件はコンテキストを圧迫するだけで、判断の材料は増えない。
 
 #### なぜ日時フィルタを付けないのか
 
