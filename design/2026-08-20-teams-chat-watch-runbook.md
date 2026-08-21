@@ -55,15 +55,50 @@ abist-kb teams questions assign --message-id <id> --owner <email>
 
 ### 2. 検索する
 
-`abist-kb teams gate status` が返す `search_since` を `afterDateTime` にして、
-`chat_message_search` を probe ごとに実行する。probe は `teams_search_probes`
-の既定で「い」「の」「す」。
+**`afterDateTime` を付けてはならない。** 対象6名それぞれについて、送信者で絞った
+検索を1本ずつ、計6本実行する。
 
-`search_since` は `search_watermark` から overlap 分(`Settings.teams_overlap_minutes`、
-既定30分)引いた時刻を Python 側が計算した値であり、`run_ingest` が実際に使う
-`since` と同じ計算式。overlap の分数を手作業で書き写さないこと — 設定を変えると
-手で覚えた数字と実際の検索範囲がずれる。初回 tick(`search_watermark` が
-`null`)では `search_since` は `now - overlap` になる。
+```
+chat_message_search(query="from:t_isaka@abist.co.jp",   limit=25)
+chat_message_search(query="from:d_suzuki@abist.co.jp",  limit=25)
+chat_message_search(query="from:a_ishizuka@abist.co.jp", limit=25)
+chat_message_search(query="from:ma_ishii@abist.co.jp",  limit=25)
+chat_message_search(query="from:y_osawa@abist.co.jp",   limit=25)
+chat_message_search(query="from:t_niizeki@abist.co.jp", limit=25)
+```
+
+#### なぜ日時フィルタを付けないのか
+
+このツールには**2つの内部経路**があり、日時フィルタは絞り込みではなく**経路の
+切り替えスイッチ**である。
+
+| | 日時フィルタ**無し**（A経路） | 日時フィルタ**有り**（B経路） |
+|---|---|---|
+| 実体 | Graph の全文検索インデックス | 50チャット×50件を総なめ（最大2500件） |
+| `query` | KQL（`from:` が効く） | 単なるリテラル部分一致 |
+| `from.email` | **入る** | **`null`** |
+| `webUrl` | 入る | `null` |
+| 並び | 新しい順 | 新しい順 |
+| `429` | 観測されず | **頻発** |
+
+**B経路の一番危険な性質: `429` でもエラーを返さない。** 「結果は部分的」という
+注記を先頭に付けて `200` で返る。**新着0件と見分けが付かない。** 完全性を時刻
+カーソルに預けている設計だと、ここで静かに取りこぼす。
+
+こちらは新着判定を **`message_id` だけ**で行っており（設計 §5.1）、時刻は検索の
+下限を決める目安にしか使っていない。したがって A経路の並び順は問題にならない。
+**日時フィルタは最初から不要だった。**
+
+`from:` で絞ることで、25件の枠を対象メンバーの発言だけで埋められる。連絡チャットが
+静かな日に、他の忙しいチャットへ枠を奪われて埋もれる事故を防げる（2026-08-21 に
+実際に踏んだ）。
+
+**代償**: context-only メンバー（山浦・橋川・森田・佐賀）の発言は拾えなくなる。
+文脈としての参照ができなくなるが、応答判定に必要なのは active 6名の発言であり、
+取りこぼすと害があるのはそちらだけなので、この交換は妥当と判断する。
+
+`search_since` は検索には使わない（`gate status` は引き続き返すが、A経路では
+渡さない）。
 
 `429` が返ったら投稿せずに終了する。`Retry-After`（秒）が返っていれば
 
