@@ -1,0 +1,138 @@
+# 可視化復旧で見つかった範囲外の問題・判断記録
+
+> `feat/visualize-recovery-and-expansion` の Phase 0〜4 実施中に確認した記録。
+> 元は `.superpowers/sdd/` 配下に置いたが、そこは gitignore 対象で消えうるため、
+> Phase 5〜7 の実施に必要な判断根拠として追跡対象へ移した。
+
+`feat/visualize-recovery-and-expansion` の作業中に確認した、本ブランチの
+スコープ外だが記録しておくべき問題。いずれも本ブランチでは修正していない。
+
+## 1. 同期 render が worker のキュー消費全体を止めうる（重大）
+
+`src/abist_kb/infrastructure/jobs/execution.py:279-286` は
+`leases.acquire_resource_lease` を **`wait` 引数なし**で呼ぶ。
+`src/abist_kb/infrastructure/jobs/leases.py:188` の既定は `wait: bool = True`
+（`timeout` 既定は `None` = 無限待ち）。
+
+そして `supervisor.py` の `tick()` はハンドラを同期呼び出しする。したがって:
+
+> 同期 MCP `render_scene` が `render` リースを最大10分保持している間、
+> `worker run` が render ジョブを claim すると `tick()` が最大10分ブロックし、
+> **docs-write / corpus-write を含む全ジョブ種別のキュー消費が停止する。**
+
+`repository.py` の `claim` は「必要リソースが空いているか」を見ずに先頭の
+queued を取るため、ジョブ側では回避できない。
+
+最小の緩和策: `run_job` に `lease_timeout` を渡し、`CONFLICT` になったら
+`finish(FAILED)` ではなく queued へ差し戻す（`JobRepository.requeue`）。
+恒久策は `claim` に「保持中のリソースを要求する kind をスキップする」条件を足すこと。
+
+## 2. `test_handler_writes_stop_after_resource_lease_is_stolen_mid_run` の
+   タイミング依存（Phase 5 で修正済み）
+
+`tests/jobs/test_multiprocess_leases.py:727`。実プロセス2つを跨ぎ、
+「0.1秒間隔で20回書き込む間に t=0.35秒でリースを奪う」という壁時計前提で動く。
+
+本ブランチの作業中、`pytest tests/mcp tests/cli tests/api tests/jobs` の並行実行で
+1度だけ失敗した。以下より **本ブランチの変更が原因ではない**と判断した:
+
+- 単体実行では成功
+- 変更前（`git stash`）の tree でも同スイートは 12 passed ×3 で成功
+- 同じスコープを変更後に2回再実行して 346 passed ×2（再現せず）
+- 本ブランチの jobs 系変更は presentation 層の直列化のみで、
+  lease / execution の経路に触れていない
+
+**Phase 5 で修正した。** `timing_sensitive` マーカーは
+`pyproject.toml` で宣言されているだけで deselect には使われておらず
+（CI も `pytest -q` を素で実行する）、マークしても失敗は消えない。
+
+原因は「奪取 → 検知」に使える時間が書き込み間隔 0.1 秒しかなく、
+フルスイート実行時の CPU 高負荷下では次の書き込みが1回すり抜けること。
+`--interval` を 0.25 秒・`--count` を 8 に変更し（総実行時間 2 秒は据え置き）、
+検知の余裕を 2.5 倍に広げた。**`writes_after == []` の assert は緩めていない。**
+
+検証: 単体で成功、かつ `tests/search tests/mcp` を並行実行して負荷をかけた状態で
+3 回連続成功。
+
+## 3. `scripts/bootstrap.bat` の `echo ==>` がリダイレクトだった（本ブランチで修正済み）
+
+batch では `echo ==> text` は「`echo ==` を `text` という名前のファイルへ書き出す」と
+解釈される。実行するとリポジトリルートに `uv` / `abist-kb` / `document` / `index` /
+`skipped` といった空ファイルが散らかる。
+
+本ブランチで `echo ==^> ` へエスケープして修正した（`bootstrap.bat` 8箇所、
+新規の `bootstrap-visualize.bat` 7箇所）。既存の `^(dry-run^)` と同じ流儀。
+
+## 4. Phase 6-b（flow への自動レイヤリング適用）は必要性が実証された
+
+Phase 3 で `decision` を実装したあと、分岐フローを実レンダリングして確認した
+（`reports/visualizations/_phase3b/`）。結果は計画の予測どおり:
+
+> `許容差内?` の分岐先（`自動確定` / `手動レビュー`）が **beat 順に左から右へ**
+> 並び、分岐に見えない。`いいえ` の矢印は箱の上を大きく迂回する弧になる。
+
+`decision` は分岐を書くための beat type なので、4個折り返しレイアウトのままだと
+`decision` を使うほど図が読みにくくなる。**Phase 6-b（`assign_ranks` による
+自動レイヤリングを flow にも適用）は実施すべき**と結論する。
+
+ただし後方互換は直線フローに限られる（分岐・合流・循環・孤立ノードを含む
+既存 spec は配置が変わる）。
+
+### 採否の判断: **実施した**（Phase 6-b）
+
+計画の画像確認表に沿って5ケースを実レンダリングして目視した結果
+（`reports/visualizations/_phase6b/`）:
+
+| ケース | 結果 |
+| --- | --- |
+| 直線5ステップ | 4個が1行目・5個目が2段目・wrap_down で接続。**Phase 2 の出力と同一配置**（互換の実証） |
+| 分岐・合流 | B と C が同じ列に縦並び、D が次列。期待どおり |
+| 循環 A→B→C→A | 無限ループせず完走。back edge が箱の下を弧で戻る |
+| 孤立ノード | 末尾に置かれ消えない |
+| decision + ラベル付き分岐 | ひし形から「はい」「いいえ」が縦に2本分岐し、出力へ合流。Phase 3 の横並びから改善 |
+
+**配置が変わる範囲（分岐・合流・循環・孤立ノード）は SKILL.md にも明記した。**
+
+## 5. `tests/visualize/test_schema_compat.py` の件数はローカル成果物に依存する
+
+`reports/visualizations/` を走査する parametrize なので、レンダリングするほど
+テスト件数が増える。CI（クリーンチェックアウト）では成果物が無いので skip される。
+「全体テスト件数」を回帰の指標に使うときはこの揺れを考慮すること。
+
+## 6. リポジトリの行末が混在している（`.gitattributes` が無い）
+
+大半のファイルは LF だが、以下は CRLF で管理されている:
+
+- `src/abist_kb/presentation/mcp/kb_admin.py`
+- `tests/visualize/test_real_render.py`
+- `tests/visualize/test_scene_spec.py`
+- `tests/visualize/test_source_verifier.py`
+
+`.gitattributes` が無く `core.autocrlf=false` なので、編集ツールによっては
+ファイル全体が書き換わったように見える巨大な差分が生まれる（本ブランチでも
+一度発生させ、各ファイルの元の行末へ戻して解消した）。
+
+`.gitattributes` に `* text=auto eol=lf` 等を入れて一度正規化するのが望ましいが、
+全ファイルに触れる変更なので本ブランチのスコープ外とした。
+
+## 7. 中間進捗（Phase 7-5）は実装しない — 実測に基づく判断
+
+計画は「mp4 の p95 が 60 秒未満なら実装しない、120 秒超なら実装する」を
+判断基準としていた。Phase 2 と Phase 7 で実測した結果:
+
+| ケース | レンダリング時間 |
+| --- | --- |
+| explain 5 beat / mp4 | 22.1 秒（動画長 17.1 秒） |
+| explain 30 beat / mp4（`MAX_BEATS` 上限） | 112.4 秒 |
+| png（全 kind） | 3〜6 秒 |
+
+典型的な利用（数 beat）は 20 秒台で、上限ケースでも 112 秒と 120 秒を超えない。
+10 分のタイムアウトに対しては 5.3 倍の余裕がある。したがって
+**`start_render_scene` + `job_status` の 0%/100% で十分**と判断し、
+中間進捗は実装しない。
+
+実装が必要になった場合の土台は Phase 7-3 の Popen 化で完成している
+（`tools/visualize/render_scene.py` の `emit()` は既に `flush=True` の行 JSON を出し、
+`parse_last_json_line` は最後の JSON 行を読むので途中行を出しても契約は壊れない）。
+テンプレートには手を入れず、`Scene.play` をラップしたサブクラスに差し替えるのが
+最小侵襲。

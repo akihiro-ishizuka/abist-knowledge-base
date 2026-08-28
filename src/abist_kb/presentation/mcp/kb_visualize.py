@@ -10,32 +10,49 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import sqlite3
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import jsonschema
 import mcp.types as types
 
+from abist_kb.application.visualization import catalog
 from abist_kb.application.visualization.renderer import render_scene as run_render_scene
 from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.domain.job import ResourceKind
-from abist_kb.infrastructure.jobs.leases import acquire_resource_lease
+from abist_kb.domain.scene_spec import RESERVED_KINDS
+from abist_kb.infrastructure.db.visualizations_repo import VisualizationRepository
+from abist_kb.infrastructure.jobs.execution import held_resource_lease
+from abist_kb.infrastructure.visualization.artifact_store import sha256_file
 from abist_kb.infrastructure.visualization.manim_runner import (
     check_visualize_deps as run_check_visualize_deps,
 )
-from abist_kb.infrastructure.visualization.manim_runner import default_timeout_seconds
+from abist_kb.infrastructure.visualization.manim_runner import (
+    default_lease_ttl_seconds,
+    default_timeout_seconds,
+)
 from abist_kb.presentation.mcp.payloads import ok_result, tool_result
+
+#: 予約済み(未実装)kind の案内文。`RESERVED_KINDS` から自動生成するので、
+#: kind を実装して `SCENE_KINDS` へ移すたびに文言が自動で追随する。
+#: 全て実装し終えたら空文字になる。
+_RESERVED_NOTE = f"予約済み（未実装）: {' / '.join(RESERVED_KINDS)}。" if RESERVED_KINDS else ""
 
 #: `list_scene_kinds`/`check_visualize_deps`/`render_scene` の docstring は
 #: `tools/list` fixture(`tests/fixtures/mcp/tools-list.json`)から一字一句転記する。
+#: 例外は `list_scene_kinds` の予約 kind の一文で、旧実装に無い kind を実装した
+#: ことによる意図的な逸脱。fixture は手編集できないため、
+#: `tests/mcp/test_contract_visualize.py` の
+#: `_INTENTIONAL_DESCRIPTION_DIVERGENCE` に理由付きで登録して許可する。
 TOOL_DESCRIPTIONS: dict[str, str] = {
     "list_scene_kinds": (
         "利用可能なシーン種別（テンプレート・必須フィールド・beat 種別）を JSON で返す。"
-        "render_scene の前に必ず呼び、SceneSpec の組み立てに使うこと。"
-        "予約済み（未実装）: timeline / comparison / domain。"
+        "render_scene の前に必ず呼び、SceneSpec の組み立てに使うこと。" + _RESERVED_NOTE
     ),
     "check_visualize_deps": (
         "Python / Manim / ffmpeg / 日本語フォントの有無とバージョンを診断する。初回利用時や "
@@ -52,6 +69,16 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "（INVALID_SCENE_SPEC / SOURCE_NOT_FOUND / SOURCE_HASH_MISMATCH / PYTHON_NOT_FOUND / "
         "MANIM_NOT_FOUND / RENDER_TIMEOUT / RENDER_FAILED / OUTPUT_NOT_FOUND / "
         "OUTPUT_PATH_VIOLATION / CONCURRENT_RENDER）で分岐すること。"
+    ),
+    "list_visualizations": (
+        "過去のレンダリング成果物を新しい順に一覧する。render_scene の応答が"
+        "クライアント側タイムアウトで切れた場合の確認や、過去成果物の再利用に使う。"
+        "state / scene_kind / output_format / query / source_path で絞り込める。"
+        "全文（SceneSpec・出典・stderr）は get_visualization で取得すること。"
+    ),
+    "get_visualization": (
+        "visualization_id の詳細（状態・出典検証結果・成果物パス・manifest）を返す。"
+        "manifest.json がディスク上で変化していれば manifest_drift: true を返す。"
     ),
 }
 
@@ -95,6 +122,41 @@ def list_tools() -> list[types.Tool]:
             },
             execution=forbidden,
         ),
+        types.Tool(
+            name="list_visualizations",
+            description=TOOL_DESCRIPTIONS["list_visualizations"],
+            inputSchema={
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "additionalProperties": False,
+                "properties": {
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                    "offset": {"type": "integer", "minimum": 0},
+                    "state": {"type": "string", "enum": ["succeeded", "failed"]},
+                    "scene_kind": {"type": "string"},
+                    "output_format": {"type": "string", "enum": ["mp4", "png"]},
+                    "query": {"type": "string"},
+                    "source_path": {"type": "string"},
+                },
+                "type": "object",
+            },
+            execution=forbidden,
+        ),
+        types.Tool(
+            name="get_visualization",
+            description=TOOL_DESCRIPTIONS["get_visualization"],
+            inputSchema={
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "additionalProperties": False,
+                "properties": {
+                    "visualization_id": {"type": "string", "minLength": 1},
+                    "include_manifest": {"type": "boolean"},
+                    "include_spec": {"type": "boolean"},
+                },
+                "required": ["visualization_id"],
+                "type": "object",
+            },
+            execution=forbidden,
+        ),
     ]
 
 
@@ -118,6 +180,38 @@ def validate_arguments(tool_name: str, arguments: dict[str, Any]) -> types.CallT
             content=[types.TextContent(type="text", text=text)], isError=True
         )
     return None
+
+
+#: シーン種別の見本（`scripts/generate-scene-gallery.py` が生成する PNG）。
+#: リポジトリルートからの相対で返す —— 絶対パスを返すと、成果物を別マシンへ
+#: 持って行ったときに壊れる。
+SCENE_GALLERY_DIR = "assets/scene-gallery"
+
+
+def scene_kinds_payload() -> dict[str, Any]:
+    """`list_scene_kinds` の応答。
+
+    説明文だけでは17種の見た目が伝わらず、書き手は**想像して**選ぶことになる
+    （実際、手書きの台本でも key_points に偏っていた）。`preview` で実物を
+    見せることで、選ぶ前に見比べられるようにする。
+    """
+    from abist_kb.domain.scene_spec import SCENE_KINDS
+
+    return {
+        "ok": True,
+        "count": len(SCENE_KINDS),
+        "scene_kinds": [
+            {
+                "kind": info["kind"],
+                "description": info["description"],
+                "template": info["template"],
+                "required": info["required"],
+                "beat_types": info["beat_types"],
+                "preview": f"{SCENE_GALLERY_DIR}/{info['kind']}.png",
+            }
+            for info in SCENE_KINDS
+        ],
+    }
 
 
 class KbVisualizeTools:
@@ -145,29 +239,25 @@ class KbVisualizeTools:
     # -- list_scene_kinds -----------------------------------------------------
 
     def list_scene_kinds(self, _arguments: dict[str, Any]) -> types.CallToolResult:
-        from abist_kb.domain.scene_spec import SCENE_KINDS
-
-        payload = {
-            "ok": True,
-            "count": len(SCENE_KINDS),
-            "scene_kinds": [
-                {
-                    "kind": info["kind"],
-                    "description": info["description"],
-                    "template": info["template"],
-                    "required": info["required"],
-                    "beat_types": info["beat_types"],
-                }
-                for info in SCENE_KINDS
-            ],
-        }
-        return ok_result(payload)
+        return ok_result(scene_kinds_payload())
 
     # -- check_visualize_deps ---------------------------------------------------
 
     def check_visualize_deps(self, _arguments: dict[str, Any]) -> types.CallToolResult:
         payload = self._check_deps_fn(root=self._repo_root)
         return ok_result(payload)
+
+    # -- カタログ ----------------------------------------------------------------
+
+    def _record_catalog(self, outcome: Any) -> None:
+        """成果物をカタログへ記録する（失敗しても描画結果は返す）。
+
+        カタログは索引であって正本ではないので、ここで落ちてもレンダリングの
+        成否には影響させない。取りこぼしは次の `list_visualizations` の
+        自己修復（ディスクとの差分検出）で回復する。
+        """
+        with contextlib.suppress(sqlite3.Error):
+            catalog.record_render(self._conn, outcome, root_dir=self._repo_root)
 
     # -- render_scene -----------------------------------------------------------
 
@@ -235,11 +325,15 @@ class KbVisualizeTools:
         assert spec is not None
 
         timeout_seconds = default_timeout_seconds()
-        ttl_seconds = self._lease_ttl_seconds or (timeout_seconds + 60.0)
+        ttl_seconds = self._lease_ttl_seconds or default_lease_ttl_seconds()
         owner_id = str(uuid.uuid4())
+        outcome = None
 
         try:
-            with acquire_resource_lease(
+            # 保持中は TTL の 1/3 ごとに自動更新される。単発取得のままでは
+            # TTL を短くできず(保持中に横取りされて Manim が2本走る)、
+            # 異常終了時に次のレンダリングが TTL 分ブロックされていた。
+            with held_resource_lease(
                 self._conn,
                 ResourceKind.RENDER,
                 owner_id=owner_id,
@@ -254,7 +348,10 @@ class KbVisualizeTools:
                     timeout_seconds=timeout_seconds,
                 )
         except AppError as exc:
-            if exc.code is ErrorCode.CONFLICT:
+            if exc.code is not ErrorCode.CONFLICT:
+                raise
+            if outcome is None:
+                # リースを取得できなかった = 本来の busy。
                 return tool_result(
                     {
                         "ok": False,
@@ -272,7 +369,18 @@ class KbVisualizeTools:
                     },
                     is_error=True,
                 )
-            raise
+            # 描画は完了したがその後リースを喪失した。成果物は既に書かれているので
+            # 捨てずに返す(捨てると「レンダリングは成功したのに busy と報告する」
+            # という最悪の挙動になる)。
+            outcome = replace(
+                outcome,
+                warnings=[
+                    *outcome.warnings,
+                    "レンダリング中に render リースを喪失しました（成果物は生成済み）。",
+                ],
+            )
+
+        self._record_catalog(outcome)
 
         if not outcome.ok:
             payload: dict[str, Any] = {
@@ -291,6 +399,150 @@ class KbVisualizeTools:
             "manifest_path": str(outcome.manifest_path),
             "warnings": outcome.warnings,
             "duration_ms": outcome.duration_ms,
+        }
+        return ok_result(payload)
+
+    # -- list_visualizations ------------------------------------------------------
+
+    def _visualizations_dir(self) -> Path:
+        # KbVisualizeTools は解決済みの <reports>/visualizations を受け取る。
+        return self._reports_dir
+
+    def _self_heal(self) -> list[str]:
+        """ディスクと DB の差分があるときだけ整合を取る。
+
+        クライアント側タイムアウトで応答が切れ、レンダリングは完走したのに
+        DB 行だけ書かれなかったケースを、次の一覧参照で自動回復させる。
+        以前はこれが無いため SKILL.md に「reports/ を目で確認する」という
+        運用回避策が常駐していた。
+        """
+        repo = VisualizationRepository(self._conn)
+        on_disk = catalog.disk_ids(self._visualizations_dir())
+        if on_disk == repo.all_ids():
+            return []
+        if len(on_disk) > catalog.MAX_AUTO_RECONCILE_DIRS:
+            return [
+                f"成果物が {len(on_disk)} 件あるため自動整合をスキップしました"
+                "（多すぎる場合は手動で整合してください）"
+            ]
+        catalog.reconcile_from_disk(
+            self._conn, self._visualizations_dir(), root_dir=self._repo_root
+        )
+        return []
+
+    def list_visualizations(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        warnings = self._self_heal()
+        repo = VisualizationRepository(self._conn)
+        rows, total = repo.list(
+            state=arguments.get("state"),
+            scene_kind=arguments.get("scene_kind"),
+            output_format=arguments.get("output_format"),
+            query=arguments.get("query"),
+            source_path=arguments.get("source_path"),
+            limit=int(arguments.get("limit") or 20),
+            offset=int(arguments.get("offset") or 0),
+        )
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            source_count, bad_count = repo.source_counts(row["id"])
+            output_abs = (
+                self._repo_root / row["output_dir"] / row["output_path"]
+                if row["output_dir"] and row["output_path"]
+                else None
+            )
+            items.append(
+                {
+                    "visualization_id": row["id"],
+                    "state": row["state"],
+                    "code": row["code"],
+                    "scene_kind": row["scene_kind"],
+                    "template": row["template"],
+                    "output_format": row["output_format"],
+                    "title": row["title"],
+                    "query": row["query"],
+                    "created_at": row["created_at"],
+                    "duration_ms": row["duration_ms"],
+                    "output_dir": str(self._repo_root / row["output_dir"])
+                    if row["output_dir"]
+                    else None,
+                    "output_path": str(output_abs) if output_abs else None,
+                    "output_exists": bool(output_abs and output_abs.exists()),
+                    "warnings_count": len(row["warnings"]),
+                    "source_count": source_count,
+                    "bad_source_count": bad_count,
+                    "job_id": row["job_id"],
+                }
+            )
+        return ok_result(
+            {
+                "ok": True,
+                "count": len(items),
+                "total": total,
+                "visualizations": items,
+                "warnings": warnings,
+            }
+        )
+
+    # -- get_visualization --------------------------------------------------------
+
+    def get_visualization(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        visualization_id = arguments["visualization_id"]
+        repo = VisualizationRepository(self._conn)
+        record = repo.get(visualization_id)
+        if record is None:
+            self._self_heal()
+            record = repo.get(visualization_id)
+        if record is None:
+            return tool_result(
+                {
+                    "ok": False,
+                    "code": "NOT_FOUND",
+                    "errors": [
+                        {
+                            "path": "visualization_id",
+                            "code": "not_found",
+                            "message": f"可視化 {visualization_id} は見つかりません",
+                        }
+                    ],
+                },
+                is_error=True,
+            )
+
+        drifted, manifest = catalog.manifest_drifted(record, self._repo_root)
+        out_dir = self._repo_root / record["output_dir"] if record["output_dir"] else None
+        artifacts: dict[str, Any] = {
+            "output_dir": str(out_dir) if out_dir else None,
+            "manifest_path": str(self._repo_root / record["manifest_path"])
+            if record["manifest_path"]
+            else None,
+            "outputs": [],
+        }
+        if out_dir and record["output_path"]:
+            produced = out_dir / record["output_path"]
+            exists = produced.exists()
+            artifacts["outputs"] = [
+                {
+                    "path": record["output_path"],
+                    "abs_path": str(produced),
+                    "sha256": record["output_sha256"],
+                    "size_bytes": record["output_size_bytes"],
+                    "exists": exists,
+                    "sha256_matches": bool(
+                        exists
+                        and record["output_sha256"]
+                        and sha256_file(produced) == record["output_sha256"]
+                    ),
+                }
+            ]
+
+        payload: dict[str, Any] = {
+            "ok": True,
+            "visualization": record,
+            "sources": repo.get_sources(visualization_id),
+            "artifacts": artifacts,
+            "manifest": manifest if arguments.get("include_manifest", True) else None,
+            "manifest_drift": drifted,
+            "spec": (manifest or {}).get("spec") if arguments.get("include_spec") else None,
         }
         return ok_result(payload)
 

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import platform
 import shutil
 import sys
@@ -24,9 +25,28 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+from templates import layout  # noqa: E402  (sys.path を通した後でなければ import できない)
+from templates import theme  # noqa: E402
+
 TEMPLATES = {
     "step_explanation": "templates.step_explanation",
     "data_flow_v1": "templates.data_flow_v1",
+    "timeline_v1": "templates.timeline_v1",
+    "comparison_v1": "templates.comparison_v1",
+    "domain_map_v1": "templates.domain_map_v1",
+    # --- 動画専用（Phase 7）。単独でも使えるが、主用途は章立て動画の構成要素 ---
+    "title_card": "templates.title_card",
+    "chapter_card": "templates.chapter_card",
+    "key_points": "templates.key_points",
+    "quote_card": "templates.quote_card",
+    "summary_card": "templates.summary_card",
+    "cta_card": "templates.cta_card",
+    "ending_card": "templates.ending_card",
+    "code_block": "templates.code_block",
+    "formula_block": "templates.formula_block",
+    "image_still": "templates.image_still",
+    "chart_v1": "templates.chart_v1",
+    "thumbnail_card": "templates.thumbnail_card",
 }
 
 
@@ -35,7 +55,17 @@ def emit(obj: dict) -> None:
 
 
 def load_spec(spec_path: str | Path) -> dict:
-    return json.loads(Path(spec_path).read_text(encoding="utf-8"))
+    """SceneSpec を読み、`asset_base` を注入する。
+
+    `image` beat の `path` は **scene-spec.json と同じディレクトリからの相対**と
+    定義しているので、そのディレクトリをここで教える。spec 本体には書き戻さない
+    （ディスク上の spec に絶対パスが混ざると、成果物を別マシンへ持って行った
+    ときに壊れるため）。
+    """
+    path = Path(spec_path)
+    spec = json.loads(path.read_text(encoding="utf-8"))
+    spec["asset_base"] = str(path.resolve().parent)
+    return spec
 
 
 def build_scene_class(spec_path: str | Path):
@@ -48,6 +78,55 @@ def build_scene_class(spec_path: str | Path):
     module = import_module(TEMPLATES[spec["template"]])
     anim, static = module.make_scene_classes(spec)
     return static if spec.get("output_format") == "png" else anim
+
+
+#: 出力品質。Manim の quality プリセット名ではなく寸法と fps を直接指定する。
+#: `high_quality` は 60fps でレンダリング時間が倍増するため使わない。
+#: 寸法の実体は templates.layout.FRAME_PIXELS（アスペクト比 x 品質）にあり、
+#: **quality は段だけ、frame はアスペクト比だけ**を決める（2つの軸を混ぜない）。
+QUALITY_FRAME_RATES = {"draft": 30, "standard": 30, "high": 60}
+DEFAULT_QUALITY = "standard"
+DEFAULT_ASPECT_RATIO = "16:9"
+
+
+def _resolve_quality(spec: dict) -> str:
+    """spec > 環境変数 > 既定 の順で品質を決める(`resolve_font` と同じ流儀)。"""
+    requested = spec.get("quality") or os.environ.get("KB_VISUALIZE_QUALITY") or DEFAULT_QUALITY
+    return requested if requested in QUALITY_FRAME_RATES else DEFAULT_QUALITY
+
+
+def _resolve_aspect_ratio(spec: dict) -> str:
+    """`frame.aspect_ratio` を解決する（未指定は 16:9）。
+
+    **既存 spec は frame を持たないので必ず 16:9 に落ちる。** 縦型を明示した
+    ときだけフレーム形状が変わる、という後方互換の担保がここ。
+    """
+    frame = spec.get("frame")
+    requested = frame.get("aspect_ratio") if isinstance(frame, dict) else None
+    return requested if requested in layout.FRAME_ASPECTS else DEFAULT_ASPECT_RATIO
+
+
+def _frame_config(spec: dict) -> dict:
+    """画素寸法・フレーム寸法・fps をまとめて返す。
+
+    `frame_width` / `frame_height` も明示する。Manim は pixel_width を変えても
+    フレーム座標系を追随させないため、縦型では自分で 4.5 x 8.0 に設定しないと
+    レイアウトが 16:9 のまま横に潰れる。
+    """
+    quality = _resolve_quality(spec)
+    aspect_ratio = _resolve_aspect_ratio(spec)
+    pixel_width, pixel_height = layout.pixel_size(aspect_ratio, quality)
+    frame_width, frame_height = layout.frame_size(aspect_ratio)
+    return {
+        "pixel_width": pixel_width,
+        "pixel_height": pixel_height,
+        "frame_rate": QUALITY_FRAME_RATES[quality],
+        "frame_width": frame_width,
+        "frame_height": frame_height,
+        # 背景はテーマが決める。ディップ（暗転）もこの色へ落とすので、
+        # ここで config に入れておくと choreography 側が引き直せる。
+        "background_color": theme.get_theme(spec.get("theme")).background,
+    }
 
 
 def _find_output(media_dir: Path, ext: str) -> Path | None:
@@ -85,16 +164,21 @@ def main() -> int:
             "progress_bar": "none",
             "verbosity": "ERROR",
         }
+        preset = _frame_config(spec)
+        conf.update(preset)
         if is_png:
             # 静的専用シーン + 最終フレーム保存（アニメ途中フレームに依存しない）
-            conf.update({"save_last_frame": True, "format": "png", "pixel_width": 1920, "pixel_height": 1080})
+            conf.update({"save_last_frame": True, "format": "png"})
+            conf.pop("frame_rate", None)
             scene_cls = static_cls
         else:
-            conf.update({"quality": "medium_quality"})
             scene_cls = anim_cls
 
         with tempconfig(conf):
-            scene_cls().render()
+            # インスタンスを保持する: シーンが記録した beat の実時刻を後で取り出す。
+            scene = scene_cls()
+            scene.render()
+            beat_times = getattr(scene, "kb_beat_times", None)
 
         ext = "png" if is_png else "mp4"
         produced = _find_output(media_dir, ext)
@@ -110,6 +194,8 @@ def main() -> int:
             "output": final.name,
             "python": platform.python_version(),
             "manim": manim.__version__,
+            # beat が画面に出た実時刻（秒）。効果音の beat アンカーがこれに載る。
+            "beat_times": beat_times if isinstance(beat_times, list) else None,
         })
         return 0
     except Exception:

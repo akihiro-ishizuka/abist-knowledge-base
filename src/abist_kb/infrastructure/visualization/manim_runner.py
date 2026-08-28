@@ -8,10 +8,15 @@ stdout の最終行を JSON としてパースする。
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
+import signal
 import subprocess
+import threading
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -36,10 +41,45 @@ def default_timeout_seconds() -> float:
     return 10 * 60.0
 
 
+#: `render` リースの既定 TTL(秒)。`held_resource_lease` が TTL の 1/3 ごとに
+#: 更新するため、レンダリングの実行時間(最長10分)とは独立に決められる。
+#: プロセスが異常終了した場合に次のレンダリングが待たされるのは最大この秒数。
+#: 従来は「タイムアウト+60秒」= 11分で、実測 4.6 秒に対して2桁過剰だった。
+_DEFAULT_LEASE_TTL_SECONDS = 30.0
+
+
+def default_lease_ttl_seconds() -> float:
+    """`KB_VISUALIZE_LEASE_TTL_SECONDS` で上書き可(運用調整用)。"""
+    raw = os.environ.get("KB_VISUALIZE_LEASE_TTL_SECONDS")
+    if raw:
+        try:
+            value = float(raw)
+            if value > 0:
+                return value
+        except ValueError:
+            pass
+    return _DEFAULT_LEASE_TTL_SECONDS
+
+
 def tail(text: str) -> str:
     lines = [line for line in text.splitlines() if line.strip()]
     joined = "\n".join(lines[-_TAIL_LINES:])
     return joined[-_TAIL_MAX_CHARS:] if len(joined) > _TAIL_MAX_CHARS else joined
+
+
+def visualize_python_path(*, root: Path | None = None) -> Path | None:
+    """可視化用 venv の python 実行ファイルの実パスを返す(無ければ None)。
+
+    `resolve_python` と違い、フォールバックの `py`/`python3` は返さない。
+    「専用 venv が用意されているか」だけを知りたい呼び出し側(doctor 等)が使う。
+    """
+    root = root or _REPO_ROOT
+    candidate = (
+        root / ".venv-visualize" / "Scripts" / "python.exe"
+        if os.name == "nt"
+        else root / ".venv-visualize" / "bin" / "python"
+    )
+    return candidate if candidate.exists() else None
 
 
 def resolve_python(*, root: Path | None = None, env: dict[str, str] | None = None) -> str | None:
@@ -68,41 +108,142 @@ class ProcessResult:
     stdout: str
     stderr: str
     timed_out: bool
+    #: `should_cancel` が True を返して中止した場合に立つ（純増フィールド）。
+    cancelled: bool = False
+
+
+def _spawn_kwargs() -> dict[str, Any]:
+    """子プロセスを独立したプロセスグループ／セッションで起動する。
+
+    こうしておかないと、タイムアウトやキャンセルで木ごと終了させられない。
+    """
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW}
+    return {"start_new_session": True}
+
+
+def _kill_process_tree(proc: subprocess.Popen[str]) -> None:
+    """子プロセスとその子孫（Manim が起動する ffmpeg）をまとめて終了させる。
+
+    `subprocess.run(timeout=)` は**直接の子しか kill しない**ため、従来は
+    RENDER_TIMEOUT のたびに ffmpeg が孤児として残っていた。キャンセル対応と
+    同じ仕組みでこの既存バグも直る。
+    """
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            subprocess.run(  # noqa: S603
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],  # noqa: S607
+                capture_output=True,
+                timeout=10,
+                shell=False,
+            )
+            return
+        except (OSError, subprocess.SubprocessError):
+            pass
+    else:
+        with contextlib.suppress(ProcessLookupError, OSError):
+            os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
+            return
+    with contextlib.suppress(OSError):
+        proc.kill()
+
+
+#: 公開名。長時間常駐するプロセス(Phase 7 の画面キャプチャ)も同じ木 kill を使う。
+#: 実装を複製すると「孫が残らない」保証が片方だけ壊れるので、必ずこれを共有する。
+kill_process_tree = _kill_process_tree
+spawn_kwargs = _spawn_kwargs
 
 
 def run_python_process(
-    *, python_path: str, args: list[str], timeout_seconds: float, cwd: Path | None = None
+    *,
+    python_path: str,
+    args: list[str],
+    timeout_seconds: float,
+    cwd: Path | None = None,
+    should_cancel: Callable[[], bool] | None = None,
+    poll_interval: float = 0.25,
 ) -> ProcessResult:
-    """Python スクリプトを実行して結果を返す。render_scene のテストでは DI で差し替える。"""
+    """Python スクリプトを実行して結果を返す。render_scene のテストでは DI で差し替える。
+
+    `subprocess.run` ではなく `Popen` + ポーリングを使う理由:
+
+    1. **キャンセル**: 実行中に `should_cancel()` が True になったら中止する
+    2. **プロセスツリーの終了**: タイムアウト時もキャンセル時も、孫（ffmpeg）まで
+       確実に終了させる。`subprocess.run(timeout=)` は直接の子しか kill しない
+    """
     cwd = cwd or _REPO_ROOT
     env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
     try:
-        completed = subprocess.run(
+        proc = subprocess.Popen(  # noqa: S603
             [python_path, *args],
             cwd=cwd,
             env=env,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             encoding="utf-8",
             errors="replace",
-            timeout=timeout_seconds,
             shell=False,
+            **_spawn_kwargs(),
         )
     except FileNotFoundError as exc:
         return ProcessResult(
             exit_code=None, stdout="", stderr=f"spawn failed: {exc}", timed_out=False
         )
-    except subprocess.TimeoutExpired as exc:
-        stdout = exc.stdout or ""
-        stderr = exc.stderr or ""
-        if isinstance(stdout, bytes):
-            stdout = stdout.decode("utf-8", errors="replace")
-        if isinstance(stderr, bytes):
-            stderr = stderr.decode("utf-8", errors="replace")
-        return ProcessResult(exit_code=None, stdout=stdout, stderr=stderr, timed_out=True)
+
+    # stdout/stderr は別スレッドで読み切る。パイプを読まずに待つとバッファが
+    # 埋まって子プロセスが停止する。
+    captured: dict[str, str] = {"stdout": "", "stderr": ""}
+
+    def _drain(name: str, stream: Any) -> None:
+        try:
+            captured[name] = stream.read() or ""
+        except (OSError, ValueError):
+            captured[name] = ""
+
+    readers = [
+        threading.Thread(target=_drain, args=("stdout", proc.stdout), daemon=True),
+        threading.Thread(target=_drain, args=("stderr", proc.stderr), daemon=True),
+    ]
+    for reader in readers:
+        reader.start()
+
+    deadline = time.monotonic() + timeout_seconds
+    timed_out = False
+    cancelled = False
+    while proc.poll() is None:
+        if should_cancel is not None and should_cancel():
+            _kill_process_tree(proc)
+            cancelled = True
+            break
+        if time.monotonic() >= deadline:
+            _kill_process_tree(proc)
+            timed_out = True
+            break
+        time.sleep(poll_interval)
+
+    with contextlib.suppress(subprocess.TimeoutExpired):
+        proc.wait(timeout=10)
+    for reader in readers:
+        reader.join(timeout=5)
+    for stream in (proc.stdout, proc.stderr):
+        with contextlib.suppress(OSError, ValueError):
+            if stream is not None:
+                stream.close()
+
+    if timed_out or cancelled:
+        return ProcessResult(
+            exit_code=None,
+            stdout=captured["stdout"],
+            stderr=captured["stderr"],
+            timed_out=timed_out,
+            cancelled=cancelled,
+        )
     return ProcessResult(
-        exit_code=completed.returncode,
-        stdout=completed.stdout or "",
-        stderr=completed.stderr or "",
+        exit_code=proc.returncode,
+        stdout=captured["stdout"],
+        stderr=captured["stderr"],
         timed_out=False,
     )
 
@@ -232,6 +373,8 @@ def ffmpeg_version() -> str | None:
 
 __all__ = [
     "ProcessResult",
+    "kill_process_tree",
+    "spawn_kwargs",
     "check_visualize_deps",
     "default_timeout_seconds",
     "ffmpeg_version",

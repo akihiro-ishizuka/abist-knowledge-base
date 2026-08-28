@@ -26,6 +26,7 @@ from abist_kb.infrastructure.jobs.builtin_registry import (
     build_builtin_resources,
 )
 from abist_kb.presentation.cli.context import AppTyper, get_context
+from abist_kb.presentation.common.serialize import job_to_dict
 from abist_kb.presentation.console.presenter import Presenter
 from abist_kb.presentation.console.progress import progress_scope
 
@@ -58,19 +59,12 @@ def _build_service(settings: Any) -> tuple[JobService, Any]:
 
 
 def _job_to_dict(job: Job) -> dict[str, Any]:
-    return {
-        "id": job.id,
-        "kind": job.kind,
-        "state": str(job.state),
-        "params": job.params,
-        "result": job.result,
-        "error": job.error,
-        "cancel_requested": job.cancel_requested,
-        "retry_of": job.retry_of,
-        "created_at": job.created_at.isoformat() if job.created_at else None,
-        "started_at": job.started_at.isoformat() if job.started_at else None,
-        "finished_at": job.finished_at.isoformat() if job.finished_at else None,
-    }
+    """ジョブ表現は `presentation.common.serialize.job_to_dict` を正本とする。
+
+    独自実装だったため `progress` と `state_token` が欠けていた。serialize.py の
+    docstring は「CLI と同じ列を返す」と主張していたが実態と食い違っていた。
+    """
+    return job_to_dict(job)
 
 
 def _present_job(presenter: Presenter, job: Job) -> None:

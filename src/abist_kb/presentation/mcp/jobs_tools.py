@@ -49,6 +49,7 @@ import mcp.types as types
 from abist_kb.application.batch_service import BatchService
 from abist_kb.application.index_service import CORPUS_LABELS, IndexService
 from abist_kb.application.job_service import JobService
+from abist_kb.application.video.render_job import VIDEO_JOB_KIND
 from abist_kb.application.visualization.render_job import RENDER_JOB_KIND
 from abist_kb.domain.errors import AppError
 from abist_kb.domain.job import Job
@@ -56,6 +57,7 @@ from abist_kb.domain.job import JobState as _JobState
 from abist_kb.infrastructure.db.batches_repo import BatchRepository
 from abist_kb.infrastructure.jobs import leases
 from abist_kb.infrastructure.sources.base import with_docs_prefix
+from abist_kb.infrastructure.visualization.artifact_store import visualizations_dir
 from abist_kb.presentation.mcp.kb_download import _camelize_batch
 from abist_kb.presentation.mcp.payloads import app_error_result, error_result, ok_result
 
@@ -113,6 +115,7 @@ _JOB_KIND_FOR_TOOL: dict[str, str] = {
     "start_download_web": "kb_download_web",
     "start_download_git": "kb_download_git",
     "start_render_scene": RENDER_JOB_KIND,
+    "start_render_video": VIDEO_JOB_KIND,
 }
 
 
@@ -367,6 +370,13 @@ def _app_error_result(exc: AppError) -> types.CallToolResult:
 
 
 def _job_to_status_payload(job: Job) -> dict[str, Any]:
+    """`job_status` の応答。
+
+    キー名 `job_id`(`id` ではない)は既存クライアント互換のため維持する。
+    `progress` は設計書 §10.3 が「CLI・API・MCP が公開する」としているのに
+    MCP だけ欠けていた。30秒を超える処理に進捗を求める §15 の受入条件に
+    直結するため補う。
+    """
     return {
         "ok": True,
         "job_id": job.id,
@@ -375,6 +385,7 @@ def _job_to_status_payload(job: Job) -> dict[str, Any]:
         "params": job.params,
         "result": job.result,
         "error": job.error,
+        "progress": job.progress,
         "cancel_requested": job.cancel_requested,
         "created_at": job.created_at.isoformat() if job.created_at else None,
         "started_at": job.started_at.isoformat() if job.started_at else None,
@@ -516,13 +527,30 @@ class JobTools:
         params: dict[str, Any] = {
             "scene_spec": spec,
             "docs_dir": str(self._docs_dir),
-            "reports_dir": str(self._reports_dir / "visualizations"),
+            "reports_dir": str(visualizations_dir(self._reports_dir)),
             "repo_root": str(self._repo_root),
         }
         slug = arguments.get("slug")
         if slug:
             params["slug"] = slug
         return self._start("start_render_scene", params)
+
+    def start_render_video(self, arguments: dict[str, Any]) -> types.CallToolResult:
+        """動画レンダリングを非同期ジョブへ投入する。
+
+        **`capture_profile` は登録済みプロファイル名のみ。** 起動コマンドは
+        ジョブ params にも入らない（実行内容は運用者の設定ファイルが決める）。
+        """
+        params: dict[str, Any] = {
+            "project_dir": str(arguments["project_dir"]),
+            "docs_dir": str(self._docs_dir),
+            "reports_dir": str(self._reports_dir),
+            "repo_root": str(self._repo_root),
+            "sound_intensity": arguments.get("sound_intensity") or "subtle",
+        }
+        if arguments.get("capture_profile"):
+            params["capture_profile"] = str(arguments["capture_profile"])
+        return self._start("start_render_video", params)
 
     # -- job_status -----------------------------------------------------------
 

@@ -23,25 +23,20 @@ from abist_kb.domain.job import Job, JobState
 from abist_kb.domain.scene_spec import validate_scene_spec
 from abist_kb.infrastructure.db.connection import connect
 from abist_kb.presentation.common.container import ServiceContainer
+from abist_kb.presentation.common.serialize import job_to_dict
 from abist_kb.presentation.mcp.payloads import app_error_result, error_result, ok_result
 
 _DESTRUCTIVE = types.ToolAnnotations(destructiveHint=True)
 
 
 def _job_payload(job: Job) -> dict[str, Any]:
-    return {
-        "id": job.id,
-        "kind": job.kind,
-        "state": str(job.state),
-        "params": job.params,
-        "result": job.result,
-        "error": job.error,
-        "cancel_requested": job.cancel_requested,
-        "retry_of": job.retry_of,
-        "created_at": job.created_at.isoformat() if job.created_at else None,
-        "started_at": job.started_at.isoformat() if job.started_at else None,
-        "finished_at": job.finished_at.isoformat() if job.finished_at else None,
-    }
+    """ジョブ表現は `presentation.common.serialize.job_to_dict` を正本とする。
+
+    独自に列を並べていたため `progress` が欠けていた(API だけが正しい状態だった)。
+    委譲することで、同一ジョブが API/CLI/MCP で同じ列を返すという §15 の受入条件が
+    構造的に守られる。
+    """
+    return job_to_dict(job)
 
 
 def _event_payload(event: Any) -> dict[str, Any]:

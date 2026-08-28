@@ -75,6 +75,16 @@ class RenderOutcome:
     duration_ms: float | None = None
     stdout_tail: str | None = None
     stderr_tail: str | None = None
+    #: 出典 id -> 検証結果(ok / not_found / hash_mismatch)。カタログが記録する。
+    source_status: dict[str, str] = field(default_factory=dict)
+    #: 剪定後の spec の sources[]。カタログの逆引き索引に使う。
+    sources: list[dict[str, Any]] = field(default_factory=list)
+    #: 書き出した manifest の内容と、その JSON の sha256(ドリフト検知用)。
+    manifest: dict[str, Any] | None = None
+    manifest_sha256: str | None = None
+    #: beat が画面に出た**実時刻**（秒）。効果音の beat アンカーがこれに載る。
+    #: 推定（尺を beat 数で等分）ではなく描画側の計測値なので、音と絵がずれない。
+    beat_times: list[float] = field(default_factory=list)
 
 
 _UNSET = object()
@@ -94,6 +104,7 @@ def render_scene(
     run_process: Any = run_python_process,
     resolve_python_fn: Any = resolve_python,
     ffmpeg_version_fn: Any = default_ffmpeg_version,
+    should_cancel: Any = None,
 ) -> RenderOutcome:
     """SceneSpec を検証・出典検証し、Manim レンダリングを実行する。
 
@@ -117,6 +128,8 @@ def render_scene(
             code=verified.code,
             errors=[e.to_dict() for e in verified.errors],
             warnings=verified.warnings,
+            source_status=dict(verified.source_status),
+            sources=list(validated.spec.get("sources") or []),
         )
     assert verified.spec is not None
     final_spec = verified.spec
@@ -169,6 +182,7 @@ def render_scene(
         ],
         timeout_seconds=effective_timeout,
         cwd=repo_root,
+        should_cancel=should_cancel,
     )
     duration_ms = (datetime.now(UTC) - started_at).total_seconds() * 1000
     payload = parse_last_json_line(result.stdout)
@@ -195,9 +209,9 @@ def render_scene(
     manifest_path = out_dir / "manifest.json"
 
     def fail_with(code: str, message: str) -> RenderOutcome:
+        manifest = build_manifest(outputs=[], **manifest_base)
         manifest_path.write_text(
-            json.dumps(build_manifest(outputs=[], **manifest_base), ensure_ascii=False, indent=2),
-            encoding="utf-8",
+            json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
         )
         return RenderOutcome(
             ok=False,
@@ -209,8 +223,20 @@ def render_scene(
             manifest_path=manifest_path,
             stdout_tail=tail(result.stdout),
             stderr_tail=tail(result.stderr),
+            duration_ms=duration_ms,
+            source_status=dict(verified.source_status),
+            sources=list(final_spec.get("sources") or []),
+            manifest=manifest,
+            # ドリフト検知はファイルのバイト列を読むので、ハッシュも書き出した
+            # ファイルから取る(write_text は Windows で改行を CRLF に変換するため、
+            # 文字列の utf-8 ハッシュではファイルと一致しない)。
+            manifest_sha256=sha256_file(manifest_path),
         )
 
+    if result.cancelled:
+        # 中止も manifest を書いてから返す(fail_with 経由)。カタログに
+        # state='failed', code='RENDER_CANCELLED' として証跡が残る。
+        return fail_with("RENDER_CANCELLED", "利用者の要求によりレンダリングを中止しました")
     if result.timed_out:
         return fail_with(
             "RENDER_TIMEOUT",
@@ -256,10 +282,8 @@ def render_scene(
             "size_bytes": output_file.stat().st_size,
         }
     ]
-    manifest_path.write_text(
-        json.dumps(build_manifest(outputs=outputs, **manifest_base), ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    manifest = build_manifest(outputs=outputs, **manifest_base)
+    manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
     return RenderOutcome(
         ok=True,
@@ -269,6 +293,15 @@ def render_scene(
         manifest_path=manifest_path,
         warnings=warnings,
         duration_ms=duration_ms,
+        source_status=dict(verified.source_status),
+        sources=list(final_spec.get("sources") or []),
+        manifest=manifest,
+        manifest_sha256=sha256_file(manifest_path),
+        beat_times=[
+            float(t)
+            for t in ((payload or {}).get("beat_times") or [])
+            if isinstance(t, int | float) and not isinstance(t, bool)
+        ],
     )
 
 

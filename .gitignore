@@ -19,6 +19,9 @@ htmlcov/
 # Virtual environments / uv
 # .python-version is tracked on purpose: uv uses it to pin the interpreter.
 .venv/
+# 可視化用の別インタープリタ(Python 3.11 + manim)。`.venv/` は
+# ディレクトリ名完全一致なのでこの行が無いとコミット対象に入る。
+.venv-visualize/
 venv/
 .env/
 
@@ -26,6 +29,9 @@ venv/
 .env
 .env.*
 !.env.example
+# 画面キャプチャの起動コマンド登録簿。運用者が各環境で作る運用ファイルで、
+# 社内ホスト名や起動手順が入りうるためコミットしない（雛形だけ追跡する）。
+config/capture-profiles.json
 
 # Application data (regenerable / local)
 data/
@@ -42,9 +48,15 @@ reports/
 # tools/ は tools/visualize/(このプロジェクトのソース)と旧システムの
 # コンテンツが混在するため、旧コンテンツのパスだけを個別に無視する。
 bk/
-# Keep scripts/ ignored for cutover scratch, but track the Windows bootstrap.
+# Keep scripts/ ignored for cutover scratch, but track the Windows bootstrap and
+# the generators of committed binary assets（音源は生成器が唯一の出所。
+# 生成器を追跡しないと、コミット済みの wav をどう作ったのか復元できない）。
 scripts/*
 !scripts/bootstrap.bat
+!scripts/bootstrap-visualize.bat
+!scripts/generate-video-sfx.py
+!scripts/generate-video-bgm.py
+!scripts/generate-scene-gallery.py
 work/
 tools/*.md
 tools/issue_bodies/

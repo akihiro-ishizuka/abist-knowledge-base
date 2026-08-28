@@ -108,6 +108,50 @@ screens:
         label: 可視化依存関係診断
         destructive: false
         surfaces: [mcp, api]
+      visualization_list:
+        label: 成果物一覧
+        destructive: false
+        surfaces: [mcp, api]
+      visualization_detail:
+        label: 成果物詳細
+        destructive: false
+        surfaces: [mcp, api]
+
+  video:
+    label: 動画
+    actions:
+      video_create:
+        label: 動画プロジェクト作成
+        destructive: false
+        surfaces: [mcp, api]
+      video_submit_render:
+        label: 動画レンダリング投入（非同期）
+        destructive: false
+        surfaces: [mcp, api]
+      video_list:
+        label: 動画一覧
+        destructive: false
+        surfaces: [mcp, api]
+      video_detail:
+        label: 動画詳細（成果物・QA・配布判定）
+        destructive: false
+        surfaces: [mcp, api]
+      video_run_qa:
+        label: QA 再実行
+        destructive: false
+        surfaces: [mcp, api]
+      video_approve:
+        label: 社内プレビュー承認（外部送信なし）
+        destructive: false
+        surfaces: [mcp, api]
+      video_set_distribution:
+        label: 情報区分・公開候補の更新
+        destructive: false
+        surfaces: [mcp, api]
+      video_request_public_review:
+        label: 公開審査への提出（ステータス記録のみ）
+        destructive: false
+        surfaces: [mcp, api]
 
   quality:
     label: 品質

@@ -1,0 +1,65 @@
+name: Visualize (real Manim render)
+
+# PR は gate しない。実 Manim レンダリングは design/system-design.md の
+# 「実Manim／ffmpegテストは明示フラグ時だけ実行する」方針に従い、ci.yml には入れない。
+#   - workflow_dispatch: 可視化まわりを触った PR で手動実行する
+#   - schedule: requirements-visualize.txt のピン留めの陳腐化(yank 等)を週次で検知する
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 18 * * 0" # 毎週月曜 03:00 JST
+
+permissions:
+  contents: read
+
+jobs:
+  render:
+    # ubuntu では pycairo が libcairo2-dev / libpango1.0-dev を要求し、
+    # 全ピンした requirements がそのまま入る保証がないため windows のみ。
+    runs-on: windows-latest
+    env:
+      PYTHONUTF8: "1"
+      KB_RUN_MANIM_TESTS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --locked
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ランナーに `py` ランチャーが無いため bootstrap-visualize.bat は使わず直接叩く。
+      # 同じ requirements-visualize.txt を使うので、ピン留めの妥当性はここで検証される。
+      - name: Create visualize venv
+        run: |
+          python -m venv .venv-visualize
+          .venv-visualize\Scripts\python.exe -m pip install -U pip
+          .venv-visualize\Scripts\python.exe -m pip install -r requirements-visualize.txt
+
+      - name: Install ffmpeg
+        uses: AnimMouse/setup-ffmpeg@v1
+
+      - name: Diagnostics
+        run: .venv-visualize\Scripts\python.exe tools\visualize\check_deps.py
+
+      - name: Test (real render)
+        run: uv run pytest tests/visualize -v
+
+      # 目視レビュー用。ランナーには Yu Gothic UI が無く豆腐になりうるが、
+      # manifest の sha256 検証は通るため「完走すること」の回帰検出には十分機能する。
+      - name: Upload rendered artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rendered
+          path: reports/visualizations/**
+          retention-days: 7
+          if-no-files-found: ignore

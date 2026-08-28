@@ -15,6 +15,7 @@ import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
 
+import mcp.types as types
 import pytest
 from replay import check_result, load_fixture
 
@@ -77,11 +78,44 @@ def _fixture_files(subdir: str) -> list[Path]:
     return sorted((FIXTURES_DIR / subdir).glob("*.json"))
 
 
+#: 旧実装に無い機能を追加したことに伴う、fixture の**形**からの意図的な逸脱。
+#: fixture は SHA-256 で固定されていて手編集できないので、
+#: `_INTENTIONAL_DESCRIPTION_DIVERGENCE` と同じく「増えてよい理由」を書き下して許可する。
+_INTENTIONAL_SCENE_KIND_FIELDS: set[str] = {
+    # 種別ごとの見本 PNG（`assets/scene-gallery/<kind>.png`）。説明文だけでは
+    # 17種の見た目が伝わらず、書き手が想像で選ぶことになっていた（実測で
+    # 14シーン中10が key_points に偏っていた）。旧実装には無い純増のフィールド。
+    "preview",
+}
+
+
 @pytest.mark.parametrize("fixture_path", _fixture_files("list_scene_kinds"), ids=lambda p: p.stem)
 def test_list_scene_kinds_matches_fixture_shape(env: Env, fixture_path: Path) -> None:
+    """旧実装の形は保ち、宣言した分だけ増えていること。
+
+    fixture との比較は「増えたキーを取り除いてから」行う —— 取り除いた結果が
+    fixture と一致するなら、既存の契約は何も壊していない。
+    """
     fixture = load_fixture(fixture_path)
     result = env.tools.list_scene_kinds({})
-    outcome = check_result(fixture, result)
+
+    payload = json.loads(result.content[0].text)
+    added = {
+        key
+        for entry in payload["scene_kinds"]
+        for key in entry
+        if key in _INTENTIONAL_SCENE_KIND_FIELDS
+    }
+    assert added == _INTENTIONAL_SCENE_KIND_FIELDS, f"宣言と実際の増分が食い違っている: {added}"
+    for entry in payload["scene_kinds"]:
+        for key in _INTENTIONAL_SCENE_KIND_FIELDS:
+            entry.pop(key, None)
+    stripped = types.CallToolResult(
+        content=[types.TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))],
+        isError=bool(result.isError),
+    )
+
+    outcome = check_result(fixture, stripped)
     assert outcome.ok, outcome.reason
 
 
@@ -137,17 +171,54 @@ def test_render_scene_source_hash_mismatch_matches_fixture_shape(env: Env) -> No
 # ---------------------------------------------------------------------------
 
 
+#: 旧 Node 実装に無く、このリポジトリで追加した kb-visualize のツール名。
+#:
+#: `tests/fixtures/mcp/tools-list.json` は旧実装からの実測キャプチャで、SHA-256 が
+#: `tests/fixtures/capture-manifest.json` に固定されている(`tests/fixtures_check/
+#: test_capture_manifest.py` が照合)。`tests/fixtures/PROVENANCE.md` も fixture の
+#: 手編集を禁じている。したがって新ツールは fixture を書き換えるのではなく、
+#: `tests/mcp/test_all_server_tools_list_diff.py` の `_NEW_TOOL_NAMES` と同じ
+#: 「純増分の明示宣言」で表現する。
+_NEW_VISUALIZE_TOOL_NAMES: set[str] = {"list_visualizations", "get_visualization"}
+
+#: 旧実装に無い機能を追加したことに伴う、fixture の description からの意図的な逸脱。
+#: fixture は手編集できないので、「fixture と違ってよい理由」を1件ずつ人間が
+#: 書き下すことで許可する(`replay.py` の `_STATIC_VALUE_FIELDS` と同じ発想の逆向き)。
+#: キーはツール名、値は現行の期待 description。
+_INTENTIONAL_DESCRIPTION_DIVERGENCE: dict[str, str] = {
+    # 予約 kind(timeline / comparison / domain)をすべて実装したため、
+    # 「予約済み（未実装）: ...」の一文が消えた。文言は RESERVED_KINDS から
+    # 自動生成される(kb_visualize._RESERVED_NOTE)ので、将来 kind を予約すれば
+    # 自動的に復活する。
+    "list_scene_kinds": (
+        "利用可能なシーン種別（テンプレート・必須フィールド・beat 種別）を JSON で返す。"
+        "render_scene の前に必ず呼び、SceneSpec の組み立てに使うこと。"
+    ),
+}
+
+
 def test_tools_list_matches_fixture_descriptions_and_schemas() -> None:
+    """旧3ツールの契約は不変。新ツールは allowlist で純増分として許可する。
+
+    fixture の `count` や配列要素が増えても replay が壊れないのは、
+    `tests/mcp/replay.py::_structural_mismatch` がキー集合と型だけを比較し、
+    値を見ず、list は先頭要素だけを見るため(同ファイルの docstring 参照)。
+    したがって `list_scene_kinds` の応答に scene_kind を足しても
+    fixture の更新は不要。**反射的に fixture を書き換えないこと。**
+    """
     tools_list_fixture = json.loads(TOOLS_LIST_FIXTURE.read_text(encoding="utf-8"))
     expected_tools = {
         tool["name"]: tool for tool in tools_list_fixture["servers"]["kb-visualize"]["tools"]
     }
     actual_tools = {tool.name: tool for tool in list_tools()}
 
-    assert set(actual_tools) == set(expected_tools)
+    assert set(actual_tools) == set(expected_tools) | _NEW_VISUALIZE_TOOL_NAMES
+    # allowlist が「純増分」であること(既存ツール名を紛れ込ませていないこと)。
+    assert _NEW_VISUALIZE_TOOL_NAMES.isdisjoint(expected_tools)
     for name, expected in expected_tools.items():
         actual = actual_tools[name]
-        assert actual.description == expected["description"], name
+        want_description = _INTENTIONAL_DESCRIPTION_DIVERGENCE.get(name, expected["description"])
+        assert actual.description == want_description, name
         assert actual.inputSchema == expected["inputSchema"], name
         expected_task_support = expected.get("execution", {}).get("taskSupport")
         actual_task_support = actual.execution.taskSupport if actual.execution else None

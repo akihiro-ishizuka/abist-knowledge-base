@@ -65,6 +65,8 @@ class JobRunContext:
     job: Job
     emit: EmitFn
     _check_lease: Callable[[], None] | None = None
+    _cancel_requested: Callable[[], bool] | None = None
+    _conn: sqlite3.Connection | None = None
     _finish_state: JobState | None = None
     _finish_result: dict[str, object] | None = None
     _finish_error: dict[str, object] | None = None
@@ -79,6 +81,27 @@ class JobRunContext:
         """
         if self._check_lease is not None:
             self._check_lease()
+
+    def cancel_requested(self) -> bool:
+        """`cancel_job` / `jobs cancel` が要求されていれば True。
+
+        `check_lease()` は**リース喪失(他プロセスへの横取り)しか見ない**。
+        利用者からの明示的なキャンセル要求は別概念であり、こちらで見る。
+        長時間動く子プロセスを持つハンドラは、ポーリング用コールバックとして
+        これを子プロセス側へ渡すこと。
+        """
+        if self._cancel_requested is None:
+            return False
+        return self._cancel_requested()
+
+    @property
+    def conn(self) -> sqlite3.Connection | None:
+        """ハンドラが同じ接続で付随テーブルを書きたい場合に使う。
+
+        `run_job` と同一スレッドで呼ばれるため `check_same_thread` に抵触しない。
+        リース更新スレッドは別接続を開くので競合もしない。
+        """
+        return self._conn
 
     def finish_as(
         self,

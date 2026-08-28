@@ -20,6 +20,7 @@ from mcp.server.lowlevel import NotificationOptions, Server
 from mcp.server.models import InitializationOptions
 
 from abist_kb.config import Settings, load_settings
+from abist_kb.infrastructure.visualization.artifact_store import visualizations_dir
 from abist_kb.presentation.mcp.jobs_tools import JobTools
 from abist_kb.presentation.mcp.jobs_tools import list_tools as jobs_list_tools
 from abist_kb.presentation.mcp.jobs_tools import validate_arguments as validate_jobs_arguments
@@ -34,6 +35,12 @@ from abist_kb.presentation.mcp.kb_download import (
 )
 from abist_kb.presentation.mcp.kb_search import KbSearchTools
 from abist_kb.presentation.mcp.kb_search import list_tools as kb_search_list_tools
+from abist_kb.presentation.mcp.kb_video import KbVideoTools
+from abist_kb.presentation.mcp.kb_video import handlers_for as kb_video_handlers
+from abist_kb.presentation.mcp.kb_video import list_tools as kb_video_list_tools
+from abist_kb.presentation.mcp.kb_video import (
+    validate_arguments as validate_kb_video_arguments,
+)
 from abist_kb.presentation.mcp.kb_visualize import KbVisualizeTools
 from abist_kb.presentation.mcp.kb_visualize import list_tools as kb_visualize_list_tools
 from abist_kb.presentation.mcp.kb_visualize import (
@@ -163,7 +170,7 @@ def build_kb_visualize_server(
     repo_root: Path | None = None,
     reports_dir: Path | None = None,
 ) -> Server[Any, Any]:
-    """kb-visualize サーバー(list_scene_kinds/check_visualize_deps/render_scene)を組み立てる。
+    """kb-visualize サーバー(scene_kinds/deps/render + カタログ2ツール)を組み立てる。
 
     `render` リソースリースの直列化(`CONCURRENT_RENDER` 互換)には SQLite 接続が
     必要なため、`app_db_path` を kb-download と同じ `app.sqlite` に向ける。出力は
@@ -174,9 +181,9 @@ def build_kb_visualize_server(
     server: Server[Any, Any] = Server("kb-visualize", version=_SERVER_VERSION)
     conn: sqlite3.Connection = open_app_db(app_db_path)
     resolved_root = repo_root if repo_root is not None else Path.cwd()
-    resolved_reports = (
+    resolved_reports = visualizations_dir(
         reports_dir if reports_dir is not None else (resolved_root / "reports")
-    ) / "visualizations"
+    )
     tools = KbVisualizeTools(
         conn, docs_dir=docs_dir, reports_dir=resolved_reports, repo_root=resolved_root
     )
@@ -194,6 +201,8 @@ def build_kb_visualize_server(
             "list_scene_kinds": tools.list_scene_kinds,
             "check_visualize_deps": tools.check_visualize_deps,
             "render_scene": tools.render_scene,
+            "list_visualizations": tools.list_visualizations,
+            "get_visualization": tools.get_visualization,
         }.get(name)
         if handler is None:
             return error_result(f"未知のツールです: {name}")
@@ -266,6 +275,9 @@ def build_kb_admin_server(
 
     @server.call_tool(validate_input=False)
     async def _call_tool(name: str, arguments: dict[str, Any]) -> types.CallToolResult:
+        validation_error = validate_kb_video_arguments(name, arguments)
+        if validation_error is not None:
+            return validation_error
         validation_error = validate_kb_admin_arguments(name, arguments)
         if validation_error is not None:
             return validation_error
@@ -326,7 +338,7 @@ def build_all_server(
     visualize_tools = KbVisualizeTools(
         conn,
         docs_dir=resolved.docs_dir,  # type: ignore[arg-type]
-        reports_dir=resolved.reports_dir / "visualizations",  # type: ignore[operator]
+        reports_dir=visualizations_dir(resolved.reports_dir),
         repo_root=resolved.root_dir,
     )
     job_tools = JobTools(
@@ -339,6 +351,14 @@ def build_all_server(
         repo_root=resolved.root_dir,
     )
     admin_tools = KbAdminTools(ServiceContainer(resolved))
+    # 動画は `reports/` のベースをそのまま受け取る（`videos_dir` はこの層より内側で導出）
+    video_tools = KbVideoTools(
+        conn,
+        docs_dir=resolved.docs_dir,  # type: ignore[arg-type]
+        reports_dir=resolved.reports_dir,  # type: ignore[arg-type]
+        repo_root=resolved.root_dir,
+        job_tools=job_tools,
+    )
 
     handlers: dict[str, Any] = {
         "search_kb": search_tools.search_kb,
@@ -356,6 +376,8 @@ def build_all_server(
         "list_scene_kinds": visualize_tools.list_scene_kinds,
         "check_visualize_deps": visualize_tools.check_visualize_deps,
         "render_scene": visualize_tools.render_scene,
+        "list_visualizations": visualize_tools.list_visualizations,
+        "get_visualization": visualize_tools.get_visualization,
         "start_run_batch": job_tools.start_run_batch,
         "start_download_esa_post": job_tools.start_download_esa_post,
         "start_download_esa_category": job_tools.start_download_esa_category,
@@ -368,6 +390,8 @@ def build_all_server(
         "get_batch": job_tools.get_batch,
         "list_corpora": job_tools.list_corpora,
         "system_status": job_tools.system_status,
+        "start_render_video": job_tools.start_render_video,
+        **kb_video_handlers(video_tools),
         **kb_admin_handlers(admin_tools),
     }
 
@@ -378,6 +402,7 @@ def build_all_server(
             *kb_download_list_tools(),
             *kb_visualize_list_tools(),
             *jobs_list_tools(),
+            *kb_video_list_tools(),
             *kb_admin_list_tools(),
         ]
 

@@ -9,9 +9,11 @@
 
 from __future__ import annotations
 
+import os
 import shutil
+import subprocess
 import sys
-from importlib.util import find_spec
+from pathlib import Path
 from typing import Literal, TypedDict
 
 import typer
@@ -22,6 +24,7 @@ from abist_kb.infrastructure.db.connection import (
     MIN_SQLITE_VERSION,
     check_sqlite_capabilities,
 )
+from abist_kb.infrastructure.visualization.manim_runner import visualize_python_path
 from abist_kb.presentation.cli.context import get_context
 from abist_kb.presentation.console.presenter import Presenter
 from abist_kb.presentation.console.theme import TOKEN_STYLES, SemanticToken
@@ -202,14 +205,114 @@ def _check_ffmpeg() -> CheckResult:
     )
 
 
+#: 可視化用 venv の import 検査に許す時間。通常は1〜2秒で返る。壊れた venv
+#: (site-packages 破損・インストール途中で失敗)がぶら下がる場合の保険。
+_MANIM_PROBE_TIMEOUT_SECONDS = 10.0
+
+_MANIM_HINT = (
+    "scripts\\bootstrap-visualize.bat を実行してください(図解の自動生成機能が制限されます)。"
+)
+
+
 def _check_manim() -> CheckResult:
-    if find_spec("manim") is not None:
-        return _result("manim", "ok", "Manim を検出しました。")
+    """可視化用 venv で manim が実際に import できるかを見る。
+
+    主 venv の `find_spec("manim")` は見ない。manim は主 venv(Python 3.12・uv 管理)
+    ではなく `.venv-visualize`(Python 3.11)に入るため、主 venv を見ると構造的に
+    必ず NG になる。逆に `python.exe` の存在だけでは、venv が壊れていても(manim が
+    入っていない・pip install が途中で落ちた)「OK」と報告してしまう。import が
+    通ることまで確認するのが唯一正しい判定。
+
+    `check_visualize_deps` は使わない -- 診断スクリプト全体(ffmpeg・フォント照会を
+    含む)を最大30秒かけて回すのは doctor には重い。ここは import 1つに絞る。
+    """
+    python_path = visualize_python_path()
+    if python_path is None:
+        return _result("manim", "warn", "可視化用の venv がありません。", hint=_MANIM_HINT)
+    try:
+        completed = subprocess.run(  # noqa: S603
+            [str(python_path), "-c", "import manim; print(manim.__version__)"],
+            capture_output=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=_MANIM_PROBE_TIMEOUT_SECONDS,
+            shell=False,
+        )
+    except subprocess.TimeoutExpired:
+        return _result(
+            "manim", "warn", "可視化用の venv が応答しません(タイムアウト)。", hint=_MANIM_HINT
+        )
+    except OSError:
+        return _result("manim", "warn", "可視化用の venv を実行できません。", hint=_MANIM_HINT)
+    if completed.returncode == 0:
+        version = completed.stdout.strip() or "(版不明)"
+        return _result("manim", "ok", f"Manim {version} を検出しました。")
     return _result(
-        "manim",
+        "manim", "warn", "venv はありますが manim を import できません。", hint=_MANIM_HINT
+    )
+
+
+def _check_video_captions() -> CheckResult:
+    """テロップ焼き込みに要るフォントがあるか。
+
+    **動画にナレーション音声は無い。** 台本の文はテロップとして映像へ焼き込まれ、
+    視聴者は音を切ったままでも内容を追える。だから外部 TTS の設定は検査しない
+    （そもそも使わない）。代わりに、焼き込みに使う日本語フォントの有無を見る。
+    YouTube 認証の検査も行わない（自動投稿は実装しないため）。
+    """
+    from abist_kb.application.video.subtitles import BURN_IN_FONT_SIZE
+
+    font_dirs = [
+        Path(os.environ.get("SYSTEMROOT", r"C:\Windows")) / "Fonts",
+        Path.home() / "AppData" / "Local" / "Microsoft" / "Windows" / "Fonts",
+    ]
+    found = any(
+        directory.is_dir() and any(directory.glob(pattern))
+        for directory in font_dirs
+        for pattern in ("YuGoth*", "meiryo*", "msgothic*")
+    )
+    if found:
+        return _result(
+            "video_captions",
+            "ok",
+            f"テロップ用の日本語フォントを検出しました（焼き込み {BURN_IN_FONT_SIZE['16:9']}pt）。",
+        )
+    return _result(
+        "video_captions",
         "warn",
-        "Manim が見つかりません。",
-        hint="`uv add manim` 等でインストールしてください(図解の自動生成機能が制限されます)。",
+        "テロップ焼き込みに使う日本語フォント（Yu Gothic UI / Meiryo）が見つかりません。",
+        hint="フォントが無いと焼き込んだ字幕が豆腐になります。"
+        "KB_VISUALIZE_FONT で別のフォントを指定できます。",
+    )
+
+
+def _check_video_capture() -> CheckResult:
+    """画面キャプチャの有効/無効と、登録済みプロファイルの有無。
+
+    **既定は無効。** 無効であることは正常なので ok として報告する
+    （警告にすると「有効化すべき」という誤ったシグナルになる）。
+    """
+    from abist_kb.application.video.capture_planner import list_profiles
+    from abist_kb.domain.capture_spec import is_capture_enabled
+
+    enabled = is_capture_enabled(dict(os.environ))
+    if not enabled:
+        return _result(
+            "video_capture",
+            "ok",
+            "画面キャプチャは無効です（既定）。",
+            hint="有効にするには ABIST_KB_VIDEO_CAPTURE_ENABLED=1 を設定し、"
+            "config/capture-profiles.json へプロファイルを登録してください。",
+        )
+    profiles = list_profiles(Path(__file__).resolve().parents[3])
+    if profiles:
+        return _result("video_capture", "ok", f"有効。登録済みプロファイル: {', '.join(profiles)}")
+    return _result(
+        "video_capture",
+        "warn",
+        "画面キャプチャは有効ですが、登録済みプロファイルがありません。",
+        hint="config/capture-profiles.json にプロファイルを登録してください"
+        "（MCP/API から起動コマンドは渡せません）。",
     )
 
 
@@ -227,6 +330,8 @@ def _run_checks(settings: Settings) -> list[CheckResult]:
         _check_data_dir(settings),
         _check_ffmpeg(),
         _check_manim(),
+        _check_video_captions(),
+        _check_video_capture(),
     ]
 
 

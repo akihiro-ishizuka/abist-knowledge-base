@@ -248,8 +248,12 @@ Python移植前に現行3サーバーへ固定リクエストfixtureを送って
 
 - バッチ／取得: `start_run_batch`、`start_download_esa_post`、`start_download_esa_category`、`start_download_esa_search`、`start_download_web`、`start_download_git`
 - 可視化: `start_render_scene`
+- 動画: `start_render_video`
 - ジョブ操作: `job_status`、`cancel_job`
 - 新規参照: `get_batch`、`list_corpora`、`system_status`
+- 動画（同期）: `plan_video`、`create_video_project`、`video_status`、`get_video`、`list_videos`、`run_video_qa`、`approve_video`、`set_distribution`、`request_public_review`、`list_capture_profiles`
+
+動画ツールは統合サーバー `all` にのみ追加する（互換3サーバーは3キーのまま変えない）。`upload_youtube` の類は**追加しない** —— 外部への自動投稿は実装せず、人が手動でアップロードするための成果物一式（`video-metadata.json` ほか）だけを作る。
 
 `start_*`は`{ok:true, job_id, state:"queued"}`を返す。新規ツールは統合サーバー`all`および対応する互換サーバーに追加できるが、既存ツールのスキーマや応答へフィールドを追加しない。MCP stdioではstdoutをJSON-RPC専用とし、Richを初期化せず、ログはstderrへ送る。
 

@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "アプリ画面キャプチャの登録簿の雛形。config/capture-profiles.json へコピーして使う。",
+    "MCP / API / CLI が渡せるのはここに書いたプロファイル名だけで、",
+    "launch.command は必ずこのファイルの内容が使われる（外部から差し替えられない）。",
+    "キャプチャ機能は既定で無効。ABIST_KB_VIDEO_CAPTURE_ENABLED=1 で有効になる。",
+    "トークン等の秘密情報はここへ書かない（git の資格情報に委ねる）。"
+  ],
+  "profiles": {
+    "pattern-editor": {
+      "repo": {
+        "url": "https://example.invalid/internal/pattern-editor.git",
+        "ref": "main"
+      },
+      "launch": {
+        "type": "web",
+        "command": ["uv", "run", "python", "-m", "app", "--port", "8765"],
+        "url": "http://127.0.0.1:8765/",
+        "ready_timeout_sec": 60
+      },
+      "shots": [
+        {
+          "id": "editor-home",
+          "scene_id": "s04",
+          "selector": "#main",
+          "wait_ms": 800,
+          "mask": ["#user-name", ".api-token"]
+        }
+      ]
+    }
+  }
+}

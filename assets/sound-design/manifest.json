@@ -1,0 +1,253 @@
+{
+  "preset": "professional-v3",
+  "license_note": "社内制作の合成音。外部素材を含まない。",
+  "assets": [
+    {
+      "id": "startup_soft_01",
+      "categories": [
+        "startup"
+      ],
+      "path": "professional/startup_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "999d87678f4e15c910a80b4bb3c003d0a90f992f6bbc0faf826c3efac01c5311",
+      "duration_ms": 1300
+    },
+    {
+      "id": "startup_soft_02",
+      "categories": [
+        "startup"
+      ],
+      "path": "professional/startup_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "058063421be04ac1a488ccab275656ee974212f69c58496b5df7c41c07d70b26",
+      "duration_ms": 1300
+    },
+    {
+      "id": "transition_soft_01",
+      "categories": [
+        "transition"
+      ],
+      "path": "professional/transition_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "b0f75a4610a5e121c854bd2f6c7732450fb8e3f78f8dd50e0838b812088b6ba4",
+      "duration_ms": 720
+    },
+    {
+      "id": "transition_soft_02",
+      "categories": [
+        "transition"
+      ],
+      "path": "professional/transition_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "5e2b7e273e87d1b1bd510bfe0fa733e42084bcdb2e735144683d4433c2c56cf1",
+      "duration_ms": 720
+    },
+    {
+      "id": "accent_soft_01",
+      "categories": [
+        "accent"
+      ],
+      "path": "professional/accent_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "23073ceaeb05df6eb37bacf673b37ea84c4ced1942fab8e11e2f8fcc3c5465a8",
+      "duration_ms": 480
+    },
+    {
+      "id": "accent_soft_02",
+      "categories": [
+        "accent"
+      ],
+      "path": "professional/accent_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "34a01658f98d3542cc3969fedce967a56f8a5c06d2ea171cba1d373b5c758688",
+      "duration_ms": 480
+    },
+    {
+      "id": "swipe_soft_01",
+      "categories": [
+        "swipe"
+      ],
+      "path": "professional/swipe_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "95da4954dbc788085b19bb3385a21bb048bf09fd53847541c67302af027e4a79",
+      "duration_ms": 680
+    },
+    {
+      "id": "branch_soft_01",
+      "categories": [
+        "branch"
+      ],
+      "path": "professional/branch_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "7aa3162b9699c5fe8aff20bce79e3955ba8bd343e765eee8854c6422ca3c9b43",
+      "duration_ms": 780
+    },
+    {
+      "id": "caution_soft_01",
+      "categories": [
+        "caution"
+      ],
+      "path": "professional/caution_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "83cf8c3ba022d9349d5bea5b3673640c4f57c255233fa861550e81eb03878f6a",
+      "duration_ms": 900
+    },
+    {
+      "id": "caution_soft_02",
+      "categories": [
+        "caution"
+      ],
+      "path": "professional/caution_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "75a9b87d03b8a3a9efef9341ca199f5c151bb4f162122473c1a6451ae24771fe",
+      "duration_ms": 900
+    },
+    {
+      "id": "complete_soft_01",
+      "categories": [
+        "complete"
+      ],
+      "path": "professional/complete_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "ec4da54655ea82d693948a3e4b9198c7e1a809751ccbf7914b0de22dd785f10c",
+      "duration_ms": 1100
+    },
+    {
+      "id": "complete_soft_02",
+      "categories": [
+        "complete"
+      ],
+      "path": "professional/complete_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "925292983809134dbd8dff4d1595b14a630eb7ab92cfa0f565a3c0ac9d3743aa",
+      "duration_ms": 1100
+    },
+    {
+      "id": "error_soft_01",
+      "categories": [
+        "error"
+      ],
+      "path": "professional/error_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "11ed3eac2698a04d4bd31890003d65b63158eb738773688851f51caf64a0fd76",
+      "duration_ms": 720
+    },
+    {
+      "id": "ending_soft_01",
+      "categories": [
+        "ending"
+      ],
+      "path": "professional/ending_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "c5231b5a371556e498342a8d9077146a09ed2840b92fa63634e4993874e46ff3",
+      "duration_ms": 1650
+    },
+    {
+      "id": "tick_soft_01",
+      "categories": [
+        "tick"
+      ],
+      "path": "professional/tick_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "53ccc5ceab8d1e99662db7e0cf5df343f5237db20129168bb2bd5edaa506f418",
+      "duration_ms": 100
+    },
+    {
+      "id": "tick_soft_02",
+      "categories": [
+        "tick"
+      ],
+      "path": "professional/tick_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "0e821a576a27e6eabcc584fedfbdca76e06240aed21c248ff0c4679ca417aa19",
+      "duration_ms": 100
+    },
+    {
+      "id": "whoosh_soft_01",
+      "categories": [
+        "whoosh"
+      ],
+      "path": "professional/whoosh_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "701af04ae7f3cbd90690bc4b0e827ce55be0338e6577f86b06fbfcf3ed42c7cf",
+      "duration_ms": 360
+    },
+    {
+      "id": "whoosh_soft_02",
+      "categories": [
+        "whoosh"
+      ],
+      "path": "professional/whoosh_soft_02.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "cec706b5080f86dbd583debd841f19e59940dd064b56f0a4433dd108d4fb4940",
+      "duration_ms": 360
+    },
+    {
+      "id": "chart_soft_01",
+      "categories": [
+        "chart"
+      ],
+      "path": "professional/chart_soft_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal SFX pack v3 (layered synthesis)",
+      "sha256": "0f5561061ed0946c6f1206b0b4c587500f5d637268c26738b41ca94f96bdcf8d",
+      "duration_ms": 680
+    }
+  ],
+  "bgm": [
+    {
+      "id": "bgm_neutral_report_01",
+      "mood": "neutral",
+      "path": "bgm/bgm_neutral_report_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal BGM pack v1 (layered synthesis)",
+      "sha256": "d582eb151b497c664a10fa2ae9a5b6e0b32485ff32b99cef3d321e28ce599ae2",
+      "duration_ms": 11349,
+      "bpm": 84,
+      "loop": true,
+      "note": "報告・進捗向けの落ち着いたパッド"
+    },
+    {
+      "id": "bgm_upbeat_tutorial_01",
+      "mood": "upbeat",
+      "path": "bgm/bgm_upbeat_tutorial_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal BGM pack v1 (layered synthesis)",
+      "sha256": "8640009c19f69ee373ef305e235ac83db8db3e782edce58516b24707fe685714",
+      "duration_ms": 9151,
+      "bpm": 104,
+      "loop": true,
+      "note": "手順・チュートリアル向けの軽いアルペジオ"
+    },
+    {
+      "id": "bgm_calm_training_01",
+      "mood": "calm",
+      "path": "bgm/bgm_calm_training_01.wav",
+      "license": "in-house",
+      "attribution": "Abist internal BGM pack v1 (layered synthesis)",
+      "sha256": "175d0e83832d15f244967b4ef86b0700b493f2be13315d2b6acbe2d905354bef",
+      "duration_ms": 13253,
+      "bpm": 72,
+      "loop": true,
+      "note": "研修・教材向けの静かなパッド"
+    }
+  ]
+}

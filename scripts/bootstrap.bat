@@ -7,10 +7,12 @@ rem   scripts\bootstrap.bat
 rem   scripts\bootstrap.bat --skip-embed
 rem   scripts\bootstrap.bat --dry-run-register
 rem   scripts\bootstrap.bat --root C:\path\to\kb
+rem   scripts\bootstrap.bat --with-visualize
 
 set "ROOT="
 set "SKIP_EMBED=0"
 set "DRY_RUN_REGISTER=0"
+set "WITH_VISUALIZE=0"
 
 :parse_args
 if "%~1"=="" goto args_done
@@ -21,6 +23,11 @@ if /I "%~1"=="--skip-embed" (
 )
 if /I "%~1"=="--dry-run-register" (
   set "DRY_RUN_REGISTER=1"
+  shift
+  goto parse_args
+)
+if /I "%~1"=="--with-visualize" (
+  set "WITH_VISUALIZE=1"
   shift
   goto parse_args
 )
@@ -35,7 +42,7 @@ if /I "%~1"=="--root" (
   goto parse_args
 )
 echo [ERROR] Unknown argument: %~1
-echo Valid: --root DIR  --skip-embed  --dry-run-register
+echo Valid: --root DIR  --skip-embed  --dry-run-register  --with-visualize
 exit /b 2
 
 :args_done
@@ -57,12 +64,12 @@ if errorlevel 1 (
   exit /b 3
 )
 
-echo ==> root: %ROOT%
-echo ==> uv sync
+echo ==^> root: %ROOT%
+echo ==^> uv sync
 uv sync
 if errorlevel 1 exit /b 1
 
-echo ==> abist-kb init
+echo ==^> abist-kb init
 uv run abist-kb --root "%ROOT%" init
 if errorlevel 1 exit /b 1
 
@@ -72,7 +79,7 @@ if not exist "%ROOT%\docs\" (
 )
 
 if "%DRY_RUN_REGISTER%"=="1" (
-  echo ==> document register-disk ^(dry-run^)
+  echo ==^> document register-disk ^(dry-run^)
   uv run abist-kb --root "%ROOT%" document register-disk
   if errorlevel 1 exit /b 1
   echo.
@@ -81,20 +88,28 @@ if "%DRY_RUN_REGISTER%"=="1" (
   exit /b 0
 )
 
-echo ==> document register-disk --apply
+echo ==^> document register-disk --apply
 uv run abist-kb --root "%ROOT%" document register-disk --apply
 if errorlevel 1 exit /b 1
 
-echo ==> index build --corpus work
+echo ==^> index build --corpus work
 uv run abist-kb --root "%ROOT%" index build --corpus work
 if errorlevel 1 exit /b 1
 
 if "%SKIP_EMBED%"=="1" (
-  echo ==> skipped index embed
+  echo ==^> skipped index embed
 ) else (
-  echo ==> index embed --corpus work
+  echo ==^> index embed --corpus work
   uv run abist-kb --root "%ROOT%" index embed --corpus work
   if errorlevel 1 exit /b 1
+)
+
+if "%WITH_VISUALIZE%"=="1" (
+  echo ==^> bootstrap-visualize
+  call "%~dp0bootstrap-visualize.bat" --root "%ROOT%"
+  if errorlevel 1 exit /b 1
+) else (
+  echo ==^> skipped kb-visualize setup ^(pass --with-visualize to install Manim^)
 )
 
 echo.

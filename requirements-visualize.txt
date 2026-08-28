@@ -1,0 +1,51 @@
+# kb-visualize (Manim rendering) Python dependencies -- Python 3.11 ONLY.
+#
+# Why a separate interpreter: pyproject.toml pins requires-python "==3.12.*" and
+# its .venv is uv-managed; `uv sync` would prune anything pip-installed there.
+# manim_runner.resolve_python() therefore spawns a separate interpreter
+# (KB_VISUALIZE_PYTHON -> .venv-visualize -> py).
+#
+# Setup (use `py`; plain `python` is a Windows Store stub):
+#   scripts\bootstrap-visualize.bat
+#
+# Regenerate this file with:
+#   .venv-visualize\Scripts\python.exe -m pip freeze --exclude pip --exclude setuptools
+#
+# NOTE: keep this file ASCII-only. pip decodes it with the locale encoding
+#       (cp932 on this machine) and non-ASCII bytes break the install.
+#
+# Direct dependency is manim only; the rest is the transitive set proven to
+# render on Python 3.11.9 / Windows 11 / ffmpeg 8.0.1.
+av==13.1.0
+beautifulsoup4==4.15.0
+click==8.4.2
+cloup==3.1.0
+colorama==0.4.6
+decorator==5.3.1
+glcontext==3.0.0
+isosurfaces==0.1.2
+manim==0.19.0
+ManimPango==0.6.1
+mapbox_earcut==2.0.0
+markdown-it-py==4.2.0
+mdurl==0.1.2
+moderngl==5.12.0
+moderngl-window==3.1.1
+networkx==3.6.1
+numpy==2.4.6
+pillow==12.3.0
+pycairo==1.29.0
+pydub==0.25.1
+pyglet==2.1.15
+pyglm==2.8.3
+Pygments==2.20.0
+rich==15.0.0
+scipy==1.17.1
+screeninfo==0.8.1
+skia-pathops==0.9.2
+soupsieve==2.9.1
+srt==3.5.3
+svgelements==1.9.6
+tqdm==4.70.0
+typing_extensions==4.16.0
+watchdog==6.0.0

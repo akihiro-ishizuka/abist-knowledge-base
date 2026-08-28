@@ -40,6 +40,8 @@ _EXPECTED_KINDS = frozenset(
         "kb_download_web",
         "kb_download_git",
         "render_scene",
+        # 動画レンダリング（video Phase 10）。`render` 区画を render_scene と共有する。
+        "render_video",
     }
 )
 

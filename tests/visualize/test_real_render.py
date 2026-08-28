@@ -1,8 +1,13 @@
 """実 Manim レンダリングの統合検証(M7 task-3 ゲート): `KB_RUN_MANIM_TESTS=1` で有効化。
 
 Manim/ffmpeg のインストールを要するため既定はスキップする(`test_embedding.py`
-の `KB_RUN_MODEL_TESTS` と同じゲート方式)。`KB_VISUALIZE_PYTHON` で Manim 済みの
-インタープリタを指定する(例: 隣接する旧リポジトリの `.venv-visualize`)。
+の `KB_RUN_MODEL_TESTS` と同じゲート方式)。
+
+`scripts\\bootstrap-visualize.bat` でリポジトリ直下に `.venv-visualize` を作れば
+**`KB_VISUALIZE_PYTHON` の指定は不要**。このテストは `repo_root` だけを渡し、
+`renderer.render_scene` -> `manim_runner.resolve_python(root=repo_root)` が
+`<repo>/.venv-visualize/Scripts/python.exe` を自力で見つける。
+`KB_VISUALIZE_PYTHON` は「別の場所の venv を使いたいとき」だけの上書き手段。
 
 `design/plans/M6-M10-remaining.md` M7 のゲート「実 Manim レンダリング(明示フラグ時)
 で manifest sha256 検証成功」を満たすことを実測する。
@@ -28,8 +33,8 @@ pytestmark_manim = pytest.mark.skipif(
     not _run_manim_tests,
     reason=(
         "実 Manim レンダリング(子プロセス起動・数秒〜数十秒)を伴うため既定はスキップ。"
-        "KB_RUN_MANIM_TESTS=1 と KB_VISUALIZE_PYTHON(Manim 済みインタープリタ)を"
-        "指定すると実行する。"
+        "KB_RUN_MANIM_TESTS=1 で実行する(scripts\\bootstrap-visualize.bat 済みなら"
+        "KB_VISUALIZE_PYTHON の指定は不要)。"
     ),
 )
 
@@ -99,3 +104,149 @@ def test_real_manim_render_produces_manifest_with_verified_sha256(tmp_path: Path
 
 
 __all__ = []
+
+
+@pytestmark_manim
+@pytest.mark.slow
+def test_timeline_renders_to_png_with_verified_sha256(tmp_path: Path) -> None:
+    """timeline の実レンダリング smoke(png は save_last_frame で mp4 より桁違いに速い)。"""
+    doc_text = "行1\n行2\n行3\n"
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "t.md").write_text(doc_text, encoding="utf-8")
+    spec = {
+        "schema_version": "1.0",
+        "scene_kind": "timeline",
+        "output_format": "png",
+        "template": "timeline_v1",
+        "title": "経緯の実レンダリング",
+        "sources": [
+            {
+                "id": "s1",
+                "path": "t.md",
+                "start_line": 1,
+                "end_line": 2,
+                "content_hash": range_hash(doc_text, 1, 2).hash,
+            }
+        ],
+        "beats": [
+            {
+                "type": "timeline_point",
+                "at": "2026-05-14",
+                "label": "統合方針を決定",
+                "description": "抽出→提案→編集→出力を単一アプリへ",
+                "source_refs": ["s1"],
+            },
+            {
+                "type": "timeline_point",
+                "at": "6/11 定例",
+                "label": "VDI 要件を追加",
+                "source_refs": ["s1"],
+            },
+        ],
+    }
+    outcome = render_scene(
+        spec, docs_dir=docs_dir, reports_dir=tmp_path / "out", repo_root=REPO_ROOT
+    )
+    assert outcome.ok, (outcome.code, outcome.errors, outcome.stderr_tail)
+    manifest = json.loads(Path(outcome.manifest_path).read_text(encoding="utf-8"))
+    for entry in manifest["outputs"]:
+        produced = Path(outcome.output_dir) / entry["path"]
+        digest = hashlib.sha256(produced.read_bytes()).hexdigest()
+        assert digest == entry["sha256"]
+
+
+@pytestmark_manim
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    ("scene_kind", "template", "beats"),
+    [
+        (
+            "comparison",
+            "comparison_v1",
+            [
+                {
+                    "type": "comparison_item",
+                    "side": "現行版",
+                    "aspect": "UI",
+                    "text": "Excel/VBA",
+                    "source_refs": ["s1"],
+                },
+                {
+                    "type": "comparison_item",
+                    "side": "次期版",
+                    "aspect": "UI",
+                    "text": "単一アプリ",
+                    "source_refs": ["s1"],
+                },
+                {
+                    "type": "comparison_item",
+                    "side": "次期版",
+                    "aspect": "配布",
+                    "text": "onedir",
+                    "source_refs": ["s1"],
+                },
+            ],
+        ),
+        (
+            "domain",
+            "domain_map_v1",
+            [
+                {
+                    "type": "domain_entity",
+                    "name": "extractor",
+                    "group": "抽出",
+                    "source_refs": ["s1"],
+                },
+                {
+                    "type": "domain_entity",
+                    "name": "editor",
+                    "group": "編集",
+                    "description": "単一アプリの中核",
+                    "source_refs": ["s1"],
+                },
+                {
+                    "type": "domain_relation",
+                    "from": "extractor",
+                    "to": "editor",
+                    "label": "抽出データ",
+                    "source_refs": ["s1"],
+                },
+            ],
+        ),
+    ],
+    ids=["comparison", "domain"],
+)
+def test_new_scene_kinds_render_to_png_with_verified_sha256(
+    tmp_path: Path, scene_kind: str, template: str, beats: list
+) -> None:
+    """comparison / domain の実レンダリング smoke。"""
+    doc_text = "行1\n行2\n行3\n"
+    docs_dir = tmp_path / "docs"
+    docs_dir.mkdir()
+    (docs_dir / "t.md").write_text(doc_text, encoding="utf-8")
+    spec = {
+        "schema_version": "1.0",
+        "scene_kind": scene_kind,
+        "output_format": "png",
+        "template": template,
+        "title": f"{scene_kind} の実レンダリング",
+        "sources": [
+            {
+                "id": "s1",
+                "path": "t.md",
+                "start_line": 1,
+                "end_line": 2,
+                "content_hash": range_hash(doc_text, 1, 2).hash,
+            }
+        ],
+        "beats": beats,
+    }
+    outcome = render_scene(
+        spec, docs_dir=docs_dir, reports_dir=tmp_path / "out", repo_root=REPO_ROOT
+    )
+    assert outcome.ok, (outcome.code, outcome.errors, outcome.stderr_tail)
+    manifest = json.loads(Path(outcome.manifest_path).read_text(encoding="utf-8"))
+    for entry in manifest["outputs"]:
+        produced = Path(outcome.output_dir) / entry["path"]
+        assert hashlib.sha256(produced.read_bytes()).hexdigest() == entry["sha256"]

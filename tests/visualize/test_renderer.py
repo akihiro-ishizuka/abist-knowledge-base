@@ -111,7 +111,7 @@ def test_python_not_found_fails_after_source_verification(docs_dir, reports_dir)
 
 
 def test_successful_render_writes_manifest_with_sha256(docs_dir, reports_dir):
-    def fake_run_process(*, python_path, args, timeout_seconds, cwd):
+    def fake_run_process(*, python_path, args, timeout_seconds, cwd, **_kwargs):
         outdir = Path(args[args.index("--outdir") + 1])
         output_file = outdir / "output.mp4"
         output_file.write_bytes(b"fake video bytes")
@@ -138,7 +138,7 @@ def test_successful_render_writes_manifest_with_sha256(docs_dir, reports_dir):
 
 
 def test_render_timeout_writes_manifest_and_fails(docs_dir, reports_dir):
-    def fake_run_process(*, python_path, args, timeout_seconds, cwd):
+    def fake_run_process(*, python_path, args, timeout_seconds, cwd, **_kwargs):
         return ProcessResult(exit_code=None, stdout="", stderr="", timed_out=True)
 
     outcome = render_scene(
@@ -156,7 +156,7 @@ def test_render_timeout_writes_manifest_and_fails(docs_dir, reports_dir):
 
 
 def test_manim_not_found_propagates_code_from_payload(docs_dir, reports_dir):
-    def fake_run_process(*, python_path, args, timeout_seconds, cwd):
+    def fake_run_process(*, python_path, args, timeout_seconds, cwd, **_kwargs):
         payload = json.dumps(
             {"ok": False, "code": "MANIM_NOT_FOUND", "error": "no module named manim"}
         )
@@ -175,7 +175,7 @@ def test_manim_not_found_propagates_code_from_payload(docs_dir, reports_dir):
 
 
 def test_output_not_found_when_process_reports_success_but_file_missing(docs_dir, reports_dir):
-    def fake_run_process(*, python_path, args, timeout_seconds, cwd):
+    def fake_run_process(*, python_path, args, timeout_seconds, cwd, **_kwargs):
         payload = json.dumps({"ok": True, "output": "output.mp4"})
         return ProcessResult(exit_code=0, stdout=payload, stderr="", timed_out=False)
 

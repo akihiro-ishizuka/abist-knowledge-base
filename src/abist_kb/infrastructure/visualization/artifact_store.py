@@ -15,6 +15,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+
+def visualizations_dir(reports_dir: Path) -> Path:
+    """`reports_dir` から可視化成果物ディレクトリを導出する唯一の関数。
+
+    規約: **`reports_dir` は常にベースの `reports/`**(`Settings.reports_dir` と同義)。
+    以前は呼び出し側ごとに「ベースの reports/ か、visualizations まで含んだ値か」の
+    解釈が割れており、`reports/visualizations/visualizations` を作りうる状態だった。
+    導出をこの関数1つに集約して語義を固定する。
+    """
+    return reports_dir / "visualizations"
+
+
 #: Windows で予約されているベース名(大文字小文字を問わない)
 _WINDOWS_RESERVED = (
     {"con", "prn", "aux", "nul"}
