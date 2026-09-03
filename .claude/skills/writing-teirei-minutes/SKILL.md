@@ -54,7 +54,8 @@ Verify after publishing: `GET /v1/teams/abist/posts/<number>` → `name` must eq
      ```
 4. **Update each 案件 section** with the standard anatomy (below). Only report this week's delta; collapse prior context into a `> **先週報告済み**：…` line.
 5. **Refresh the cross-cutting sections:** top トピックサマリー, 俯瞰表 (スケジュール・課題一覧), 直近の関連議事録 (new posts only), 次アクション. Keep these consistent with the section edits.
-6. **Publish (only when asked).** See "Publishing to esa" below. Write `post_number` / `url` back into the frontmatter and flip `managed_by` to `esa-sync`.
+6. **Polish the prose with `natural-japanese`** before publishing. Run it over the assembled doc (quick mode is enough for a normal week) to strip AI臭さ・翻訳調・単調なリズム. It does **not** know this team's jargon or the `**` spacing rule, so still apply the Plain-language rule and Conventions below — the two are complementary, not alternatives.
+7. **Publish (only when asked).** See "Publishing to esa" below. Write `post_number` / `url` back into the frontmatter and flip `managed_by` to `esa-sync`.
 
 ## Publishing to esa
 

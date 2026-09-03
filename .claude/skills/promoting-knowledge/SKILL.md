@@ -89,7 +89,16 @@ status: active
 `document_type: knowledge` と `managed_by: human` を付けてください。
 これで自動同期の対象外になり、esa 由来の議事録とは別に管理されます。
 
-### 5. 人間のレビューに出す
+### 5. natural-japanese で文章を整える
+
+草案が固まったら `natural-japanese` スキルを通します。議事録から起こした文章は
+発言の断片が残って読みにくくなりがちで、AI に清書させると今度は翻訳調になります。
+どちらも lint が機械的に拾います。通常はクイックで十分です。
+
+内容の取捨選択（何を恒久知識として残すか）はこの工程では変えません。
+あくまで文章の読みやすさだけを直します。
+
+### 6. 人間のレビューに出す
 
 草案を提示して、次を確認してもらいます。
 
@@ -123,5 +132,6 @@ esa 側に作れば次回の同期で `source: esa` として取り込まれ、�
 | --- | --- |
 | ナレッジベースを検索する | `searching-kb` スキル |
 | 議事録そのものを書く | `writing-teirei-minutes` スキル |
-| esa に記事を作る・更新する | `managing-esa-posts` スキル |
+| esa に記事を作る・更新する | esa API を直接叩く（`managing-esa-posts` スキルは存在しない。`EsaClient` は読み取り専用） |
+| 日本語の文章を読みやすくする | `natural-japanese` スキル |
 | 重複した文書を整理する | `npm run duplicates` → `reports/duplicates.md` |

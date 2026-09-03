@@ -95,3 +95,12 @@ backup/
 
 # Project-local agent worktrees
 .worktrees/
+
+# esa 作業用スクラッチ / WaWaOffice から取得した申請データ
+_esa_work/
+_esa_rev/
+
+# Agent skills: .agents/ is the tracked source of truth.
+# .claude/skills/<name> is a machine-local junction/symlink into it
+# (absolute path, so it must not be committed). Recreate with `npx skills sync`.
+/.claude/skills/natural-japanese/
