@@ -14,7 +14,7 @@ from unittest import mock
 
 import pytest
 
-from abist_kb.application.sync_service import SyncService, _resolve_git_repository
+from abist_kb.application.sync_service import SyncService
 from abist_kb.config import Settings
 from abist_kb.domain.errors import AppError, ErrorCode
 from abist_kb.infrastructure.db.batches_repo import BatchRepository
@@ -26,7 +26,6 @@ from abist_kb.infrastructure.sources.web import DEFAULT_DELAY_SECONDS, HostRateL
 
 from .conftest import FAKE_TOKEN, MockEsaServer
 from .test_esa import make_post
-from .test_git import make_upstream
 from .test_web import WebPageServer
 
 
@@ -181,24 +180,18 @@ def test_sync_batch_web_crawls_and_writes_report(tmp_root: Path, web_server: Web
     assert len(saved) == 1
 
 
-def test_sync_batch_git_mirrors_and_writes_report(tmp_root: Path) -> None:
-    upstream = make_upstream(tmp_root / "upstream")
+def test_sync_batch_git_is_removed(tmp_root: Path) -> None:
     service, _sources, batches = _build_raw_service(tmp_root)
     batch = batches.create(
         name="gitバッチ",
         type="git",
         output_dir="docs/_svc_git_test",
-        items=[{"options": {"repository": str(upstream), "branch": "main"}}],
+        items=[{"options": {"repository": "https://example.com/repo.git"}}],
     )
 
-    summary, report_path = service.sync_batch(batch["id"])
-
-    assert summary.source == "git"
-    assert summary.totals["added"] >= 2  # README.md + docs/a.md + docs/b.md
-    assert report_path is not None
-    assert report_path.name.startswith("sync-git-")
-    saved = list((tmp_root / "docs" / "_svc_git_test").rglob("*.md"))
-    assert len(saved) >= 2
+    with pytest.raises(AppError) as exc_info:
+        service.sync_batch(batch["id"])
+    assert "Git 同期は削除" in exc_info.value.message
 
 
 def test_sync_source_web_uses_source_connection(tmp_root: Path, web_server: WebPageServer) -> None:
@@ -218,36 +211,18 @@ def test_sync_source_web_uses_source_connection(tmp_root: Path, web_server: WebP
     assert list((tmp_root / "docs" / "_svc_web_source").rglob("*.md"))
 
 
-def test_sync_source_git_uses_source_connection(tmp_root: Path) -> None:
-    upstream = make_upstream(tmp_root / "upstream")
+def test_sync_source_git_is_removed(tmp_root: Path) -> None:
     service, sources, _batches = _build_raw_service(tmp_root)
     source = sources.create(
         type="git",
         display_name="gitソース",
-        connection={"repository": str(upstream), "branch": "main"},
+        connection={"repository": "https://example.com/repo.git"},
         output_dir="docs/_svc_git_source",
     )
 
-    summary, report_path = service.sync_source(source["id"])
-
-    assert summary.totals["added"] >= 2
-    assert report_path is not None
-    assert list((tmp_root / "docs" / "_svc_git_source").rglob("*.md"))
-
-
-def test_sync_batch_git_rejects_dry_run(tmp_root: Path) -> None:
-    """git には旧実装にも `--dry-run` が無いため、要求されたら明示的に拒否する。"""
-    upstream = make_upstream(tmp_root / "upstream")
-    service, _sources, batches = _build_raw_service(tmp_root)
-    batch = batches.create(
-        name="gitバッチ",
-        type="git",
-        output_dir="docs/_svc_git_dry",
-        items=[{"options": {"repository": str(upstream), "branch": "main"}}],
-    )
-
-    with pytest.raises(AppError):
-        service.sync_batch(batch["id"], dry_run=True)
+    with pytest.raises(AppError) as exc_info:
+        service.sync_source(source["id"])
+    assert "Git 同期は削除" in exc_info.value.message
 
 
 def test_sync_batch_web_missing_url_raises(tmp_root: Path) -> None:
@@ -277,7 +252,7 @@ def test_sync_all_continues_past_failed_batch_and_reports_it(
     # 例外で落とすものではないため、ここでは「そもそも実行できない設定不備」を使う。
     service._batches.create(  # noqa: SLF001
         name="失敗バッチ",
-        type="git",
+        type="web",
         output_dir="docs/_svc_fail_test",
         items=[{"options": {}}],
     )
@@ -334,9 +309,9 @@ def test_sync_all_via_job_path_records_partial_state_on_batch_failure(
     )
     batches.create(
         name="失敗バッチ",
-        type="git",
+        type="web",
         output_dir="docs/_job_all_fail",
-        items=[{"options": {}}],  # repository が無く実行時に必ず失敗する
+        items=[{"options": {}}],
     )
 
     result = run_sync_inline(
@@ -365,16 +340,13 @@ def test_sync_all_via_job_path_records_partial_state_on_batch_failure(
 # ---------------------------------------------------------------------------
 
 
-def test_imported_web_and_git_batches_can_actually_be_run(
+def test_imported_web_batches_can_actually_be_run(
     tmp_root: Path, tmp_path: Path, web_server: WebPageServer
 ) -> None:
-    """`migration.batch_config_parser` が読み取る旧設定の web/git エントリを
-    `BatchService.import_from_old_config` で取り込んだ後、そのバッチが
-    `SyncService.sync_batch` で実際に実行できることを検証する。"""
+    """旧設定の web エントリを取り込み、git エントリはスキップする。"""
     from abist_kb.application.batch_service import BatchService
 
     web_server.state.body = "<p>本文</p>"
-    upstream = make_upstream(tmp_root / "upstream")
 
     config_path = tmp_path / "batch-config.js"
     config_path.write_text(
@@ -388,7 +360,7 @@ def test_imported_web_and_git_batches_can_actually_be_run(
         "  },\n"
         "  'catia-flotherm-prep-like': {\n"
         "    'type': 'git',\n"
-        f"    'repository': '{upstream.as_posix()}',\n"
+        "    'repository': 'https://example.com/repo.git',\n"
         "    'branch': 'main',\n"
         "    'outputDir': 'docs/catia-flotherm-prep-like'\n"
         "  }\n"
@@ -400,7 +372,8 @@ def test_imported_web_and_git_batches_can_actually_be_run(
     ensure_app_schema(conn)
     batch_service = BatchService(conn)
     result = batch_service.import_from_old_config(config_path)
-    assert result["imported"] == 2
+    assert result["imported"] == 1
+    assert result["names"] == ["catiadoc-like"]
 
     docs_dir = tmp_root / "docs"
     docs_dir.mkdir(exist_ok=True)
@@ -419,11 +392,8 @@ def test_imported_web_and_git_batches_can_actually_be_run(
     assert web_report is not None
     assert list((docs_dir / "catiadoc-like").rglob("*.md"))
 
-    git_batch = batch_service.list_by_name("catia-flotherm-prep-like")
-    git_summary, git_report = sync_service.sync_batch(git_batch["id"])
-    assert git_summary.totals["added"] >= 2
-    assert git_report is not None
-    assert list((docs_dir / "catia-flotherm-prep-like").rglob("*.md"))
+    with pytest.raises(AppError):
+        batch_service.list_by_name("catia-flotherm-prep-like")
 
 
 def test_sync_batch_web_paces_requests_per_batch_items_options_delay(
@@ -675,81 +645,3 @@ def test_sync_source_esa_missing_credentials_error_never_names_the_missing_secre
     assert FAKE_TOKEN not in (err.hint or "")
 
 
-def test_resolve_git_repository_uses_settings_token_when_connection_has_none() -> None:
-    settings = Settings(git_token="ghp-from-env", _env_file=None)  # noqa: S106 - テスト専用のダミー値
-    resolved = _resolve_git_repository(
-        "https://github.com/example/repo.git", options={}, settings=settings
-    )
-    assert resolved == "https://ghp-from-env@github.com/example/repo.git"
-
-
-def test_resolve_git_repository_per_source_token_overrides_settings() -> None:
-    settings = Settings(git_token="ghp-from-env", _env_file=None)  # noqa: S106
-    resolved = _resolve_git_repository(
-        "https://github.com/example/repo.git",
-        options={"token": "ghp-from-connection"},
-        settings=settings,
-    )
-    assert resolved == "https://ghp-from-connection@github.com/example/repo.git"
-
-
-def test_resolve_git_repository_respects_credentials_already_embedded_in_url() -> None:
-    settings = Settings(git_token="ghp-from-env", _env_file=None)  # noqa: S106
-    resolved = _resolve_git_repository(
-        "https://explicit-user:explicit-pass@github.com/example/repo.git",
-        options={},
-        settings=settings,
-    )
-    assert resolved == "https://explicit-user:explicit-pass@github.com/example/repo.git"
-
-
-def test_resolve_git_repository_leaves_url_unchanged_when_no_token_available() -> None:
-    """git は esa と違い、資格情報が無くても公開リポジトリなら成立する。
-    トークンが無ければエラーにせず URL をそのまま返す(ハードエラーにしない
-    設計判断、`_sync_git_target` 側で clone 失敗時のヒント表示を担う)。
-    """
-    settings = Settings(_env_file=None)
-    resolved = _resolve_git_repository(
-        "https://github.com/example/repo.git", options={}, settings=settings
-    )
-    assert resolved == "https://github.com/example/repo.git"
-
-
-def test_sync_batch_git_missing_token_error_hints_at_git_token_env_var_not_connection(
-    tmp_root: Path,
-) -> None:
-    """private リポジトリ相当(存在しない/認証が必要なURL)への clone 失敗時、
-    トークンが一切無い状態なら `ABIST_KB_GIT_TOKEN` を案内する。DB の接続設定を
-    編集しろとは言わない(esa の教訓と同じ理由)。トークンの値そのものは
-    このケースではそもそも存在しないため、案内メッセージにも当然含まれない。
-    """
-    conn = connect(tmp_root / "app.sqlite")
-    ensure_app_schema(conn)
-    docs_dir = tmp_root / "docs"
-    docs_dir.mkdir(exist_ok=True)
-    batches = BatchRepository(conn)
-    # 存在しないローカルパスへの clone は git 側の認証プロンプトなしで確実に失敗する
-    # (実ネットワークに依存せず、`token_available=False` 経路をエクササイズする)。
-    missing_repo = str(tmp_root / "no-such-repo-here")
-    batch = batches.create(
-        name="gitバッチ",
-        type="git",
-        output_dir="docs/_svc_git_missing_test",
-        items=[{"options": {"repository": missing_repo}}],
-    )
-    service = SyncService(
-        root_dir=tmp_root,
-        docs_dir=docs_dir,
-        reports_dir=tmp_root / "reports",
-        documents=DocumentRepository(conn),
-        sources=SourceRepository(conn),
-        batches=batches,
-        settings=Settings(root_dir=tmp_root, _env_file=None),
-    )
-
-    summary, _report = service.sync_batch(batch["id"])
-
-    assert summary.full_sync_succeeded is False
-    assert summary.note is not None
-    assert "ABIST_KB_GIT_TOKEN" in summary.note
-    assert "接続設定に team/access_token が不足しています" not in summary.note

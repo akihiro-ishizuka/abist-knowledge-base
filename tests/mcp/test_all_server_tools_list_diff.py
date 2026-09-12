@@ -26,7 +26,6 @@ _NEW_TOOL_NAMES = {
     "start_download_esa_category",
     "start_download_esa_search",
     "start_download_web",
-    "start_download_git",
     "start_render_scene",
     "job_status",
     "cancel_job",
@@ -58,10 +57,15 @@ _NEW_VIDEO_TOOL_NAMES = {
 }
 
 
+_REMOVED_COMPAT_TOOLS = {"download_git"}
+
+
 def _expected_compat_tools() -> dict[str, dict]:
     tools_list_fixture = json.loads((FIXTURES_DIR / "tools-list.json").read_text(encoding="utf-8"))
     expected = {
-        tool["name"]: tool for tool in tools_list_fixture["servers"]["kb-download"]["tools"]
+        tool["name"]: tool
+        for tool in tools_list_fixture["servers"]["kb-download"]["tools"]
+        if tool["name"] not in _REMOVED_COMPAT_TOOLS
     }
     expected.update(
         {tool["name"]: tool for tool in tools_list_fixture["servers"]["kb-search"]["tools"]}
@@ -76,7 +80,7 @@ def _expected_compat_tools() -> dict[str, dict]:
 
 
 def test_all_server_tools_list_is_additions_only() -> None:
-    """kb-download 8 + kb-search 4 の既存12ツールはそのまま、jobs+kb-admin が純増する。"""
+    """kb-download(download_git を除く) + kb-search はそのまま、jobs+kb-admin が純増する。"""
     expected = _expected_compat_tools()
     combined = [
         *kb_search_list_tools(),

@@ -1,9 +1,9 @@
-# UI action matrix — surface contract (MCP + API).
+# UI action matrix — surface contract (MCP).
 # Canonical for tests/mcp/test_matrix_actions_contract.py.
-# Screens are logical domains (not NiceGUI/Textual hosts; those were removed).
+# Screens are logical domains (not NiceGUI/Textual/REST hosts; those were removed).
 # Agents: prefer MCP all (search + admin + jobs). Admin-only: kb-admin.
 # Compat: kb-download/kb-search/kb-visualize.
-# REST: abist-kb api serve. Long-running jobs: abist-kb worker run.
+# Long-running jobs: abist-kb worker run.
 screens:
   dashboard:
     label: ダッシュボード
@@ -15,35 +15,35 @@ screens:
       source_add:
         label: ソース追加
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       source_edit:
         label: ソース編集
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       source_remove:
         label: ソース削除
         destructive: true
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       source_test_connection:
         label: ソース接続テスト
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       batch_add:
         label: バッチ追加
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       batch_edit:
         label: バッチ編集
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       batch_remove:
         label: バッチ削除
         destructive: true
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       batch_run:
         label: バッチ実行
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
 
   jobs:
     label: ジョブ
@@ -51,11 +51,11 @@ screens:
       job_cancel:
         label: ジョブキャンセル
         destructive: true
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       job_retry:
         label: ジョブ再試行
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
 
   documents:
     label: 文書
@@ -63,11 +63,11 @@ screens:
       document_update_metadata:
         label: 文書メタデータ編集（status/document_type のみ）
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       document_delete:
         label: 文書削除
         destructive: true
-        surfaces: [mcp, api]
+        surfaces: [mcp]
 
   search:
     label: 検索
@@ -75,23 +75,7 @@ screens:
       search_run:
         label: 検索実行
         destructive: false
-        surfaces: [mcp, api]
-
-  chat:
-    label: チャット
-    actions:
-      chat_start:
-        label: 会話開始
-        destructive: false
-        surfaces: [mcp, api]
-      chat_ask:
-        label: 質問
-        destructive: false
-        surfaces: [mcp, api]
-      chat_history:
-        label: 会話履歴
-        destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
 
   visualization:
     label: 可視化
@@ -99,23 +83,23 @@ screens:
       visualization_validate:
         label: SceneSpec 検証
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       visualization_submit_render:
         label: レンダリング投入
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       visualization_deps:
         label: 可視化依存関係診断
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       visualization_list:
         label: 成果物一覧
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       visualization_detail:
         label: 成果物詳細
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
 
   video:
     label: 動画
@@ -123,35 +107,35 @@ screens:
       video_create:
         label: 動画プロジェクト作成
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       video_submit_render:
         label: 動画レンダリング投入（非同期）
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       video_list:
         label: 動画一覧
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       video_detail:
         label: 動画詳細（成果物・QA・配布判定）
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       video_run_qa:
         label: QA 再実行
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       video_approve:
         label: 社内プレビュー承認（外部送信なし）
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       video_set_distribution:
         label: 情報区分・公開候補の更新
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       video_request_public_review:
         label: 公開審査への提出（ステータス記録のみ）
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
 
   quality:
     label: 品質
@@ -159,35 +143,27 @@ screens:
       quality_run_integrity:
         label: 整合性監査（読取専用）
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       quality_apply_integrity_updates:
         label: 整合性監査の DB 更新適用
         destructive: true
         surfaces: [mcp]
-        api_omitted_reason: API は update_db クエリで別契約。MCP は専用破壊的ツールに分離
       quality_run_duplicates:
         label: 重複監査
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       quality_run_contradictions:
         label: 矛盾候補監査
         destructive: false
-        surfaces: [mcp, api]
+        surfaces: [mcp]
       quality_preview_backfill_metadata:
         label: メタデータ補完 preview（dry-run）
         destructive: false
         surfaces: [mcp]
-        api_omitted_reason: API は quality_run_backfill_metadata(apply=false) で同等
       quality_apply_backfill_metadata:
         label: メタデータ補完の適用
         destructive: true
         surfaces: [mcp]
-        api_omitted_reason: API は apply+confirmed クエリで別契約。MCP は専用破壊的ツールに分離
-      quality_run_backfill_metadata:
-        label: "メタデータ補完監査（API: apply=false 既定）"
-        destructive: false
-        surfaces: [api]
-        mcp_omitted_reason: MCP では preview/apply ツールに分離済み
 
   settings:
     label: 設定・診断

@@ -38,7 +38,6 @@ _EXPECTED_KINDS = frozenset(
         "kb_download_esa_category",
         "kb_download_esa_search",
         "kb_download_web",
-        "kb_download_git",
         "render_scene",
         # 動画レンダリング（video Phase 10）。`render` 区画を render_scene と共有する。
         "render_video",
@@ -177,7 +176,6 @@ def test_network_kind_handlers_reach_succeeded_when_sync_mocked(tmp_root: Path) 
             "kb_download_esa_category",
             "kb_download_esa_search",
             "kb_download_web",
-            "kb_download_git",
         ):
             assert kind in handlers
             assert build_builtin_resources()[kind] == (ResourceKind.DOCS_WRITE, None)

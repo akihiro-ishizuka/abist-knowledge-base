@@ -71,7 +71,7 @@ from abist_kb.application.sync_service import (
 )
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
 from abist_kb.domain.job import JobState, ResourceKind, Severity
-from abist_kb.domain.metadata_schema import extract_repo_name, safe_batch_name
+from abist_kb.domain.metadata_schema import safe_batch_name
 from abist_kb.infrastructure.db.batches_repo import BatchRepository
 from abist_kb.infrastructure.db.connection import connect
 from abist_kb.infrastructure.db.documents_repo import DocumentRepository
@@ -125,14 +125,6 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "最長30分ブロックする。差分同期: ETag / Last-Modified による条件付きGETで"
         "未変更ページは取得も上書きもしない。ローカルで編集されたファイルは"
         "上書きせず conflict として応答の sync に報告する。"
-    ),
-    "download_git": (
-        "Git リポジトリを取得して docs/ 配下に反映する（download-git.js）。"
-        "差分同期: data/git-cache/ にクローンを保持し、2回目以降は shallow fetch "
-        "で差分だけ反映する。内容が同じファイルには触れず、上流から消えたファイル"
-        'だけを削除して応答の sync に一覧を返す。outputDir が "docs" 始まりで'
-        "ない場合は docs/ が前置される。プライベートリポジトリは .env の "
-        "GIT_TOKEN 等が必要。"
     ),
 }
 
@@ -316,32 +308,6 @@ def list_tools() -> list[types.Tool]:
             },
             execution=forbidden,
         ),
-        types.Tool(
-            name="download_git",
-            description=TOOL_DESCRIPTIONS["download_git"],
-            inputSchema={
-                "$schema": "http://json-schema.org/draft-07/schema#",
-                "additionalProperties": False,
-                "properties": {
-                    "branch": {
-                        "description": "ブランチ名（省略時はリポジトリのデフォルトブランチ）",
-                        "type": "string",
-                    },
-                    "outputDir": {
-                        "description": "出力先（既定 docs/<リポジトリ名>）",
-                        "type": "string",
-                    },
-                    "repository": {
-                        "description": "リポジトリ URL（https:// または git@ 形式）",
-                        "minLength": 1,
-                        "type": "string",
-                    },
-                },
-                "required": ["repository"],
-                "type": "object",
-            },
-            execution=forbidden,
-        ),
     ]
 
 
@@ -414,7 +380,6 @@ _PROBE_LEASE_TTL_SECONDS = 5.0
 _TIMEOUT_ENV: dict[str, tuple[str, float]] = {
     "batch": ("KB_DOWNLOAD_BATCH_TIMEOUT_SECONDS", 60 * 60.0),
     "web": ("KB_DOWNLOAD_WEB_TIMEOUT_SECONDS", 30 * 60.0),
-    "git": ("KB_DOWNLOAD_GIT_TIMEOUT_SECONDS", 15 * 60.0),
     "esa": ("KB_DOWNLOAD_ESA_TIMEOUT_SECONDS", 10 * 60.0),
 }
 
@@ -1036,45 +1001,6 @@ class KbDownloadTools:
             command=command,
             output_dir=output_dir,
             timeout_seconds=_timeout_seconds("web"),
-            make_sync_call=make_sync_call,
-        )
-
-    # -- download_git -----------------------------------------------------
-
-    def download_git(self, arguments: dict[str, Any]) -> types.CallToolResult:
-        repository = arguments["repository"]
-        branch = arguments.get("branch")
-        output_dir_arg = arguments.get("outputDir")
-        output_dir = output_dir_arg or extract_repo_name(repository)
-        command = ["download_git", repository]
-
-        def make_sync_call(conn: sqlite3.Connection) -> Any:
-            def sync_call(emit: Any, check_lease: Any) -> Any:
-                return self._sync_service(conn)._sync_git_target(  # noqa: SLF001
-                    items=[
-                        {
-                            "options": {
-                                "repository": repository,
-                                "branch": branch,
-                                "output_dir": output_dir,
-                            }
-                        }
-                    ],
-                    batch_output_dir=None,
-                    label="download_git",
-                    dry_run=False,
-                    emit=emit,
-                    check_lease=check_lease,
-                )
-
-            return sync_call
-
-        return self._run_blocking(
-            kind="kb_download_git",
-            batch_type="git",
-            command=command,
-            output_dir=with_docs_prefix(output_dir),
-            timeout_seconds=_timeout_seconds("git"),
             make_sync_call=make_sync_call,
         )
 

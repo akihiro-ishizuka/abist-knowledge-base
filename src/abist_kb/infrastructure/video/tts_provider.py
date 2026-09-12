@@ -4,8 +4,7 @@
 `none`（無音）と `manual`（人が用意した音声）が常に使えるので、
 プロバイダ未設定は「実装が未完成」を意味しない。
 
-`ChatProvider`（`infrastructure/ai/chat_provider.py`）と同じく Protocol で
-境界を切り、実装は差し替え可能にする。
+埋め込みプロバイダと同じく Protocol で境界を切り、実装は差し替え可能にする。
 """
 
 from __future__ import annotations

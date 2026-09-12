@@ -32,8 +32,8 @@ _DESTRUCTIVE = types.ToolAnnotations(destructiveHint=True)
 def _job_payload(job: Job) -> dict[str, Any]:
     """ジョブ表現は `presentation.common.serialize.job_to_dict` を正本とする。
 
-    独自に列を並べていたため `progress` が欠けていた(API だけが正しい状態だった)。
-    委譲することで、同一ジョブが API/CLI/MCP で同じ列を返すという §15 の受入条件が
+    独自に列を並べていたため `progress` が欠けていた。
+    委譲することで、同一ジョブが CLI/MCP で同じ列を返すという §15 の受入条件が
     構造的に守られる。
     """
     return job_to_dict(job)
@@ -224,26 +224,6 @@ def list_tools() -> list[types.Tool]:
             },
             required=["path"],
             destructive=True,
-        ),
-        _tool(
-            "chat_start",
-            "会話を開始する(openai_api_key 必須)。",
-            {"title": {"type": "string"}},
-        ),
-        _tool(
-            "chat_ask",
-            "会話に質問する。",
-            {
-                "conversation_id": {"type": "string", "minLength": 1},
-                "question": {"type": "string", "minLength": 1},
-            },
-            required=["conversation_id", "question"],
-        ),
-        _tool(
-            "chat_history",
-            "会話履歴を返す。",
-            {"conversation_id": {"type": "string", "minLength": 1}},
-            required=["conversation_id"],
         ),
         _tool(
             "quality_run_integrity",
@@ -648,59 +628,6 @@ class KbAdminTools:
             return app_error_result(exc)
         return ok_result({"ok": True, "deleted": bool(deleted), "path": path})
 
-    # -- chat -----------------------------------------------------------------
-
-    def _require_chat(self) -> Any:
-        chat = self._c.chat
-        if chat is None:
-            raise AppError(
-                code=ErrorCode.CONFIG_ERROR,
-                message="ChatService が利用できません(openai_api_key 未設定)。",
-            )
-        return chat
-
-    def chat_start(self, arguments: dict[str, Any]) -> types.CallToolResult:
-        try:
-            chat = self._require_chat()
-            conversation_id = chat.start_conversation(title=arguments.get("title"))
-        except AppError as exc:
-            return app_error_result(exc)
-        return ok_result({"ok": True, "conversation_id": conversation_id})
-
-    def chat_ask(self, arguments: dict[str, Any]) -> types.CallToolResult:
-        try:
-            chat = self._require_chat()
-            answer = chat.ask(arguments["conversation_id"], arguments["question"])
-        except AppError as exc:
-            return app_error_result(exc)
-        return ok_result(
-            {
-                "ok": True,
-                "conversation_id": answer.conversation_id,
-                "message_id": answer.message_id,
-                "text": answer.text,
-                "citations": [
-                    {
-                        "path": c.path,
-                        "start_line": c.start_line,
-                        "end_line": c.end_line,
-                        "valid": c.valid,
-                        "reason": c.reason,
-                    }
-                    for c in answer.citations
-                ],
-                "citation_warnings": list(answer.citation_warnings),
-            }
-        )
-
-    def chat_history(self, arguments: dict[str, Any]) -> types.CallToolResult:
-        try:
-            chat = self._require_chat()
-            messages = chat.history(arguments["conversation_id"])
-        except AppError as exc:
-            return app_error_result(exc)
-        return ok_result({"ok": True, "messages": messages})
-
     # -- quality --------------------------------------------------------------
 
     def quality_run_integrity(self, _arguments: dict[str, Any]) -> types.CallToolResult:
@@ -914,9 +841,6 @@ def handlers_for(tools: KbAdminTools) -> dict[str, Any]:
         "document_detail": tools.document_detail,
         "document_update_metadata": tools.document_update_metadata,
         "document_delete": tools.document_delete,
-        "chat_start": tools.chat_start,
-        "chat_ask": tools.chat_ask,
-        "chat_history": tools.chat_history,
         "quality_run_integrity": tools.quality_run_integrity,
         "quality_apply_integrity_updates": tools.quality_apply_integrity_updates,
         "quality_run_duplicates": tools.quality_run_duplicates,

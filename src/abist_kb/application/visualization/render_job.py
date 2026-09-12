@@ -11,8 +11,7 @@
 `kb_visualize.py` と共有するのは `application.visualization.renderer.render_scene`
 の呼び出しと `RenderOutcome` → エラー形の変換だけで、リース制御は共有しない。
 
-ジョブ `params` には投入側(`presentation/common/actions.
-visualization_submit_render`/`presentation/mcp/jobs_tools.start_render_scene`)が
+ジョブ `params` には投入側(`presentation/mcp/jobs_tools.start_render_scene`)が
 解決済みの `docs_dir`/`reports_dir`/`repo_root` を文字列として含める。ハンドラ
 自身は `Settings` を再解決しない — `WorkerSupervisor`(`worker run`)は別プロセス
 で動く想定であり、ジョブ行に必要な情報を持たせるのが唯一の確実な経路のため。

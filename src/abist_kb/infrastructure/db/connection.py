@@ -76,7 +76,7 @@ def connect(
     ことが呼び出し元にとって既知の場合(§11.1 の移行元DBなど)に指定すると、
     `-wal`/`-shm` ファイルを元DBの隣に新規作成せずに済む。
 
-    `check_same_thread=False` は、ASGI サーバー(FastAPI)がリクエストを
+    `check_same_thread=False` は、ASGI サーバー(MCP Streamable HTTP)がリクエストを
     接続作成時とは別スレッドで処理しうる場合に使う(`ServiceContainer` 参照)。
     呼び出し側が単一スレッドからの逐次アクセスを保証する
     責務を負う(このモジュールは排他制御をしない)。CLI/MCP など常に単一スレッドで

@@ -14,7 +14,6 @@ from __future__ import annotations
 # 避けつつ importlib でパス指定 import する)。
 import importlib.util as _importlib_util  # noqa: E402
 import json
-import subprocess
 import threading
 from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -38,28 +37,6 @@ _sources_conftest = _importlib_util.module_from_spec(_spec)
 _spec.loader.exec_module(_sources_conftest)
 FAKE_TOKEN = _sources_conftest.FAKE_TOKEN
 MockEsaServer = _sources_conftest.MockEsaServer
-
-
-def _git(args: list[str], cwd: Path) -> None:
-    subprocess.run(
-        ["git", *args],
-        cwd=str(cwd),
-        check=True,
-        capture_output=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-
-
-def _make_upstream_repo(directory: Path) -> Path:
-    directory.mkdir(parents=True, exist_ok=True)
-    _git(["init", "-b", "main"], directory)
-    _git(["config", "user.email", "test@example.com"], directory)
-    _git(["config", "user.name", "Test"], directory)
-    (directory / "README.md").write_text("# hello\n", encoding="utf-8")
-    _git(["add", "."], directory)
-    _git(["commit", "-m", "initial"], directory)
-    return directory
 
 
 class _StaticHandler(BaseHTTPRequestHandler):
@@ -134,55 +111,35 @@ def _payload(result: object) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# download_git
+# run_batch(web バッチ経由)
 # ---------------------------------------------------------------------------
 
 
-def test_download_git_clones_local_repo_and_reports_ok(tmp_root: Path) -> None:
-    upstream = _make_upstream_repo(tmp_root / "upstream")
-    tools = _make_tools(tmp_root)
-
-    result = tools.download_git({"repository": str(upstream)})
-    payload = _payload(result)
-
-    assert payload["ok"] is True
-    assert payload["exitCode"] == 0
-    assert payload["batchType"] == "git"
-    assert payload["sync"]["totals"]["added"] >= 1
-    assert (tmp_root / payload["outputDir"] / "README.md").is_file()
-
-
-def test_download_git_nonexistent_repository_is_not_ok(tmp_root: Path) -> None:
-    tools = _make_tools(tmp_root)
-    result = tools.download_git({"repository": str(tmp_root / "does-not-exist")})
-    payload = _payload(result)
-    assert payload["ok"] is False
-    assert result.isError
-
-
-# ---------------------------------------------------------------------------
-# run_batch(git バッチ経由)
-# ---------------------------------------------------------------------------
-
-
-def test_run_batch_git_batch_succeeds(tmp_root: Path) -> None:
-    upstream = _make_upstream_repo(tmp_root / "upstream")
+def test_run_batch_web_batch_reports_sync_shape(tmp_root: Path) -> None:
     conn = connect(tmp_root / "app.sqlite")
     ensure_app_schema(conn)
     BatchService(conn).add(
-        name="gitバッチ",
-        type="git",
-        output_dir="docs/gitバッチ",
-        items=[{"options": {"repository": str(upstream)}}],
+        name="webバッチ",
+        type="web",
+        output_dir="docs/webバッチ",
+        items=[
+            {
+                "options": {
+                    "url": "http://127.0.0.1:1/unreachable",
+                    "output_dir": "docs/webバッチ",
+                    "max_depth": 1,
+                    "delay": 0,
+                }
+            }
+        ],
     )
     tools = KbDownloadTools(conn, root_dir=tmp_root)
 
-    result = tools.run_batch({"batch": "gitバッチ"})
+    result = tools.run_batch({"batch": "webバッチ"})
     payload = _payload(result)
 
-    assert payload["ok"] is True
-    assert payload["command"] == ["run_batch", "gitバッチ"]
-    assert (tmp_root / "docs" / "gitバッチ" / "README.md").is_file()
+    assert payload["command"] == ["run_batch", "webバッチ"]
+    assert "sync" in payload
 
 
 # ---------------------------------------------------------------------------
@@ -364,14 +321,13 @@ def test_add_web_batch_refuses_overwrite_of_non_web_batch(tmp_root: Path) -> Non
 
 
 def test_run_batch_returns_busy_when_docs_write_lease_is_held(tmp_root: Path) -> None:
-    upstream = _make_upstream_repo(tmp_root / "upstream")
     conn = connect(tmp_root / "app.sqlite")
     ensure_app_schema(conn)
     BatchService(conn).add(
         name="busyバッチ",
-        type="git",
+        type="web",
         output_dir="docs/busyバッチ",
-        items=[{"options": {"repository": str(upstream)}}],
+        items=[{"options": {"url": "http://127.0.0.1:1/unreachable"}}],
     )
     tools = KbDownloadTools(conn, root_dir=tmp_root)
 

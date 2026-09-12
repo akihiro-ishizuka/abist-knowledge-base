@@ -217,7 +217,7 @@ FastAPIで`/api/v1`を提供する。起動は`abist-kb api serve`（uvicorn）�
 | 用途 | サーバーキー | 起動 |
 |---|---|---|
 | エージェント（推奨） | **`all`** | `abist-kb mcp serve all`（検索 + 管理 + jobs） |
-| 管理のみ | `kb-admin` | `search_kb` なし。KB 回答は `chat_ask` 経由 |
+| 管理のみ | `kb-admin` | `search_kb` なし |
 | 既存スキル互換 | `kb-download`／`kb-search`／`kb-visualize` | `abist-kb mcp serve <name>` |
 | REST | — | `abist-kb api serve` |
 | 長時間ジョブ | — | `abist-kb worker run` |
@@ -234,7 +234,7 @@ FastAPIで`/api/v1`を提供する。起動は`abist-kb api serve`（uvicorn）�
 
 | 互換サーバー | 既存のまま提供するツール |
 |---|---|
-| `kb-download` | `list_batches`、`run_batch`、`add_web_batch`、`download_esa_post`、`download_esa_category`、`download_esa_search`、`download_web`、`download_git` |
+| `kb-download` | `list_batches`、`run_batch`、`add_web_batch`、`download_esa_post`、`download_esa_category`、`download_esa_search`、`download_web` |
 | `kb-search` | `search_kb`、`get_document`、`get_chunk`、`index_status` |
 | `kb-visualize` | `list_scene_kinds`、`check_visualize_deps`、`render_scene` |
 
@@ -246,7 +246,7 @@ Python移植前に現行3サーバーへ固定リクエストfixtureを送って
 
 非同期実行は別名の新規ツールとしてのみ追加する。
 
-- バッチ／取得: `start_run_batch`、`start_download_esa_post`、`start_download_esa_category`、`start_download_esa_search`、`start_download_web`、`start_download_git`
+- バッチ／取得: `start_run_batch`、`start_download_esa_post`、`start_download_esa_category`、`start_download_esa_search`、`start_download_web`
 - 可視化: `start_render_scene`
 - 動画: `start_render_video`
 - ジョブ操作: `job_status`、`cancel_job`
@@ -316,7 +316,6 @@ abist-kb index embed --corpus work   # 意味検索が要る場合
 | `DocumentService` | list、get、metadata update、safe delete |
 | `IndexService` | build、embed、status、staleness check |
 | `SearchService` | lexical、semantic、hybrid、citation resolve |
-| `ChatService` | conversation、stream answer、citation validation |
 | `VisualizationService` | validate spec、verify sources、render、list artifacts |
 | `AuditService` | integrity、duplicates、contradictions、evaluation |
 | `JobService` | submit、progress、cancel、retry、history |

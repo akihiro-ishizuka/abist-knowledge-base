@@ -16,7 +16,6 @@ from abist_kb.presentation.cli.app import app
 
 from .conftest import FAKE_TOKEN, MockEsaServer
 from .test_esa import make_post
-from .test_git import make_upstream
 from .test_web import WebPageServer
 
 runner = CliRunner()
@@ -175,9 +174,7 @@ def test_sync_batch_web_via_cli(tmp_root, web_server: WebPageServer) -> None:
     assert payload["summary"]["totals"]["added"] == 1
 
 
-def test_sync_batch_git_via_cli(tmp_root) -> None:
-    upstream = make_upstream(tmp_root / "upstream")
-
+def test_batch_add_git_is_rejected(tmp_root) -> None:
     add_batch = runner.invoke(
         app,
         _root_args(
@@ -193,16 +190,11 @@ def test_sync_batch_git_via_cli(tmp_root) -> None:
             "--output-dir",
             "docs/_cli_git_test",
             "--items",
-            json.dumps([{"options": {"repository": str(upstream), "branch": "main"}}]),
+            json.dumps([{"options": {"repository": "https://example.com/repo.git"}}]),
         ),
     )
-    assert add_batch.exit_code == 0, add_batch.output
-    batch_id = json.loads(add_batch.stdout)["id"]
-
-    result = runner.invoke(app, _root_args(tmp_root, "--output", "json", "sync", "batch", batch_id))
-    assert result.exit_code == 0, result.output
-    payload = json.loads(result.stdout)
-    assert payload["summary"]["totals"]["added"] >= 2
+    assert add_batch.exit_code != 0
+    assert "Git 同期は削除" in add_batch.output
 
 
 def test_sync_all_via_cli_exits_5_on_partial_failure(tmp_root, esa_server: MockEsaServer) -> None:
@@ -266,11 +258,11 @@ def test_sync_all_via_cli_exits_5_on_partial_failure(tmp_root, esa_server: MockE
             "--name",
             "失敗する方",
             "--type",
-            "git",
+            "web",
             "--output-dir",
             "docs/_cli_all_fail",
             "--items",
-            json.dumps([{"options": {}}]),  # repository が無く実行時に必ず失敗する
+            json.dumps([{"options": {}}])
         ),
     )
     assert bad_batch.exit_code == 0, bad_batch.output

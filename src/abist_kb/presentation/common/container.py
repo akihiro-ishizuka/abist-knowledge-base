@@ -1,4 +1,4 @@
-"""`ServiceContainer`: MCP / API / CLI が共有する Application Service の束(§5, §8)。
+"""`ServiceContainer`: MCP / CLI が共有する Application Service の束(§5, §8)。
 
 CLI が各コマンド内で毎回 `open_app_db` + 個別サービス構築を行っているのと同じ配線を
 1箇所へ集約する。プレゼンテーション層はいずれもこの `ServiceContainer` 経由で
@@ -20,14 +20,12 @@ from pathlib import Path
 from typing import Any
 
 from abist_kb.application.batch_service import BatchService
-from abist_kb.application.chat_service import ChatService
 from abist_kb.application.document_service import DocumentService
 from abist_kb.application.index_service import IndexService
 from abist_kb.application.job_service import JobService
 from abist_kb.application.search_service import SearchService
 from abist_kb.application.source_service import SourceService
 from abist_kb.config import Settings
-from abist_kb.infrastructure.ai.chat_provider import OpenAIChatProvider
 from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.infrastructure.jobs import events as events_mod
 
@@ -35,8 +33,8 @@ from abist_kb.infrastructure.jobs import events as events_mod
 class ServiceContainer:
     """1つの `app.sqlite` 接続と全アプリケーションサービスをまとめる。
 
-    プロセス生存期間中は1つの Container を使い回す想定(FastAPI / MCP の
-    起動時に1つ作り、リクエスト・ツールハンドラ間で共有する)。
+    プロセス生存期間中は1つの Container を使い回す想定(MCP の
+    起動時に1つ作り、ツールハンドラ間で共有する)。
     """
 
     def __init__(
@@ -46,15 +44,13 @@ class ServiceContainer:
         owner_id: str | None = None,
         check_same_thread: bool = True,
     ) -> None:
-        """`check_same_thread=False` は ASGI 層(FastAPI)専用。
+        """`check_same_thread=False` は ASGI 層(MCP Streamable HTTP)専用。
 
-        Starlette の `TestClient`/実運用の ASGI サーバーは、この接続を作った
+        Starlette の実運用 ASGI サーバーは、この接続を作った
         スレッドとは別スレッドでリクエストを処理しうる
         (`infrastructure/db/connection.py::connect` の docstring 参照)。
-        API(`presentation/api/app.py`)はこの値を `False` で渡し、代わりに
-        `asyncio.Lock` で全リクエストのDBアクセスを直列化することで、
-        単一接続への同時アクセスを防ぐ。CLI/テストのような単一スレッド利用では
-        既定の `True`(スレッド越境を誤って許してしまうバグを検出できる状態)のままにする。
+        CLI/テストのような単一スレッド利用では既定の `True`
+        (スレッド越境を誤って許してしまうバグを検出できる状態)のままにする。
         """
         self.settings = settings
         self.owner_id = owner_id or str(uuid.uuid4())
@@ -81,30 +77,6 @@ class ServiceContainer:
         # 依存しない。インライン実行はそれぞれ専用の一時的な `JobService` を
         # 都度組み立てるため、この `jobs` には handlers を登録しない。
         self.jobs = JobService(self.conn, owner_id=self.owner_id, event_bus=self.event_bus)
-        self._chat: ChatService | None = None
-
-    @property
-    def chat(self) -> ChatService | None:
-        """`ChatService`(§7.1)。`openai_api_key` が未設定なら `None`。
-
-        `SearchService` を根拠取得に、`OpenAIChatProvider` をベンダー実装として使う
-        (`ChatProvider` 境界のおかげで差し替え可能。実 API へは `openai_api_key`
-        が設定されているときのみ到達する)。
-        """
-        if self._chat is not None:
-            return self._chat
-        if not self.settings.openai_api_key:
-            return None
-        provider = OpenAIChatProvider(
-            model=self.settings.chat_model, api_key=self.settings.openai_api_key
-        )
-        self._chat = ChatService(
-            self.conn,
-            search_service=self.search,
-            provider=provider,
-            docs_dir=self.settings.docs_dir,
-        )
-        return self._chat
 
     def close(self) -> None:
         self.conn.close()

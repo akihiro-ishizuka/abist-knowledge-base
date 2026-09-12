@@ -25,8 +25,12 @@ ConfirmFn = Callable[[str], bool]
 _REQUIRED_CONNECTION_KEYS: dict[str, tuple[str, ...]] = {
     "esa": ("team", "access_token"),
     "web": ("url",),
-    "git": ("repository",),
 }
+
+_GIT_REMOVED = (
+    "Git 同期は削除されました。リポジトリは git / gh で docs/ に置いてから "
+    "document register-disk --apply で登録してください。"
+)
 
 
 class SourceService:
@@ -53,6 +57,8 @@ class SourceService:
         output_dir: str,
         enabled: bool = True,
     ) -> dict[str, Any]:
+        if type == "git":
+            raise AppError(code=ErrorCode.INVALID_INPUT, message=_GIT_REMOVED)
         return self._repo.create(
             type=type,
             display_name=display_name,

@@ -80,9 +80,6 @@ TOOL_DESCRIPTIONS: dict[str, str] = {
         "同期版は download_esa_search。"
     ),
     "start_download_web": ("Web クロールをキューに投入する(非ブロック版)。同期版は download_web。"),
-    "start_download_git": (
-        "Git リポジトリ同期をキューに投入する(非ブロック版)。同期版は download_git。"
-    ),
     "start_render_scene": (
         "SceneSpec のレンダリングをキューに投入し、即座に job_id を返す(ブロックしない)。"
         "生きた worker(`worker run`)が居ない場合は WORKER_UNAVAILABLE で失敗する。"
@@ -113,7 +110,6 @@ _JOB_KIND_FOR_TOOL: dict[str, str] = {
     "start_download_esa_category": "kb_download_esa_category",
     "start_download_esa_search": "kb_download_esa_search",
     "start_download_web": "kb_download_web",
-    "start_download_git": "kb_download_git",
     "start_render_scene": RENDER_JOB_KIND,
     "start_render_video": VIDEO_JOB_KIND,
 }
@@ -225,31 +221,6 @@ def list_tools() -> list[types.Tool]:
                     },
                 },
                 "required": ["url"],
-                "type": "object",
-            },
-        ),
-        types.Tool(
-            name="start_download_git",
-            description=TOOL_DESCRIPTIONS["start_download_git"],
-            inputSchema={
-                "$schema": "http://json-schema.org/draft-07/schema#",
-                "additionalProperties": False,
-                "properties": {
-                    "branch": {
-                        "description": "ブランチ名(既定はデフォルトブランチ)",
-                        "type": "string",
-                    },
-                    "outputDir": {
-                        "description": "出力先(既定 docs/<リポジトリ名>)",
-                        "type": "string",
-                    },
-                    "repository": {
-                        "description": "リポジトリ URL",
-                        "minLength": 1,
-                        "type": "string",
-                    },
-                },
-                "required": ["repository"],
                 "type": "object",
             },
         ),
@@ -511,14 +482,6 @@ class JobTools:
             "concurrency": arguments.get("concurrency", 5),
         }
         return self._start("start_download_web", params)
-
-    def start_download_git(self, arguments: dict[str, Any]) -> types.CallToolResult:
-        params = {
-            "repository": arguments["repository"],
-            "branch": arguments.get("branch"),
-            "outputDir": arguments.get("outputDir"),
-        }
-        return self._start("start_download_git", params)
 
     def start_render_scene(self, arguments: dict[str, Any]) -> types.CallToolResult:
         spec, parse_error = _parse_scene_spec_argument(arguments.get("sceneSpec"))

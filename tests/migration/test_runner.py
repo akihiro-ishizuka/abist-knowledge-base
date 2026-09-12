@@ -46,14 +46,14 @@ def test_run_imports_batch_config(old_repo: Path, tmp_path: Path) -> None:
     manifest = load_manifest(manifest_path)
     assert manifest is not None
     assert manifest.steps["import_batch_config"].status == "completed"
-    assert manifest.steps["import_batch_config"].counts["imported"] == 2
+    assert manifest.steps["import_batch_config"].counts["imported"] == 1
 
     conn = sqlite3.connect(build_dir / "app.sqlite")
     try:
         count = conn.execute("SELECT COUNT(*) FROM batches").fetchone()[0]
     finally:
         conn.close()
-    assert count == 2
+    assert count == 1
 
 
 def test_run_imports_sync_state_rows(old_repo: Path, tmp_path: Path) -> None:
@@ -167,7 +167,7 @@ def test_run_is_idempotent_on_second_invocation(old_repo: Path, tmp_path: Path) 
     finally:
         conn.close()
     assert doc_count == 1  # not duplicated
-    assert batch_count == 2  # not duplicated
+    assert batch_count == 1  # not duplicated
     assert manifest_second.steps["copy_docs"].finished_at == (
         manifest_after_first.steps["copy_docs"].finished_at
     )

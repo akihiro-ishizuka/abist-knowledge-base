@@ -45,8 +45,11 @@ def test_init_creates_directories_templates_and_database(tmp_root: Path) -> None
 def test_init_writes_no_secrets_into_settings_toml(tmp_root: Path) -> None:
     init_workspace(load_settings(root=tmp_root))
     settings_toml = (tmp_root / "config" / "settings.toml").read_text(encoding="utf-8")
-    for secret in ("esa_access_token", "openai_api_key", "git_token"):
+    for secret in ("esa_access_token", "git_token"):
         assert secret not in settings_toml
+    assert "openai_api_key" not in settings_toml
+    assert "chat_model" not in settings_toml
+    assert "git_token" not in settings_toml
 
 
 def test_env_example_lists_official_variable_names_commented_out(tmp_root: Path) -> None:
@@ -54,8 +57,10 @@ def test_env_example_lists_official_variable_names_commented_out(tmp_root: Path)
     lines = (tmp_root / ".env.example").read_text(encoding="utf-8").splitlines()
 
     assert all(line.startswith("#") or not line for line in lines)
-    for field_name in ("esa_access_token", "openai_api_key", "git_token"):
+    for field_name in ("esa_access_token",):
         assert f"# {identity.env_var(field_name)}=" in lines
+    assert not any("OPENAI_API_KEY" in line for line in lines)
+    assert not any("GIT_TOKEN" in line for line in lines)
 
 
 def test_generated_settings_toml_can_be_reloaded(tmp_root: Path) -> None:
@@ -65,7 +70,7 @@ def test_generated_settings_toml_can_be_reloaded(tmp_root: Path) -> None:
     assert reloaded.log_level == "INFO"
     assert reloaded.missing_threshold == 3
     assert reloaded.embedding_model == "intfloat/multilingual-e5-small"
-    assert reloaded.chat_model == "gpt-4o-mini"
+    assert not hasattr(reloaded, "chat_model")
 
 
 def test_init_uses_settings_paths_not_hardcoded_defaults(tmp_root: Path) -> None:

@@ -81,9 +81,9 @@ def test_import_from_old_config_creates_batches(service: BatchService, tmp_path:
 
     result = service.import_from_old_config(config_path)
 
-    assert result["imported"] == 3
+    assert result["imported"] == 2
     names = {b["name"] for b in service.list()}
-    assert names == {"蛇腹形状の自動設計", "catiadoc", "catia-flotherm-prep"}
+    assert names == {"蛇腹形状の自動設計", "catiadoc"}
 
     esa_batch = service.show(service.list_by_name("蛇腹形状の自動設計")["id"])
     assert [item["target"] for item in esa_batch["items"]] == [

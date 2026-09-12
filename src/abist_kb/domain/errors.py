@@ -61,38 +61,6 @@ _EXIT_CODE_BY_ERROR: dict[ErrorCode, ExitCode] = {
 }
 
 
-#: `ErrorCode` -> HTTP ステータスの単一のソース。以前は
-#: `presentation/api/app.py` にだけ `_ERROR_STATUS` 表があり、
-#: facade/`actions` が返す `{"error": ...}` 規約と FastAPI の
-#: 例外ハンドラが同じ表を別々に参照していた。表自体は同じ辞書オブジェクトだった
-#: ため2箇所とも更新されるコード経路は一致していたが、新しい `ErrorCode` を
-#: 追加した実装者が HTTP マッピングの存在に気付けるとは限らない
-#: (`ErrorCode` を定義する場所と `_ERROR_STATUS` を編集する場所が別ファイル
-#: だった)。ここへ移設し `http_status_for()` として公開することで、
-#: 新しいエラーコードを追加する場所そのものに「HTTP ステータスも決めろ」という
-#: 制約を埋め込む。CLI/MCP など HTTP を持たない消費者はこの表を参照しない
-#: (=既存の非HTTP経路に影響しない)。既定は 500(未知のコードは内部エラー扱い)。
-HTTP_STATUS_BY_ERROR: dict[ErrorCode, int] = {
-    ErrorCode.NOT_FOUND: 404,
-    ErrorCode.INVALID_INPUT: 400,
-    ErrorCode.CONFLICT: 409,
-    ErrorCode.WORKER_UNAVAILABLE: 409,
-    ErrorCode.CONFIG_ERROR: 500,
-    ErrorCode.EXTERNAL_SERVICE: 502,
-    ErrorCode.CANCELLED: 409,
-    ErrorCode.UNSUPPORTED_BATCH_CONFIG: 400,
-    ErrorCode.FTS5_TRIGRAM_UNAVAILABLE: 500,
-    ErrorCode.SQLITE_TOO_OLD: 500,
-    ErrorCode.MIGRATION_FAILED: 500,
-    ErrorCode.FAILURE: 500,
-}
-
-
-def http_status_for(code: ErrorCode) -> int:
-    """`ErrorCode` に対応する HTTP ステータス(既定 500)。"""
-    return HTTP_STATUS_BY_ERROR.get(code, 500)
-
-
 class AppError(Exception):
     """UIへ提示できる正規化済みエラー。"""
 

@@ -112,7 +112,6 @@ def test_start_run_batch_queues_job_when_worker_is_live(tmp_root: Path) -> None:
         ),
         ("start_download_esa_search", {"query": "テスト"}, "kb_download_esa_search"),
         ("start_download_web", {"url": "https://example.com"}, "kb_download_web"),
-        ("start_download_git", {"repository": "https://example.com/repo.git"}, "kb_download_git"),
     ],
 )
 def test_start_download_tools_queue_when_worker_is_live(
@@ -137,7 +136,6 @@ def test_start_download_tools_queue_when_worker_is_live(
         ("start_download_esa_category", {"category": "テスト"}),
         ("start_download_esa_search", {"query": "テスト"}),
         ("start_download_web", {"url": "https://example.com"}),
-        ("start_download_git", {"repository": "https://example.com/repo.git"}),
     ],
 )
 def test_start_download_tools_fail_without_live_worker(

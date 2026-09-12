@@ -154,7 +154,6 @@ def build_kb_download_server(
             "download_esa_category": tools.download_esa_category,
             "download_esa_search": tools.download_esa_search,
             "download_web": tools.download_web,
-            "download_git": tools.download_git,
         }.get(name)
         if handler is None:
             return error_result(f"未知のツールです: {name}")
@@ -372,7 +371,6 @@ def build_all_server(
         "download_esa_category": download_tools.download_esa_category,
         "download_esa_search": download_tools.download_esa_search,
         "download_web": download_tools.download_web,
-        "download_git": download_tools.download_git,
         "list_scene_kinds": visualize_tools.list_scene_kinds,
         "check_visualize_deps": visualize_tools.check_visualize_deps,
         "render_scene": visualize_tools.render_scene,
@@ -383,7 +381,6 @@ def build_all_server(
         "start_download_esa_category": job_tools.start_download_esa_category,
         "start_download_esa_search": job_tools.start_download_esa_search,
         "start_download_web": job_tools.start_download_web,
-        "start_download_git": job_tools.start_download_git,
         "start_render_scene": job_tools.start_render_scene,
         "job_status": job_tools.job_status,
         "cancel_job": job_tools.cancel_job,

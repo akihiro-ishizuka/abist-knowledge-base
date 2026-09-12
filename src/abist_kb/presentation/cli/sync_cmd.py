@@ -25,7 +25,7 @@ from abist_kb.infrastructure.db.schema import open_app_db
 from abist_kb.presentation.cli.batch_cmd import resolve_batch
 from abist_kb.presentation.cli.context import AppTyper, get_context
 
-sync_app = AppTyper(help="ソース同期(esa/web/git)の実行。", no_args_is_help=True)
+sync_app = AppTyper(help="ソース同期(esa/web)の実行。", no_args_is_help=True)
 
 
 def _present_result(cli_ctx, result: dict) -> None:  # type: ignore[no-untyped-def]
@@ -88,11 +88,11 @@ def _fail_if_partial(result: dict) -> None:  # type: ignore[no-untyped-def]
 @sync_app.command("source")
 def sync_source(
     ctx: typer.Context,
-    source_id: Annotated[str, typer.Argument(help="ソースID(esa/web/git)。")],
+    source_id: Annotated[str, typer.Argument(help="ソースID(esa/web)。")],
     category: Annotated[
         list[str] | None,
         typer.Option(
-            "--category", help="同期するカテゴリパス(esa のみ、複数指定可)。web/git では無視。"
+            "--category", help="同期するカテゴリパス(esa のみ、複数指定可)。web では無視。"
         ),
     ] = None,
     force: Annotated[
@@ -101,7 +101,7 @@ def sync_source(
     ] = False,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="ファイルにも DB にも書き込まない(esa/web、git は非対応)。"),
+        typer.Option("--dry-run", help="ファイルにも DB にも書き込まない(esa/web)。"),
     ] = False,
     prune_orphans: Annotated[
         bool,
@@ -111,7 +111,7 @@ def sync_source(
         ),
     ] = False,
 ) -> None:
-    """1つのソースを同期する(esa はカテゴリ単位、web/git は接続設定1件分)。"""
+    """1つのソースを同期する(esa はカテゴリ単位、web は接続設定1件分)。"""
     cli_ctx = get_context(ctx)
     conn = open_app_db(cli_ctx.settings.app_db_path)
     try:
@@ -136,7 +136,7 @@ def sync_source(
 @sync_app.command("batch")
 def sync_batch(
     ctx: typer.Context,
-    batch_id: Annotated[str, typer.Argument(help="バッチ ID または名前(esa/web/git)。")],
+    batch_id: Annotated[str, typer.Argument(help="バッチ ID または名前(esa/web)。")],
     force: Annotated[bool, typer.Option("--force")] = False,
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     prune_orphans: Annotated[bool, typer.Option("--prune-orphans")] = False,
@@ -170,7 +170,7 @@ def sync_all(
     dry_run: Annotated[bool, typer.Option("--dry-run")] = False,
     prune_orphans: Annotated[bool, typer.Option("--prune-orphans")] = False,
 ) -> None:
-    """有効な全バッチ(esa/web/git)を同期する。
+    """有効な全バッチ(esa/web)を同期する。
 
     1バッチの失敗で残りを止めない(`SyncService.sync_all` docstring参照)。
     1件でも失敗があれば、結果提示の後に終了コード5(部分成功)で終わる。

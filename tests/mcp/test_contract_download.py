@@ -65,23 +65,8 @@ def env(tmp_root: Path) -> Iterator[Env]:
             }
         ],
     )
-    service.add(
-        name="ccc_git_batch",
-        type="git",
-        output_dir="docs/ccc_git_batch",
-        items=[
-            {
-                "options": {
-                    "repository": "https://github.com/example/repo",
-                    "branch": "main",
-                    "output_dir": "docs/ccc_git_batch",
-                }
-            }
-        ],
-    )
-
     tools = KbDownloadTools(conn)
-    yield Env(tools=tools, known_batch_names=["aaa_esa_batch", "bbb_web_batch", "ccc_git_batch"])
+    yield Env(tools=tools, known_batch_names=["aaa_esa_batch", "bbb_web_batch"])
     conn.close()
 
 
@@ -103,14 +88,12 @@ def test_list_batches_matches_fixture_shape(env: Env, fixture_path: Path) -> Non
 
 
 def test_list_batches_camelizes_each_batch_type(env: Env) -> None:
-    """3つの型(esa/web/git)それぞれで期待する camelCase キーが出ること。"""
+    """esa/web それぞれで期待する camelCase キーが出ること。"""
     payload = json.loads(env.tools.list_batches({}).content[0].text)
     by_name = {b["name"]: b for b in payload["batches"]}
     assert by_name["aaa_esa_batch"]["categories"] == ["設計効率化/テスト", "議事録/テスト"]
     assert by_name["bbb_web_batch"]["url"] == "https://example.com/"
     assert by_name["bbb_web_batch"]["maxDepth"] == 3
-    assert by_name["ccc_git_batch"]["repository"] == "https://github.com/example/repo"
-    assert by_name["ccc_git_batch"]["branch"] == "main"
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +126,7 @@ def test_run_batch_known_name_no_longer_raises_not_implemented(env: Env) -> None
 
 @pytest.mark.parametrize(
     "tool_name",
-    ["download_esa_post", "download_esa_category", "download_esa_search", "download_git"],
+    ["download_esa_post", "download_esa_category", "download_esa_search"],
 )
 def test_schema_validation_error_matches_fixture_shape(tool_name: str) -> None:
     from abist_kb.presentation.mcp.kb_download import validate_arguments
@@ -235,6 +218,7 @@ def test_tools_list_matches_fixture_schemas() -> None:
     expected_tools["add_web_batch"] = add_web_batch_fixture["tool_schema_from_tools_list"]
 
     actual_tools = {tool.name: tool for tool in list_tools()}
+    expected_tools.pop("download_git", None)
 
     assert set(actual_tools) == set(expected_tools)
     for name, expected in expected_tools.items():

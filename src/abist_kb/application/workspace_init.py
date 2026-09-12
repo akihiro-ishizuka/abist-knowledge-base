@@ -49,7 +49,6 @@ SETTINGS_TOML_TEMPLATE = """\
 log_level = "INFO"
 embedding_model = "intfloat/multilingual-e5-small"
 missing_threshold = 3
-chat_model = "gpt-4o-mini"
 """
 
 #: `docs/README.md` の雛形の元。`{cli}` はこのプロジェクトの CLI 名で埋める。
@@ -86,8 +85,6 @@ _ENV_EXAMPLE_HEADER = """\
 #: `.env.example` に並べる環境変数(`identity.env_var` 由来の正式名のみ)と説明。
 _ENV_EXAMPLE_ENTRIES: tuple[tuple[str, str | None], ...] = (
     ("esa_access_token", None),
-    ("openai_api_key", None),
-    ("git_token", None),
     ("esa_team_name", "任意: esa チーム名は settings.toml の esa_team_name でも可"),
 )
 

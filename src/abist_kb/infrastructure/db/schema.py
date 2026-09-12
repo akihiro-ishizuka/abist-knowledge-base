@@ -72,8 +72,9 @@ def ensure_app_schema(conn: sqlite3.Connection) -> None:
 def open_app_db(db_path: Path, *, check_same_thread: bool = True) -> sqlite3.Connection:
     """app.sqlite を開き、スキーマを保証してから返す。呼び出し元が `close()` する。
 
-    `check_same_thread=False` は Web(ASGI)層専用(`connection.py::connect` の
-    docstring 参照)。CLI/MCP は既定の `True` のままにする。
+    `check_same_thread=False` は ASGI 層(MCP Streamable HTTP)専用
+    (`connection.py::connect` の docstring 参照)。CLI/stdio MCP は既定の
+    `True` のままにする。
     """
     conn = connect(db_path, check_same_thread=check_same_thread)
     ensure_app_schema(conn)

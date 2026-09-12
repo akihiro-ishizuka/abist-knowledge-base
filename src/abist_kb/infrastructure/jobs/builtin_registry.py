@@ -37,7 +37,6 @@ from abist_kb.application.visualization.render_job import (
 from abist_kb.config import Settings
 from abist_kb.domain.errors import AppError, ErrorCode, ExitCode
 from abist_kb.domain.job import JobState, ResourceKind, ResourceRequirement
-from abist_kb.domain.metadata_schema import extract_repo_name
 from abist_kb.infrastructure.db.batches_repo import BatchRepository
 from abist_kb.infrastructure.db.documents_repo import DocumentRepository
 from abist_kb.infrastructure.db.sources_repo import SourceRepository
@@ -53,7 +52,6 @@ MCP_DOWNLOAD_JOB_KINDS: tuple[str, ...] = (
     "kb_download_esa_category",
     "kb_download_esa_search",
     "kb_download_web",
-    "kb_download_git",
 )
 
 _DOCS_WRITE: ResourceRequirement = (ResourceKind.DOCS_WRITE, None)
@@ -331,36 +329,6 @@ def _make_web_handler(settings: Settings, conn: sqlite3.Connection) -> JobHandle
     return handler
 
 
-def _make_git_handler(settings: Settings, conn: sqlite3.Connection) -> JobHandler:
-    def handler(run: JobRunContext) -> None:
-        params = run.job.params
-        repository = params["repository"]
-        branch = params.get("branch")
-        output_dir_arg = params.get("outputDir")
-        output_dir = output_dir_arg or extract_repo_name(repository)
-        run.check_lease()
-        service = _build_sync_service(settings, conn)
-        summary, report_path = service._sync_git_target(  # noqa: SLF001
-            items=[
-                {
-                    "options": {
-                        "repository": repository,
-                        "branch": branch,
-                        "output_dir": output_dir,
-                    }
-                }
-            ],
-            batch_output_dir=None,
-            label="download_git",
-            dry_run=False,
-            emit=run.emit,
-            check_lease=run.check_lease,
-        )
-        _finish_sync(run, summary, report_path, phase="kb_download_git")
-
-    return handler
-
-
 def build_builtin_handlers(
     *, settings: Settings, conn: sqlite3.Connection
 ) -> dict[str, JobHandler]:
@@ -378,7 +346,6 @@ def build_builtin_handlers(
         "kb_download_esa_category": _make_esa_category_handler(settings, conn),
         "kb_download_esa_search": _make_esa_search_handler(settings, conn),
         "kb_download_web": _make_web_handler(settings, conn),
-        "kb_download_git": _make_git_handler(settings, conn),
         **BUILTIN_RENDER_HANDLERS,
         **BUILTIN_VIDEO_HANDLERS,
     }
@@ -394,7 +361,6 @@ def build_builtin_resources() -> dict[str, ResourceRequirement]:
         "kb_download_esa_category": _DOCS_WRITE,
         "kb_download_esa_search": _DOCS_WRITE,
         "kb_download_web": _DOCS_WRITE,
-        "kb_download_git": _DOCS_WRITE,
         **BUILTIN_RENDER_RESOURCES,
         # 動画も render 区画を使う（Manim は全プロセス横断で単一実行）
         **BUILTIN_VIDEO_RESOURCES,

@@ -22,7 +22,6 @@ import json
 import shutil
 import subprocess
 import sys
-import time
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -37,12 +36,10 @@ from abist_kb.domain.sync_policy import (
 )
 from abist_kb.infrastructure.db.documents_repo import DocumentRepository
 from abist_kb.infrastructure.sources.esa import EsaClient, EsaSyncRunner
-from abist_kb.infrastructure.sources.git import GitSyncRunner
 from abist_kb.infrastructure.sources.web import WebSyncRunner
 
 from . import _old_node_sandbox as old
 from .conftest import FAKE_TOKEN, MockEsaServer
-from .test_git import make_upstream
 from .test_web import WebPageServer
 
 pytestmark = pytest.mark.skipif(
@@ -266,97 +263,6 @@ def test_esa_empty_tags_is_byte_identical_to_old_node(
     assert proc.returncode == 0, f"{proc.stdout}\n{proc.stderr}"
 
     _assert_trees_byte_identical(python_docs, old_root / "docs", label="esa(空tags)")
-
-
-# ===========================================================================
-# git: バイト同一(必須)+ 上流で変化しなかったファイルの mtime 維持
-# ===========================================================================
-
-
-def test_git_docs_output_is_byte_identical_to_old_node_across_two_syncs(
-    documents: DocumentRepository, tmp_root: Path, sandbox: Path
-) -> None:
-    """git: 同一の上流リポジトリを Python/旧Node双方でクローン+ミラーし、
-    `docs/` をバイト同一で比較する。さらに上流の2回目のコミット(追加・変更・
-    削除)後も一致し、変更が無かったファイルの mtime が双方で維持されることを
-    確認する(brief必須要件)。"""
-    upstream = make_upstream(tmp_root / "upstream")
-
-    python_docs = tmp_root / "docs"
-    python_docs.mkdir()
-    python_output = python_docs / "repo"
-    git_runner = GitSyncRunner(
-        documents=documents,
-        root_dir=tmp_root,
-        docs_dir=python_docs,
-        output_dir="docs/repo",
-        repository=str(upstream),
-        branch="main",
-        cache_root=tmp_root / "cache",
-    )
-    result1 = git_runner.sync()
-    assert result1.full_sync_succeeded, result1.error
-
-    # `updateGitCache`/`mirrorCacheToOutput` を直接呼ぶ(`_old_node_sandbox
-    # .write_git_driver` の docstring参照: 旧CLIの `extractRepoName` は
-    # ローカルのバックスラッシュ区切りパスをURLとして解釈できず、サニタイズ後の
-    # キャッシュディレクトリ名が `MAX_PATH` を超えて `git clone` が失敗する
-    # 実行環境依存の問題があるため、旧テスト自身と同じ関数直呼びに揃える)。
-    old_root = sandbox / "git-run"
-    old_root.mkdir()
-    old_cache_root = old_root / "cache"
-    old_output = old_root / "docs" / "repo"
-    driver = old.write_git_driver(sandbox)
-    proc1 = old.run_node(
-        sandbox,
-        driver,
-        [str(upstream), "main", str(old_cache_root), "repo", str(old_output)],
-    )
-    assert proc1.returncode == 0, (
-        f"旧 updateGitCache/mirrorCacheToOutput 実行に失敗: {proc1.stderr}"
-    )  # noqa: E501
-
-    _assert_trees_byte_identical(python_output, old_output, label="git(初回クローン)")
-
-    # --- mtime を記録してから上流を更新する ---
-    python_before_mtimes = {
-        p: (python_output / p).stat().st_mtime_ns for p in _tree_bytes(python_output)
-    }
-    old_before_mtimes = {p: (old_output / p).stat().st_mtime_ns for p in _tree_bytes(old_output)}
-
-    time.sleep(0.05)  # ファイルシステムのmtime分解能より確実に大きい間隔を空ける
-    (upstream / "docs" / "a.md").write_text("# A (更新)\n", encoding="utf-8")  # modified
-    (upstream / "docs" / "c.md").write_text("# C (新規)\n", encoding="utf-8")  # added
-    (upstream / "docs" / "b.md").unlink()  # deleted
-    subprocess.run(["git", "add", "."], cwd=str(upstream), check=True, capture_output=True)
-    subprocess.run(
-        ["git", "commit", "-m", "second"], cwd=str(upstream), check=True, capture_output=True
-    )
-
-    result2 = git_runner.sync()
-    assert result2.full_sync_succeeded, result2.error
-
-    proc2 = old.run_node(
-        sandbox,
-        driver,
-        [str(upstream), "main", str(old_cache_root), "repo", str(old_output)],
-    )
-    assert proc2.returncode == 0, (
-        f"旧 updateGitCache/mirrorCacheToOutput 実行に失敗: {proc2.stderr}"
-    )  # noqa: E501
-
-    _assert_trees_byte_identical(python_output, old_output, label="git(2回目: 追加/変更/削除後)")
-
-    assert not (python_output / "docs" / "b.md").exists(), "Python側: 削除ファイルが残っている"
-    assert not (old_output / "docs" / "b.md").exists(), "旧側: 削除ファイルが残っている"
-    assert "更新" in (python_output / "docs" / "a.md").read_text(encoding="utf-8")
-    assert (python_output / "docs" / "c.md").is_file()
-
-    # --- 変更の無かった README.md の mtime が双方で維持されていること ---
-    python_after = (python_output / "README.md").stat().st_mtime_ns
-    old_after = (old_output / "README.md").stat().st_mtime_ns
-    assert python_after == python_before_mtimes["README.md"], "Python側: mtimeが動いた"
-    assert old_after == old_before_mtimes["README.md"], "旧側: mtimeが動いた"
 
 
 # ===========================================================================

@@ -31,7 +31,8 @@ def test_defaults_for_non_path_settings(tmp_root: Path):
     assert s.missing_threshold == 3
     assert s.esa_team_name is None
     assert s.esa_access_token is None
-    assert s.openai_api_key is None
+    assert not hasattr(s, "openai_api_key")
+    assert not hasattr(s, "chat_model")
 
 
 def test_environment_overrides_use_the_prefix(tmp_root: Path, monkeypatch: pytest.MonkeyPatch):
@@ -126,16 +127,12 @@ def test_ensure_directories_creates_data_and_reports(tmp_root: Path):
 
 def test_redacted_dict_masks_secrets(tmp_root: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("ABIST_KB_ESA_ACCESS_TOKEN", "super-secret-token")
-    monkeypatch.setenv("ABIST_KB_OPENAI_API_KEY", "sk-abcdef")
-    monkeypatch.setenv("ABIST_KB_GIT_TOKEN", "ghp-super-secret")
     s = load_settings(root=tmp_root)
     dumped = s.redacted_dict()
     assert dumped["esa_access_token"] == "***"
-    assert dumped["openai_api_key"] == "***"
-    assert dumped["git_token"] == "***"
+    assert "git_token" not in dumped
+    assert "openai_api_key" not in dumped
     assert "super-secret-token" not in repr(dumped)
-    assert "sk-abcdef" not in repr(dumped)
-    assert "ghp-super-secret" not in repr(dumped)
 
 
 def test_secret_fields_guardrail_covers_every_secret_shaped_field_name():

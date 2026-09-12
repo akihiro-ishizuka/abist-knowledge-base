@@ -33,13 +33,12 @@ abist-kb index embed --corpus work   # 意味検索が要る場合
 | 用途 | 接続 |
 |---|---|
 | エージェント（推奨） | MCP **`all`** — `abist-kb mcp serve all`（検索 + 管理 + jobs） |
-| 管理のみ | MCP `kb-admin` — `search_kb` は含まない（KB 回答は `chat_ask` 経由） |
-| 既存スキル互換 | `kb-download`／`kb-search`／`kb-visualize` |
-| REST | `abist-kb api serve` → `/api/v1` |
+| 管理のみ | MCP `kb-admin` — `search_kb` は含まない |
+| 既存スキル互換 | `kb-download`／`kb-search`／`kb-visualize`（`download_git` は削除） |
 | 長時間ジョブ | `abist-kb worker run` |
 | 対話・スクリプト | CLI `abist-kb`（Typer + Rich） |
 
-Web UI／TUI（NiceGUI／Textual）は削除済みです。`ui web`／`ui tui` コマンドはありません。
+Web UI／TUI／REST（`api serve`）は削除済みです。操作は MCP と CLI だけです。
 
 ## 動画生成
 

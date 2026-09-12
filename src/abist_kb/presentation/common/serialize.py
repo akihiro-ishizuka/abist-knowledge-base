@@ -1,8 +1,8 @@
 """`Job`/`ProgressEvent`/`AppError` を JSON 互換の dict へ変換する共通ヘルパー。
 
-SSE ペイロード、FastAPI レスポンス、MCP ツール応答はすべてこの形を経由する。
+MCP ツール応答とジョブ照会はすべてこの形を経由する。
 CLI(`presentation/cli/jobs_cmd.py::_job_to_dict`)と同じ列を返すことで、
-同一ジョブが API/CLI/MCP で同じ状態・件数・エラーコードを表示する
+同一ジョブが CLI/MCP で同じ状態・件数・エラーコードを表示する
 という §15 の受入条件を満たす。
 """
 

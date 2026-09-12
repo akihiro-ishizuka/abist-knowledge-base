@@ -110,7 +110,7 @@ def batch_show(
 def batch_add(
     ctx: typer.Context,
     name: Annotated[str, typer.Option("--name")],
-    type: Annotated[str, typer.Option("--type", help="esa/web/git。")],
+    type: Annotated[str, typer.Option("--type", help="esa/web。")],
     output_dir: Annotated[str | None, typer.Option("--output-dir")] = None,
     items: Annotated[
         str | None, typer.Option("--items", help="対象一覧(JSON配列)。省略時は空。")

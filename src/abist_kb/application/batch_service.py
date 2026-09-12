@@ -41,11 +41,6 @@ _WEB_OPTION_KEY_MAP: dict[str, str] = {
     "maxDepth": "max_depth",
     "delay": "delay",
 }
-_GIT_OPTION_KEY_MAP: dict[str, str] = {
-    "repository": "repository",
-    "branch": "branch",
-    "outputDir": "output_dir",
-}
 
 
 #: 後方互換のエイリアス。実ハンドラは `build_builtin_handlers` が組み立てる。
@@ -93,6 +88,14 @@ class BatchService:
         enabled: bool = True,
         items: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
+        if type == "git":
+            raise AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message=(
+                    "Git 同期は削除されました。リポジトリは git / gh で docs/ に置いてから "
+                    "document register-disk --apply で登録してください。"
+                ),
+            )
         return self._repo.create(
             name=name, type=type, output_dir=output_dir, enabled=enabled, items=items
         )
@@ -159,18 +162,21 @@ class BatchService:
                     output_dir=f"docs/{safe_batch_name(name)}",
                     items=[{"target": category} for category in entry],
                 )
-            elif isinstance(entry, dict) and entry.get("type") in ("web", "git"):
+            elif isinstance(entry, dict) and entry.get("type") == "web":
                 output_dir = entry.get("outputDir") or safe_batch_name(name)
-                key_map = _WEB_OPTION_KEY_MAP if entry["type"] == "web" else _GIT_OPTION_KEY_MAP
                 options = {
-                    key_map.get(key, key): value for key, value in entry.items() if key != "type"
+                    _WEB_OPTION_KEY_MAP.get(key, key): value
+                    for key, value in entry.items()
+                    if key != "type"
                 }
                 self.add(
                     name=name,
-                    type=entry["type"],
+                    type="web",
                     output_dir=_with_docs_prefix(output_dir),
                     items=[{"options": options}],
                 )
+            elif isinstance(entry, dict) and entry.get("type") == "git":
+                continue
             else:
                 raise AppError(
                     code=ErrorCode.UNSUPPORTED_BATCH_CONFIG,

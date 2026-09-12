@@ -33,7 +33,6 @@ from abist_kb.infrastructure.db.batches_repo import BatchRepository
 from abist_kb.infrastructure.db.documents_repo import DocumentRepository
 from abist_kb.infrastructure.db.sources_repo import SourceRepository
 from abist_kb.infrastructure.jobs.supervisor import JobRunContext
-from abist_kb.infrastructure.sources import git as git_module
 from abist_kb.infrastructure.sources import web as web_module
 from abist_kb.infrastructure.sources.base import with_docs_prefix
 from abist_kb.infrastructure.sources.esa import (
@@ -43,8 +42,12 @@ from abist_kb.infrastructure.sources.esa import (
     SyncItem,
     category_search_queries,
 )
-from abist_kb.infrastructure.sources.git import GitSyncRunner
 from abist_kb.infrastructure.sources.web import WebSyncRunner
+
+_GIT_REMOVED = (
+    "Git 同期は削除されました。リポジトリは git / gh で docs/ に置いてから "
+    "document register-disk --apply で登録してください。"
+)
 
 #: `JobService(resource_for_kind=...)` へそのまま渡せる既定リソース要求。
 #: 設計書 §10.2 の「バッチ・sync を全プロセス横断で直列化する」に従い、
@@ -125,17 +128,6 @@ def _web_item_payload(item: web_module.SyncItem) -> dict[str, Any]:
     return payload
 
 
-def _git_item_payload(item: git_module.SyncItem) -> dict[str, Any]:
-    """git の `SyncItem` を旧 `download-git.js` の `recordSyncResult` 呼び出しと
-    同じキー集合(path/action、必要に応じてreason/error)へ変換する。"""
-    payload: dict[str, Any] = {"path": item.path, "action": item.action}
-    if item.reason:
-        payload["reason"] = item.reason
-    if item.error:
-        payload["error"] = item.error
-    return payload
-
-
 def record_sync_result(summary: SyncSummary, item: SyncItem | Mapping[str, Any]) -> SyncSummary:
     """判定結果をサマリへ足す(旧 `recordSyncResult` と同じ集計規則)。"""
     payload = _item_payload(item)
@@ -156,34 +148,6 @@ def _sanitize_label(label: str) -> str:
     cleaned = re.sub(r'[<>:"/\\|?*\s]', "-", str(label))
     cleaned = re.sub(r"-+", "-", cleaned).strip("-")
     return cleaned[:80] or "sync"
-
-
-#: `scheme://user:pass@host/...` のように既に認証情報を含む URL は上書きしない。
-_GIT_URL_HAS_CREDENTIALS_RE = re.compile(r"^https?://[^/@\s]+@")
-
-
-def _resolve_git_repository(
-    repository: str, *, options: Mapping[str, Any], settings: Settings
-) -> str:
-    """`repository` に認証トークンを埋め込む(DB には書かず、この場限りで使う)。
-
-    優先順位: `repository` に既に `user:pass@`/`token@` が埋め込まれていればそれを
-    尊重 > バッチ/ソースの `options.token`(リポジトリごとの上書き) >
-    `Settings.git_token`(`.env` の `ABIST_KB_GIT_TOKEN`、単一トークン運用の既定)。
-    どれも無ければトークン無しの URL のまま返す(公開リポジトリはそれで動く。
-    esa と異なり git は資格情報が無くても成立し得るユースケースがあるため、
-    ここではハードエラーにしない — 失敗時の扱いは呼び出し元の `_sync_git_target`
-    が担う)。
-    """
-    if not repository.startswith(("http://", "https://")):
-        return repository
-    if _GIT_URL_HAS_CREDENTIALS_RE.match(repository):
-        return repository
-    token = options.get("token") or settings.git_token
-    if not token:
-        return repository
-    scheme, rest = repository.split("://", 1)
-    return f"{scheme}://{token}@{rest}"
 
 
 def write_sync_report(summary: SyncSummary, *, reports_dir: Path, label: str) -> Path:
@@ -447,13 +411,10 @@ class SyncService:
                 check_lease=check_lease,
             )
         if source["type"] == "git":
-            return self._sync_git_target(
-                items=[pseudo_item],
-                batch_output_dir=source["output_dir"],
-                label=source["display_name"],
-                dry_run=dry_run,
-                emit=emit,
-                check_lease=check_lease,
+            raise AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message=_GIT_REMOVED,
+                exit_code=ExitCode.INVALID_INPUT,
             )
         raise AppError(
             code=ErrorCode.INVALID_INPUT,
@@ -585,88 +546,6 @@ class SyncService:
         report_path = write_sync_report(summary, reports_dir=self._reports_dir, label=label)
         return summary, report_path
 
-    def _sync_git_target(
-        self,
-        *,
-        items: list[Mapping[str, Any]],
-        batch_output_dir: str | None,
-        label: str,
-        dry_run: bool = False,
-        emit: Any = None,
-        check_lease: Any = None,
-    ) -> tuple[SyncSummary, Path | None]:
-        """git バッチ/ソースの対象(1件以上のリポジトリ)をミラーする。
-
-        旧 `download-git.js` には `--dry-run`/`--force` に相当する機能が無い
-        (`GitSyncRunner` も持たない)。`dry_run=True` を明示的に要求された場合、
-        「実際には書き込むのに書き込まないと誤解させる」よりも即座に拒否する。
-        """
-        if dry_run:
-            raise AppError(
-                code=ErrorCode.INVALID_INPUT,
-                message=(
-                    "git バッチ/ソースは --dry-run に対応していません(旧実装にも無い機能です)。"
-                ),
-                exit_code=ExitCode.INVALID_INPUT,
-            )
-        summary = new_sync_summary("git")
-        summary.options = {}
-        overall_ok = True
-        for item in items:
-            options = self._effective_options(item)
-            repository = options.get("repository")
-            if not repository:
-                raise AppError(
-                    code=ErrorCode.INVALID_INPUT,
-                    message="git バッチ/ソースの対象に repository が設定されていません。",
-                    exit_code=ExitCode.INVALID_INPUT,
-                )
-            output_dir = options.get("output_dir") or batch_output_dir
-            if not output_dir:
-                raise AppError(
-                    code=ErrorCode.INVALID_INPUT,
-                    message="git バッチ/ソースの出力先(output_dir)が決まりません。",
-                    exit_code=ExitCode.INVALID_INPUT,
-                )
-            # §12: `repository`(接続設定/DB)に資格情報は書かせない。private
-            # リポジトリ向けのトークンは `.env`(`Settings.git_token`)から
-            # この場限りで埋め込む(`_resolve_git_repository` 参照、DB/レポートへは
-            # `GitSyncRunner`/`redact_credentials` が常にマスクしてから書く)。
-            token_available = bool(options.get("token") or self._settings.git_token)
-            resolved_repository = _resolve_git_repository(
-                repository, options=options, settings=self._settings
-            )
-            runner = GitSyncRunner(
-                documents=self._documents,
-                root_dir=self._root_dir,
-                docs_dir=self._docs_dir,
-                output_dir=output_dir,
-                repository=resolved_repository,
-                branch=options.get("branch"),
-            )
-            result = runner.sync(check_lease=check_lease, emit=emit)
-            for git_item in result.items:
-                record_sync_result(summary, _git_item_payload(git_item))
-            overall_ok = overall_ok and result.full_sync_succeeded
-            if result.error:
-                error_message = result.error
-                if not token_available:
-                    # 資格情報が一切無い状態での失敗は、認証エラーかどうかに
-                    # 関わらず「どの環境変数を設定すれば良いか」を添える
-                    # (§12: 接続設定を編集させるのではなく `.env` を指す)。
-                    error_message = (
-                        f"{error_message} (private リポジトリの場合は環境変数 "
-                        f"{identity.env_var('git_token')} を `.env` に設定するか、"
-                        "対象の接続設定に token を指定してください)"
-                    )
-                summary.note = (
-                    f"{summary.note} / {error_message}" if summary.note else error_message
-                )
-        summary.full_sync_succeeded = overall_ok
-        summary.finished_at = datetime.now(UTC).isoformat()
-        report_path = write_sync_report(summary, reports_dir=self._reports_dir, label=label)
-        return summary, report_path
-
     def sync_batch(
         self,
         batch_id: str,
@@ -720,13 +599,10 @@ class SyncService:
             )
 
         if batch["type"] == "git":
-            return self._sync_git_target(
-                items=batch["items"],
-                batch_output_dir=batch.get("output_dir"),
-                label=batch["name"],
-                dry_run=dry_run,
-                emit=emit,
-                check_lease=check_lease,
+            raise AppError(
+                code=ErrorCode.INVALID_INPUT,
+                message=_GIT_REMOVED,
+                exit_code=ExitCode.INVALID_INPUT,
             )
 
         raise AppError(
@@ -744,7 +620,7 @@ class SyncService:
         emit: Any = None,
         check_lease: Any = None,
     ) -> list[dict[str, Any]]:
-        """有効な全バッチ(esa/web/git)を同期する。
+        """有効な全バッチ(esa/web)を同期する。
 
         **partial-failure 方針(task-5b の判断事項)**: 1バッチの失敗
         (到達不能なホスト・存在しないリポジトリ等)で残りのバッチを止めない。

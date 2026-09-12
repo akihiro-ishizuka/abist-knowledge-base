@@ -70,7 +70,7 @@ def source_list(ctx: typer.Context) -> None:
 @source_app.command("add")
 def source_add(
     ctx: typer.Context,
-    type: Annotated[str, typer.Option("--type", help="ソース種別(esa/web/git)。")],
+    type: Annotated[str, typer.Option("--type", help="ソース種別(esa/web)。")],
     display_name: Annotated[str, typer.Option("--display-name", help="表示名。")],
     output_dir: Annotated[str, typer.Option("--output-dir", help="出力先ディレクトリ。")],
     connection: Annotated[
