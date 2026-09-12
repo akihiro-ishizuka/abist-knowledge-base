@@ -5,6 +5,12 @@
       "command": "uv",
       "args": ["run", "abist-kb", "mcp", "serve", "kb-search"],
       "env": {}
+    },
+    "kb-download": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "abist-kb", "mcp", "serve", "kb-download"],
+      "env": {}
     }
   }
 }
